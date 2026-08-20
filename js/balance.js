@@ -125,6 +125,13 @@ export const HARDCORE_EVERY = 3;
 export const HARDCORE_HP_MULT = 1.75;
 export const HARDCORE_ATK_MULT = 1.45;
 
+// Recompensa NÃO acompanha o degrau: `xp` e o nível que o loot consulta ficam
+// nos valores da variante comum, então o andar HARDCORE custa cerca de duas
+// vezes mais tempo pelo mesmo ganho. Isso é decisão registrada, não esquecimento
+// — a SPEC de chefes-hardcore põe `mudança no cálculo de loot ou XP do chefe`
+// explicitamente fora de escopo. Está anotado aqui porque é o primeiro lugar
+// onde alguém vai procurar ao achar que falta algo.
+
 // ---------- Janelas de carga ----------
 // Golpe carregado: a janela existe para dar tempo de reagir, então ela é
 // tuning de legibilidade, não detalhe de implementação.
@@ -140,6 +147,12 @@ export const BOSS_TELEGRAPH_TIME = 1.1;
 // Intervalo entre especiais do chefe. Menor que isso e a luta vira sequência
 // de cinemáticas sem espaço para o grupo agir.
 export const BOSS_SPECIAL_CD = 7;
+
+// Regeneracao passiva do jogador, fracao de maxHp por segundo. Estava solta
+// dentro de updatePlayer como literal. Importa estar aqui porque ela e a
+// contraparte direta de WITHER_DPS: o wither so muda alguma coisa se o dano
+// por tempo superar o que o jogador recupera sozinho no mesmo intervalo.
+export const PLAYER_REGEN_PCT = 0.012;
 
 // ---------- Status wither (elemento Morte) ----------
 // Decisão de projeto: o que dá identidade ao elemento Morte é a redução da

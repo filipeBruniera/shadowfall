@@ -4,7 +4,7 @@ import { generateMap, findPath } from '../js/world.js';
 import { VOC_LIST, VOCATIONS, CONSUMABLES, ELEM_STATUS, BOSSES, bossSpecials, E } from '../js/data.js';
 import { isCriticalEvent, drainEvents } from '../js/net.js';
 import {
-  WITHER_TIME, WITHER_DPS, WITHER_HEAL_MULT,
+  WITHER_TIME, WITHER_DPS, WITHER_HEAL_MULT, PLAYER_REGEN_PCT,
   BOSS_TELEGRAPH_TIME, BOSS_WINDUP, MONSTER_WINDUP, BOSS_SPECIAL_CD,
   bossCurve, groupScale, HARDCORE_HP_MULT, HARDCORE_ATK_MULT,
 } from '../js/balance.js';
@@ -785,6 +785,124 @@ console.log('\n== anel de telegrafia ==');
   check('UI-03: fora da janela o progresso fica preso entre 0 e 1',
     telegraphProgress(BOSS_TELEGRAPH_TIME * 2, BOSS_TELEGRAPH_TIME) === 0
     && telegraphProgress(-1, BOSS_TELEGRAPH_TIME) === 1);
+}
+
+console.log('\n== regressões do review ==');
+{
+  // Cada bloco aqui existe por causa de um defeito que passou verde pelos
+  // gates: os testes originais cobriam o caminho feliz e nenhum cobria o
+  // caminho em que a coisa some, zera ou não trafega.
+
+  function arena(floor) {
+    const G = createGame(7171, floor);
+    const chefe = G.monsters.find((m) => m.isBoss);
+    G.monsters = [chefe];
+    addPlayer(G, { id: 'p1', name: 'Alvo', voc: 'knight' });
+    const p = G.players.p1;
+    p.x = chefe.x + 1.0; p.y = chefe.y + 0.2;
+    chefe.aggro = p.id;
+    chefe.cd = 999;
+    chefe.special = 0;
+    return { G, chefe, p };
+  }
+  const tk = (G) => { setInput(G, 'p1', { mx: 0, my: 0, acts: [] }); step(G, TICK); };
+
+  // 1. Alvo perdido no meio da telegrafia. O ramo `if (!target) return` vinha
+  // antes do decremento de `m.windup`: a janela parava de correr e o golpe
+  // ressuscitava quando alguém voltasse ao alcance, na posição nova do chefe e
+  // sem nenhum anel na tela.
+  {
+    const { G, chefe, p } = arena(1);
+    tk(G);
+    const abriu = chefe.windup > 0 && chefe.windupKind !== null;
+    // Solo: o alvo morre no meio da janela e o chefe fica sem ninguém.
+    p.dead = true; p.hp = 0;
+    tk(G);
+    const zerou = chefe.windup === 0 && chefe.windupTotal === 0 && chefe.windupKind === null;
+    check('regressão: alvo perdido no meio da telegrafia cancela a janela',
+      abriu && zerou, `(abriu ${abriu}, windup ${chefe.windup.toFixed(2)})`);
+
+    // O jogador volta: o ataque cancelado não pode reaparecer sem nova janela.
+    p.dead = false; p.hp = stats(p).maxHp;
+    const cheio = p.hp;
+    let danoSemJanela = false;
+    for (let i = 0; i < 20; i++) {
+      const antes = chefe.windupKind;
+      tk(G);
+      if (antes === null && p.hp < cheio - 0.5) danoSemJanela = true;
+      if (chefe.windupKind !== null) break;
+    }
+    check('regressão: o golpe cancelado não resolve quando o alvo reaparece',
+      !danoSemJanela, `(hp ${p.hp.toFixed(1)} de ${cheio.toFixed(1)})`);
+  }
+
+  // 2. Raio de telegrafia por especial. `specialRadius` devolve `sp.r ||
+  // sp.range || 0`, e as invocações não declaravam nenhum dos dois: o anel
+  // saía com raio 0, ou seja, invisível. Atingia 3 dos 4 chefes e justamente a
+  // mecânica exclusiva HARDCORE do bonelord.
+  {
+    const semRaio = [];
+    for (const chefe of BOSSES) {
+      for (const sp of chefe.specials) {
+        if (!((sp.r || sp.range || 0) > 0)) semRaio.push(sp.id);
+      }
+    }
+    check('regressão: todo especial declara raio ameaçado maior que 0',
+      semRaio.length === 0, `(${semRaio.join(', ')})`);
+  }
+
+  // 3. Funil de cura. `wither` só valia para poção e magia; a regeneração
+  // passiva escrevia `p.hp` direto e escapava. Como ela escala com maxHp e o
+  // WITHER_DPS é absoluto, o status ficava perto de inerte em nível alto.
+  {
+    const regenNumTique = (comWither) => {
+      const G = createGame(4242, 1);
+      G.monsters = [];
+      G.zones = [];
+      addPlayer(G, { id: 'p1', name: 'Cobaia', voc: 'knight' });
+      const p = G.players.p1;
+      p.x = G.map.spawn.x; p.y = G.map.spawn.y;
+      const max = stats(p).maxHp;
+      p.hp = max * 0.5;
+      if (comWither) p.status.wither = WITHER_TIME;
+      const antes = p.hp;
+      tk(G);
+      // Com o status ativo o tique também tira WITHER_DPS: some de volta para
+      // isolar quanto a regeneração de fato entregou.
+      const curou = (p.hp - antes) + (comWither ? WITHER_DPS * TICK : 0);
+      return { curou, esperado: max * PLAYER_REGEN_PCT * TICK };
+    };
+    const limpo = regenNumTique(false);
+    const murcho = regenNumTique(true);
+    check('regressão: a regeneração passiva entrega o valor cheio sem wither',
+      Math.abs(limpo.curou - limpo.esperado) < 1e-6,
+      `(${limpo.curou.toFixed(5)} vs ${limpo.esperado.toFixed(5)})`);
+    check('regressão: a regeneração passiva passa pelo funil do wither',
+      Math.abs(murcho.curou - murcho.esperado * WITHER_HEAL_MULT) < 1e-6,
+      `(${murcho.curou.toFixed(5)} vs ${(murcho.esperado * WITHER_HEAL_MULT).toFixed(5)})`);
+    check('regressão: com wither a regeneração entrega estritamente menos',
+      murcho.curou < limpo.curou);
+  }
+
+  // 4. Evento de loot. Ele nascia sem posição e morria num `return` do cliente:
+  // pegar um lendário era visualmente igual a pegar um item comum.
+  {
+    const G = createGame(31337, 1);
+    G.monsters = [];
+    addPlayer(G, { id: 'p1', name: 'Coletor', voc: 'knight' });
+    const p = G.players.p1;
+    const it = rollItem(G, 5, true);
+    it.id = G.nextId++; it.x = p.x; it.y = p.y;
+    G.items.push(it);
+    tk(G);
+    const ev = G.events.find((e) => e.t === 'loot');
+    check('regressão: o evento de loot existe ao pegar o item', !!ev);
+    check('regressão: o evento de loot carrega posição para o cliente desenhar',
+      !!ev && Number.isFinite(ev.x) && Number.isFinite(ev.y),
+      ev ? `(${ev.x}, ${ev.y})` : '(sem evento)');
+    check('regressão: o evento de loot carrega a raridade',
+      !!ev && typeof ev.rarity === 'string');
+  }
 }
 
 console.log('\n== desempenho ==');

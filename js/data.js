@@ -108,6 +108,9 @@ export const MONSTERS = [
 //          não tem). Todo chefe tem pelo menos um, senão o degrau HARDCORE
 //          seria só número maior.
 //   mult   dano relativo ao atk do chefe; o número absoluto sai da curva
+//   r      raio ameaçado, em tiles. Obrigatório: é o que o anel de telegrafia
+//          desenha, e um especial sem ele chegaria sem aviso. Em `summon` é
+//          também o raio onde os lacaios nascem — um número, os dois usos.
 // O kit comum guarda 3 opções em todo chefe: menos que isso regrediria a
 // variedade do pool único que existia antes.
 export const BOSSES = [
@@ -125,7 +128,7 @@ export const BOSSES = [
     specials: [
       { id: 'morgaroth_bramido_fosso', name: 'Bramido do Fosso', kind: 'nova', r: 5.0, mult: 1.7, shake: 13 },
       { id: 'morgaroth_lancas_sombrias', name: 'Lanças Sombrias', kind: 'burst', count: 10, speed: 8.5, mult: 0.85, range: 9 },
-      { id: 'morgaroth_horda_fosso', name: 'Horda do Fosso', kind: 'summon', count: 3, tierMax: 2 },
+      { id: 'morgaroth_horda_fosso', name: 'Horda do Fosso', kind: 'summon', r: 2.5, count: 3, tierMax: 2 },
       { id: 'morgaroth_maldicao_fosso', name: 'Maldição do Fosso', kind: 'zone', hc: true, r: 3.4, time: 7, tick: 0.6, mult: 0.6 },
     ],
   },
@@ -134,7 +137,7 @@ export const BOSSES = [
     specials: [
       { id: 'glacier_explosao_gelida', name: 'Explosão Gélida', kind: 'nova', r: 4.8, mult: 1.55, shake: 11 },
       { id: 'glacier_estilhacos', name: 'Estilhaços', kind: 'burst', count: 12, speed: 9, mult: 0.75, range: 10 },
-      { id: 'glacier_servos_de_gelo', name: 'Servos de Gelo', kind: 'summon', count: 3, tierMax: 2 },
+      { id: 'glacier_servos_de_gelo', name: 'Servos de Gelo', kind: 'summon', r: 2.5, count: 3, tierMax: 2 },
       { id: 'glacier_manto_invernal', name: 'Manto Invernal', kind: 'zone', hc: true, r: 3.6, time: 8, tick: 0.5, mult: 0.55 },
     ],
   },
@@ -143,8 +146,8 @@ export const BOSSES = [
     specials: [
       { id: 'bonelord_grito_ossos', name: 'Grito de Ossos', kind: 'nova', r: 4.6, mult: 1.5, shake: 12 },
       { id: 'bonelord_chuva_ossos', name: 'Chuva de Ossos', kind: 'burst', count: 9, speed: 8, mult: 0.9, range: 9 },
-      { id: 'bonelord_legiao_ossuaria', name: 'Legião Ossuária', kind: 'summon', count: 4, tierMax: 2 },
-      { id: 'bonelord_ressurgir_ancestral', name: 'Ressurgir Ancestral', kind: 'summon', hc: true, count: 5, tierMax: 3 },
+      { id: 'bonelord_legiao_ossuaria', name: 'Legião Ossuária', kind: 'summon', r: 3.0, count: 4, tierMax: 2 },
+      { id: 'bonelord_ressurgir_ancestral', name: 'Ressurgir Ancestral', kind: 'summon', hc: true, r: 3.4, count: 5, tierMax: 3 },
     ],
   },
 ];

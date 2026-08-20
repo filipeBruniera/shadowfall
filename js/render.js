@@ -53,8 +53,15 @@ export function spawnParticles(x, y, color, count, opts = {}) {
   }
 }
 
+// `hold`: o anel fica no raio real e ganha presença até o impacto, em vez de
+// crescer e sumir. É o que a telegrafia precisa — um anel que se apaga bem na
+// hora em que o golpe cai não avisa ninguém, e um que só chega ao raio
+// verdadeiro no fim engana quem se afastou até a borda visível.
 export function spawnRing(x, y, r, color, opts = {}) {
-  fx.rings.push({ x, y, r, color, life: opts.life || 0.45, max: opts.life || 0.45, fill: !!opts.fill, width: opts.width || 3 });
+  fx.rings.push({
+    x, y, r, color, life: opts.life || 0.45, max: opts.life || 0.45,
+    fill: !!opts.fill, width: opts.width || 3, hold: !!opts.hold,
+  });
 }
 
 // ---------- Telegrafia ----------
@@ -192,8 +199,10 @@ export function handleFxEvent(ev) {
           break;
         case 'telegraph':
           // O aviso desenha a área ameaçada inteira: é o que dá ao grupo a
-          // chance de sair antes de o golpe existir no mundo.
-          spawnRing(ev.x, ev.y, ev.r, ev.c, { life: ev.d, width: 4 });
+          // chance de sair antes de o golpe existir no mundo. `hold` é o que
+          // torna isso verdade — sem ele o anel só passava pelo raio real no
+          // meio da janela, e já quase transparente.
+          spawnRing(ev.x, ev.y, ev.r, ev.c, { life: ev.d, width: 4, hold: true });
           registerTelegraph(ev.id, ev.d);
           break;
         default: break;
@@ -400,9 +409,20 @@ export function drawWorld(ctx, canvas, view, now) {
   for (const r of fx.rings) {
     const t = 1 - r.life / r.max;
     const p = project(r.x, r.y);
-    const rad = r.r * (0.4 + t * 0.8);
-    ctx.strokeStyle = hexA(r.color, (1 - t) * 0.9);
-    ctx.lineWidth = r.width * (1 - t * 0.5);
+    const rad = r.hold ? r.r : r.r * (0.4 + t * 0.8);
+    if (r.hold) {
+      // Área ameaçada inteira, do primeiro quadro ao último, escurecendo por
+      // dentro conforme o impacto se aproxima: quem está dentro vê que está.
+      ctx.fillStyle = hexA(r.color, 0.06 + t * 0.16);
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, rad * HALF_W, rad * HALF_H, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = hexA(r.color, 0.45 + t * 0.5);
+      ctx.lineWidth = r.width;
+    } else {
+      ctx.strokeStyle = hexA(r.color, (1 - t) * 0.9);
+      ctx.lineWidth = r.width * (1 - t * 0.5);
+    }
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, rad * HALF_W, rad * HALF_H, 0, 0, Math.PI * 2);
     ctx.stroke();
@@ -966,6 +986,52 @@ function drawMonster(ctx, m, now, view) {
   }
 }
 
+// Status sobre o jogador, no mesmo vocabulário visual já usado no monstro
+// (drawMonster): congelamento em manto azul, queimadura em fagulhas, veneno em
+// pontos verdes. `wither` é o único que precisou de marca nova — ele corta a
+// cura recebida pela metade e, sem nada na tela, o jogador só via o druida
+// curando menos e não tinha como saber por quê.
+function drawPlayerStatus(ctx, p, pos, now) {
+  const st = p.status;
+  if (!st) return;
+
+  if (st.freeze > 0) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(120,210,255,0.22)';
+    ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 14, 15, 21, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  if (st.stun > 0) {
+    ctx.fillStyle = '#ffd84d';
+    for (let i = 0; i < 3; i++) {
+      const a = now * 5 + (i / 3) * Math.PI * 2;
+      ctx.beginPath(); ctx.arc(pos.x + Math.cos(a) * 11, pos.y - 30 + Math.sin(a) * 4, 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (st.burn > 0) {
+    for (let i = 0; i < 2; i++) {
+      const fx2 = pos.x + (Math.random() - 0.5) * 13, fy = pos.y - 10 - Math.random() * 17;
+      ctx.fillStyle = `rgba(255,${120 + Math.random() * 90 | 0},40,0.7)`;
+      ctx.fillRect(fx2, fy, 2.5, 2.5);
+    }
+  }
+  if (st.poison > 0) {
+    ctx.fillStyle = 'rgba(143,191,77,0.75)';
+    ctx.fillRect(pos.x + (Math.random() - 0.5) * 12, pos.y - 8 - Math.random() * 12, 2, 2);
+  }
+  if (st.wither > 0) {
+    // Anel roxo pulsando no chão: some junto com o status e é a única pista de
+    // que a cura está pela metade.
+    ctx.strokeStyle = hexA('#9a5bd6', 0.45 + Math.sin(now * 7) * 0.25);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(pos.x, pos.y, 15, 7.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(154,91,214,0.7)';
+    ctx.fillRect(pos.x + (Math.random() - 0.5) * 12, pos.y - 12 - Math.random() * 14, 2, 2);
+  }
+}
+
 function drawPlayer(ctx, p, now, view, lights) {
   const pos = project(p.x, p.y);
   const V = VOCATIONS[p.voc] || VOCATIONS.knight;
@@ -1063,6 +1129,8 @@ function drawPlayer(ctx, p, now, view, lights) {
     ctx.ellipse(pos.x, pos.y, 18, 9, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
+
+  drawPlayerStatus(ctx, p, pos, now);
 
   // Nome e vida por cima — em co-op você precisa ver a barra do outro de longe.
   ctx.textAlign = 'center';

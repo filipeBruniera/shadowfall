@@ -262,5 +262,43 @@ console.log('\n== custo do host com a sala cheia ==');
     !!chefeVistoComum && chefeVistoComum.hardcore === false);
 }
 
+console.log('\n== status do jogador no pacote ==');
+{
+  // A entrada do jogador carregava só `b: p.buffs.length ? 1 : 0`. Resultado:
+  // o convidado congelado pelo chefe continuava andando na própria tela até o
+  // snapshot seguinte, e o witherado recebia metade da cura sem nenhuma pista.
+  const G = createGame(8181, 1);
+  addPlayer(G, { id: 'p1', name: 'Alvo', voc: 'knight' });
+  const p = G.players.p1;
+  const viewer = p;
+
+  const limpo = buildSnapshot(G, { viewer, aoi: true });
+  check('status: sem status ativo a chave não entra no pacote',
+    limpo.P[0].s === undefined, JSON.stringify(limpo.P[0].s));
+
+  p.status.wither = 3.5;
+  p.status.freeze = 0.6;
+  const pacote = buildSnapshot(G, { viewer, aoi: true });
+  const entrada = pacote.P.find((e) => e.i === 'p1');
+  check('status: com status ativo a chave entra no pacote',
+    !!entrada && Array.isArray(entrada.s), JSON.stringify(entrada && entrada.s));
+
+  const visao = { playerMap: new Map(), monsterMap: new Map() };
+  applySnapshot(visao, pacote);
+  const visto = visao.playerMap.get('p1');
+  check('status: o convidado reconstrói wither e freeze do jogador',
+    !!visto && visto.status.wither > 0 && visto.status.freeze > 0,
+    JSON.stringify(visto && visto.status));
+  check('status: o que não está ativo volta zerado, nunca indefinido',
+    !!visto && visto.status.burn === 0 && visto.status.poison === 0 && visto.status.stun === 0,
+    JSON.stringify(visto && visto.status));
+
+  // O custo tem de ser desprezível: a chave só aparece em quem está marcado.
+  const delta = JSON.stringify(pacote).length - JSON.stringify(limpo).length;
+  console.log(`      status de 1 jogador: +${delta}B no pacote`);
+  check('status: o campo custa no máximo 40 bytes por jogador marcado',
+    delta <= 40, `${delta}B`);
+}
+
 console.log(failures ? `\n${failures} FALHA(S)\n` : '\nTudo verde.\n');
 process.exit(failures ? 1 : 0);

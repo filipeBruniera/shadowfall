@@ -181,6 +181,32 @@ function approxBytes(msg) {
 // `viewer` recorta o snapshot para um destinatário. Jogadores vão sempre
 // inteiros — o HUD de grupo depende disso mesmo com o aliado do outro lado do
 // mapa. Só monstro, item, projétil e zona são cortados por distância.
+// Ordem fixa das posições de status no pacote, uma só para jogador e monstro.
+// Antes o array existia só para monstro e o jogador não mandava status nenhum:
+// o convidado congelado pelo chefe não via congelamento, e com o wither ele
+// passou a receber metade da cura sem nada na tela explicando por quê.
+// Array e não objeto porque a chave repetida por entidade dominaria o pacote.
+const STATUS_KEYS = ['burn', 'poison', 'freeze', 'stun', 'wither'];
+
+// Só entra no pacote quando há status ativo — o caso comum é nenhum, e um
+// array de zeros por entidade custaria mais que o campo inteiro economiza.
+function packStatus(st) {
+  if (!st) return null;
+  let any = false;
+  const out = STATUS_KEYS.map((k) => {
+    const v = st[k] || 0;
+    if (v > 0) any = true;
+    return r2(v);
+  });
+  return any ? out : null;
+}
+
+function unpackStatus(a) {
+  const out = {};
+  for (let i = 0; i < STATUS_KEYS.length; i++) out[STATUS_KEYS[i]] = (a && a[i]) || 0;
+  return out;
+}
+
 export function buildSnapshot(G, { viewer = null, aoi = true } = {}) {
   const players = Object.values(G.players);
   const near = (x, y) => {
@@ -192,6 +218,7 @@ export function buildSnapshot(G, { viewer = null, aoi = true } = {}) {
     pr: G.portalReady | 0, pt: G.portalTotal | 0, ph: r2(G.portalHold || 0),
     P: players.map((p) => {
       const st = stats(p);
+      const ps = packStatus(p.status);
       return {
       i: p.id, n: p.name, v: p.voc, x: r2(p.x), y: r2(p.y), d: r2(p.dir),
       h: Math.round(p.hp), m: Math.round(p.mp), mh: st.maxHp, mm: st.maxMp, sp: r2(st.speed),
@@ -201,6 +228,7 @@ export function buildSnapshot(G, { viewer = null, aoi = true } = {}) {
       a: r2(p.anim.attack), c: r2(p.anim.cast), hu: r2(p.anim.hurt), mv: p.anim.moving ? 1 : 0,
       b: p.buffs.length ? 1 : 0, cd: [p.skillCd.Q, p.skillCd.W, p.skillCd.E, p.skillCd.R].map(r2),
       la: p.lastAct, k: p.kills, op: p.onPortal ? 1 : 0,
+      ...(ps ? { s: ps } : null),
       };
     }),
     M: [],
@@ -234,10 +262,8 @@ export function buildSnapshot(G, { viewer = null, aoi = true } = {}) {
     if (m.hitFlash > 0) e.f = r2(m.hitFlash);
     if (m.windup > 0) e.w = r2(m.windup);
     if (m.deathFade > 0) e.df = r2(m.deathFade);
-    const st = m.status;
-    if (st.burn > 0 || st.poison > 0 || st.freeze > 0 || st.stun > 0) {
-      e.s = [r2(st.burn), r2(st.poison), r2(st.freeze), r2(st.stun)];
-    }
+    const ms = packStatus(m.status);
+    if (ms) e.s = ms;
     snap.M.push(e);
   }
   return snap;
@@ -269,6 +295,7 @@ export function applySnapshot(view, snap) {
     p.attack = sp.a; p.casting = sp.c; p.hurt = sp.hu > 0; p.moving = !!sp.mv;
     p.buffed = !!sp.b; p.skillCd = { Q: sp.cd[0], W: sp.cd[1], E: sp.cd[2], R: sp.cd[3] };
     p.lastAct = sp.la; p.kills = sp.k; p.onPortal = !!sp.op;
+    p.status = unpackStatus(sp.s);
   }
   for (const id of [...view.playerMap.keys()]) if (!seenP.has(id)) view.playerMap.delete(id);
 
@@ -289,9 +316,7 @@ export function applySnapshot(view, snap) {
     m.shape = type.shape || 'brute';
     m.color = type.color || '#888';
     m.size = type.size || 1;
-    m.status = sm.s
-      ? { burn: sm.s[0], poison: sm.s[1], freeze: sm.s[2], stun: sm.s[3] }
-      : { burn: 0, poison: 0, freeze: 0, stun: 0 };
+    m.status = unpackStatus(sm.s);
   }
   for (const id of [...view.monsterMap.keys()]) if (!seenM.has(id)) view.monsterMap.delete(id);
 

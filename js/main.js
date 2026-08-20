@@ -2,10 +2,11 @@ import {
   createGame, addPlayer, removePlayer, setInput, step, stats, nextFloor, sellJunk, collides, TICK,
 } from './sim.js';
 import { generateMap, findPath } from './world.js';
-import { TILE_W, TILE_H, EQUIP_SLOTS } from './data.js';
+import { TILE_W, TILE_H, EQUIP_SLOTS, RARITY } from './data.js';
 import { randomSeed, roomCode } from './rng.js';
 import {
   cam, drawWorld, drawMinimap, updateFx, handleFxEvent, project, screenToWorld,
+  spawnRing, spawnParticles,
 } from './render.js';
 import { Net, NetMode, buildSnapshot, applySnapshot, interpolate, drainEvents } from './net.js';
 import * as Save from './save.js';
@@ -542,11 +543,20 @@ function applyEvent(ev) {
   if (ev.t === 'portalReset') { UI.flashPortalReset(); return; }
   if (ev.t === 'log') { UI.pushLog(ev.m, ev.c || 'system'); return; }
   if (ev.t === 'portal') { UI.banner('Portal aberto', 'Sala do chefe'); return; }
+  // Brilho na cor da raridade. O evento existia desde sempre e caía no ignore
+  // abaixo sem nenhum consumidor: quem pegava um lendário via a mesma tela de
+  // quem pegava um item comum.
+  if (ev.t === 'loot') {
+    const cor = (RARITY[ev.rarity] || RARITY.common).color;
+    spawnRing(ev.x, ev.y, 1.4, cor, { life: 0.6, width: 3 });
+    spawnParticles(ev.x, ev.y, cor, 14, { speed: 3.2, life: 0.7, size: 2 });
+    return;
+  }
   // 'bossSpawn' e 'floor' são consumidos fora daqui: o primeiro pela camada de
   // áudio que vai assinar CT-03, o segundo pela mensagem própria do host
   // (net.send({ t: 'floor' }) em hostTick). Sem este ignore os dois desceriam
   // até o default de handleFxEvent.
-  if (ev.t === 'loot' || ev.t === 'hurt' || ev.t === 'respawn' || ev.t === 'bossSpawn' || ev.t === 'floor') return;
+  if (ev.t === 'hurt' || ev.t === 'respawn' || ev.t === 'bossSpawn' || ev.t === 'floor') return;
   handleFxEvent(ev);
 }
 
@@ -858,6 +868,9 @@ function viewPlayer(p) {
     reviveProg: p.reviveProg, deathTimer: p.deathTimer, potions: p.potions, onPortal: !!p.onPortal,
     attack: p.anim.attack, casting: p.anim.cast, hurt: p.anim.hurt > 0,
     moving: p.anim.moving, buffed: p.buffs.length > 0, skillCd: p.skillCd, kills: p.kills,
+    // O convidado recebe o status pelo snapshot; o host lê daqui. Sem isto o
+    // desenho de status ficaria só do lado de quem hospeda.
+    status: p.status,
   };
 }
 
@@ -969,7 +982,7 @@ function hostTick() {
     // 'floor' fica de fora de propósito: o host já anuncia a virada por
     // net.send({ t: 'floor' }), e encaminhar os dois regeraria o mapa duas vezes
     // no convidado.
-    for (const ev of evs) if (ev.t === 'd' || ev.t === 'fx' || ev.t === 'shake' || ev.t === 'log' || ev.t === 'portal' || ev.t === 'portalReset' || ev.t === 'bossSpawn') S.netEvents.push(ev);
+    for (const ev of evs) if (ev.t === 'd' || ev.t === 'fx' || ev.t === 'shake' || ev.t === 'log' || ev.t === 'portal' || ev.t === 'portalReset' || ev.t === 'bossSpawn' || ev.t === 'loot') S.netEvents.push(ev);
   }
   if (S.G.pendingFloor) {
     S.G.pendingFloor = false;
@@ -990,6 +1003,11 @@ function guestPredict(dt) {
   const p = S.guest.predicted;
   const me = S.view.playerMap.get(S.localId);
   if (!p || !me || me.dead || !S.map) return;
+  // Mesmo portão do host (js/sim.js, movimento em updatePlayer): sem isto o
+  // convidado congelado pelo chefe continuava andando na própria tela e era
+  // arrancado de volta pelo snapshot seguinte, sem nada explicando o tranco.
+  const st = me.status;
+  if (st && (st.stun > 0 || st.freeze > 0)) return;
   const inp = localInput();
   const speed = (me.speed || 3.5) * dt;
   if (inp.mx || inp.my) {

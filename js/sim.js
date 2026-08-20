@@ -13,7 +13,7 @@ import {
   HEAL_ALLY_RADIUS, TAUNT_TIME, REVIVE_MAX_HELPERS,
   bossCurve, HARDCORE_EVERY, HARDCORE_HP_MULT, HARDCORE_ATK_MULT,
   LEVEL_HP_SCALE, LEVEL_ATK_SCALE, LEVEL_DEF_SCALE, LEVEL_XP_SCALE,
-  WITHER_DPS, WITHER_HEAL_MULT, BOSS_STATUS_MAG,
+  WITHER_DPS, WITHER_HEAL_MULT, BOSS_STATUS_MAG, PLAYER_REGEN_PCT,
   MONSTER_WINDUP, BOSS_WINDUP, BOSS_TELEGRAPH_TIME, BOSS_SPECIAL_CD,
 } from './balance.js';
 
@@ -413,8 +413,11 @@ function updatePlayer(G, p, dt) {
   p.anim.cast = Math.max(0, p.anim.cast - dt);
   p.anim.hurt = Math.max(0, p.anim.hurt - dt);
 
-  // Regeneração lenta (o jogo é de poção, não de esperar sentado)
-  p.hp = Math.min(st.maxHp, p.hp + st.maxHp * 0.012 * dt);
+  // Regeneração lenta (o jogo é de poção, não de esperar sentado). Passa pelo
+  // funil como qualquer outra cura: escrever `p.hp` direto aqui deixava o
+  // wither de fora justamente da fonte de cura que nunca para, e o status
+  // virava quase inerte para quem tem maxHp alto.
+  healPlayer(G, p, st.maxHp * PLAYER_REGEN_PCT * dt, { silent: true });
   p.mp = Math.min(st.maxMp, p.mp + (2.5 + st.ml * 0.35) * dt);
 
   // Movimento
@@ -700,7 +703,9 @@ export function hitMonster(G, m, raw, elem, source, opts = {}) {
     if (sp) {
       sp.dmgDone += dmg;
       const st = stats(sp);
-      if (st.leech > 0) sp.hp = Math.min(st.maxHp, sp.hp + dmg * st.leech);
+      // Também pelo funil: o roubo de vida é cura recebida e o wither tem de
+      // pegá-lo, senão o status é anulado por quem tem equipamento com leech.
+      if (st.leech > 0) healPlayer(G, sp, dmg * st.leech, { silent: true });
     }
   }
   pushEvent(G, {
@@ -787,14 +792,19 @@ export function damagePlayer(G, p, raw, elem, opts = {}) {
 // reduziria um e esqueceria o outro, e a diferença só apareceria em jogo.
 // O número que sobe na tela é o ganho real, não o valor pedido: com wither
 // ativo mostrar o valor cheio seria mentira para o jogador.
-export function healPlayer(G, p, amount) {
+// `silent`: cura contínua (regeneração, roubo de vida) não sobe número, senão
+// a tela vira uma coluna de `+0` a 30 quadros por segundo. O funil vale igual
+// para ela — o que muda é só o feedback.
+export function healPlayer(G, p, amount, opts = {}) {
   if (p.dead || !(amount > 0)) return 0;
   const st = stats(p);
   const eff = p.status.wither > 0 ? amount * WITHER_HEAL_MULT : amount;
   const before = p.hp;
   p.hp = Math.min(st.maxHp, p.hp + eff);
   const gained = p.hp - before;
-  pushEvent(G, { t: 'd', x: p.x, y: p.y, v: '+' + Math.floor(gained), c: '#7de08a' });
+  if (!opts.silent && gained > 0) {
+    pushEvent(G, { t: 'd', x: p.x, y: p.y, v: '+' + Math.floor(gained), c: '#7de08a' });
+  }
   return gained;
 }
 
@@ -846,6 +856,12 @@ function updateMonster(G, m, dt) {
   const speed = m.speed * speedMult * (enraged ? 1.35 : 1) * dt;
 
   if (!target) {
+    // Perder o alvo no meio da carga não pode congelar a janela: `m.windup` só
+    // desce depois deste return, então o golpe ficaria estacionado e resolveria
+    // muito depois, na posição nova do monstro e sem nenhum anel na tela. Isso
+    // quebraria a promessa de RF-07 — nada acerta sem aviso. Cancelar é o mesmo
+    // desfecho que RF-09 já dá para morte, atordoamento e congelamento.
+    if (m.windup > 0) cancelWindup(m);
     // Ronda preguiçosa perto de casa
     if (m.cd <= 0) {
       m.cd = 1.5 + Math.random() * 2;
@@ -908,6 +924,9 @@ function cancelWindup(m) {
 // Área ameaçada em tiles, para o aviso desenhar o tamanho certo. Sai da própria
 // declaração do especial: quem muda o raio na tabela de conteúdo muda o aviso
 // junto, sem tocar em sim.js.
+// Raio ameaçado que o anel de telegrafia desenha. Todo especial precisa
+// devolver um número > 0: com 0 o anel não desenha nada e o golpe chega sem
+// aviso nenhum, que é exatamente o que RF-07 proíbe.
 function specialRadius(sp) {
   return sp.r || sp.range || 0;
 }
@@ -964,7 +983,7 @@ function resolveBossSpecial(G, m, id, target) {
       const pool = MONSTERS.filter((t) => t.tier <= sp.tierMax);
       for (let i = 0; i < sp.count; i++) {
         const t = G.rng.pick(pool);
-        const spot = findFreeSpot(G.map, m.x, m.y, 2.5);
+        const spot = findFreeSpot(G.map, m.x, m.y, sp.r);
         const s = makeMonster(G, t, spot.x, spot.y, m.level - 1);
         s.summoned = true;
         s.aggro = target ? target.id : null;
@@ -1006,6 +1025,10 @@ function resolveMonsterAttack(G, m, target, attackRange) {
     pushEvent(G, { t: 'fx', k: 'slash', x: p.x, y: p.y, a: m.dir, c: m.color });
     if (m.lifesteal) m.hp = Math.min(m.maxHp, m.hp + m.atk * m.lifesteal);
     if (m.poison) { p.status.poison = Math.max(p.status.poison, m.poison.time); p.status.poisonDps = m.poison.dps; }
+    // Inalcançável hoje: todo chefe de BOSSES tem `ai: 'boss'` e sai pelo ramo
+    // do projétil acima, onde o status vem de `pr.bossElem`. Fica aqui porque é
+    // o ponto certo caso um chefe futuro nasça corpo a corpo — sem esta linha
+    // ele perderia o status do próprio elemento sem nada apontar o porquê.
     if (m.isBoss) applyBossStatus(G, p, m.elem);
   }
 }
@@ -1279,7 +1302,9 @@ function grabItem(G, p, it) {
   }
   p.inv[slot] = it;
   p.invVer++;
-  pushEvent(G, { t: 'loot', id: p.id, rarity: it.rarity, name: it.name });
+  // x/y viajam no evento: quem desenha o brilho é o cliente, e o convidado não
+  // tem como resolver a posição de um id de jogador antes do próximo snapshot.
+  pushEvent(G, { t: 'loot', id: p.id, x: p.x, y: p.y, rarity: it.rarity, name: it.name });
   log(G, `${p.name} pegou ${it.name} [${RARITY[it.rarity].name}]`, 'loot');
   // Equipa sozinho se o espaço está vazio e a vocação permite — menos fricção pra quem tá começando.
   if (!p.equip[it.slot] && canUse(p, it)) equipFromInv(G, p, slot);
