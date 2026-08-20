@@ -230,7 +230,7 @@ export function buildSnapshot(G, { viewer = null, aoi = true } = {}) {
       i: m.id, t: m.typeId, x: r2(m.x), y: r2(m.y), d: r2(m.dir),
       h: Math.round(m.hp), mh: m.maxHp, l: m.level,
     };
-    if (m.isBoss) { e.b = 1; e.n = m.name; }
+    if (m.isBoss) { e.b = 1; e.n = m.name; if (m.hardcore) e.hc = 1; }
     if (m.hitFlash > 0) e.f = r2(m.hitFlash);
     if (m.windup > 0) e.w = r2(m.windup);
     if (m.deathFade > 0) e.df = r2(m.deathFade);
@@ -283,6 +283,7 @@ export function applySnapshot(view, snap) {
     }
     m.rx = sm.x; m.ry = sm.y;
     m.dir = sm.d; m.hp = sm.h; m.maxHp = sm.mh; m.level = sm.l; m.isBoss = !!sm.b;
+    m.hardcore = !!sm.hc;
     m.hitFlash = sm.f || 0; m.windup = sm.w || 0; m.deathFade = sm.df || 0;
     m.name = sm.n || type.name || '';
     m.shape = type.shape || 'brute';

@@ -215,9 +215,17 @@ export function updateHUD(view, local, st, dt = 0) {
   const boss = view.monsters.find((m) => m.isBoss && m.hp > 0 && Math.hypot(m.x - local.x, m.y - local.y) < 18);
   el('bossBar').classList.toggle('hidden', !boss);
   if (boss) {
-    el('bossName').textContent = `${boss.name} · Nv ${boss.level}`;
+    el('bossName').textContent = bossBarLabel(boss);
     el('barBoss').style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
   }
+}
+
+// Marca a variante por texto e não por cor: a barra do chefe precisa continuar
+// dizendo HARDCORE em escala de cinza (UI-02). Pura de propósito — quem testa
+// importa isto sem precisar de DOM.
+export function bossBarLabel(boss) {
+  const base = `${boss.name} · Nv ${boss.level}`;
+  return boss.hardcore ? `${base} · HARDCORE` : base;
 }
 
 export function updateDeathOverlay(local) {

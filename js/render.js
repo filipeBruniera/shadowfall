@@ -1,6 +1,6 @@
 import { TILE_W, TILE_H, WALL_H, T, VOCATIONS, RARITY, ELEM_COLOR } from './data.js';
 import { hash2 } from './rng.js';
-import { EMBER_LINK_MIN } from './balance.js';
+import { EMBER_LINK_MIN, BOSS_WINDUP, MONSTER_WINDUP } from './balance.js';
 
 export const cam = { x: 0, y: 0, zoom: 1, shake: 0, shakeX: 0, shakeY: 0 };
 const HALF_W = TILE_W / 2, HALF_H = TILE_H / 2;
@@ -55,6 +55,37 @@ export function spawnParticles(x, y, color, count, opts = {}) {
 
 export function spawnRing(x, y, r, color, opts = {}) {
   fx.rings.push({ x, y, r, color, life: opts.life || 0.45, max: opts.life || 0.45, fill: !!opts.fill, width: opts.width || 3 });
+}
+
+// ---------- Telegrafia ----------
+// Duração total da janela por id de monstro, aprendida pelo evento CT-02. Sem
+// isso o anel não teria como saber quanto dura a carga: o snapshot só carrega
+// o que falta (`w`), nunca o total.
+const telegraphTotals = new Map();
+
+export function registerTelegraph(id, total) {
+  if (total > 0) telegraphTotals.set(id, total);
+}
+
+// Fallback quando o anel começa a ser desenhado sem o evento correspondente —
+// convidado que entrou no meio da carga, ou pacote de evento descartado. Vem de
+// balance.js e nunca de literal (AGENTS.md:38).
+export function telegraphTotal(m) {
+  const known = telegraphTotals.get(m.id);
+  if (known > 0) return known;
+  return m.isBoss ? BOSS_WINDUP : MONSTER_WINDUP;
+}
+
+export function forgetTelegraph(id) {
+  telegraphTotals.delete(id);
+}
+
+// Progresso do anel de carga: 0 no primeiro tique da janela, 1 no último,
+// qualquer que seja a duração. O divisor fixo de 0.5s que existia aqui mentia
+// para toda telegrafia mais longa que o windup genérico.
+export function telegraphProgress(remaining, total) {
+  if (!(total > 0)) return 0;
+  return Math.min(1, Math.max(0, 1 - remaining / total));
 }
 
 export function spawnBeam(x, y, x2, y2, color, life = 0.3) {
@@ -158,6 +189,12 @@ export function handleFxEvent(ev) {
           break;
         case 'windup':
           spawnRing(ev.x, ev.y, 0.8, '#ff7a2f', { life: 0.3, width: 2 });
+          break;
+        case 'telegraph':
+          // O aviso desenha a área ameaçada inteira: é o que dá ao grupo a
+          // chance de sair antes de o golpe existir no mundo.
+          spawnRing(ev.x, ev.y, ev.r, ev.c, { life: ev.d, width: 4 });
+          registerTelegraph(ev.id, ev.d);
           break;
         default: break;
       }
@@ -922,8 +959,10 @@ function drawMonster(ctx, m, now, view) {
     ctx.strokeStyle = 'rgba(255,122,47,0.85)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(p.x, p.y, 18 * msz, 9 * msz, 0, 0, Math.PI * 2 * (1 - m.windup / 0.5));
+    ctx.ellipse(p.x, p.y, 18 * msz, 9 * msz, 0, 0, Math.PI * 2 * telegraphProgress(m.windup, telegraphTotal(m)));
     ctx.stroke();
+  } else {
+    forgetTelegraph(m.id);
   }
 }
 

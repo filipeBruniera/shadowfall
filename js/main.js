@@ -542,7 +542,11 @@ function applyEvent(ev) {
   if (ev.t === 'portalReset') { UI.flashPortalReset(); return; }
   if (ev.t === 'log') { UI.pushLog(ev.m, ev.c || 'system'); return; }
   if (ev.t === 'portal') { UI.banner('Portal aberto', 'Sala do chefe'); return; }
-  if (ev.t === 'loot' || ev.t === 'hurt' || ev.t === 'respawn') return;
+  // 'bossSpawn' e 'floor' são consumidos fora daqui: o primeiro pela camada de
+  // áudio que vai assinar CT-03, o segundo pela mensagem própria do host
+  // (net.send({ t: 'floor' }) em hostTick). Sem este ignore os dois desceriam
+  // até o default de handleFxEvent.
+  if (ev.t === 'loot' || ev.t === 'hurt' || ev.t === 'respawn' || ev.t === 'bossSpawn' || ev.t === 'floor') return;
   handleFxEvent(ev);
 }
 
@@ -962,7 +966,10 @@ function hostTick() {
   const evs = step(S.G, TICK);
   for (const ev of evs) applyEvent(ev);
   if (net.mode === NetMode.HOST && net.conns.size) {
-    for (const ev of evs) if (ev.t === 'd' || ev.t === 'fx' || ev.t === 'shake' || ev.t === 'log' || ev.t === 'portal' || ev.t === 'portalReset') S.netEvents.push(ev);
+    // 'floor' fica de fora de propósito: o host já anuncia a virada por
+    // net.send({ t: 'floor' }), e encaminhar os dois regeraria o mapa duas vezes
+    // no convidado.
+    for (const ev of evs) if (ev.t === 'd' || ev.t === 'fx' || ev.t === 'shake' || ev.t === 'log' || ev.t === 'portal' || ev.t === 'portalReset' || ev.t === 'bossSpawn') S.netEvents.push(ev);
   }
   if (S.G.pendingFloor) {
     S.G.pendingFloor = false;
