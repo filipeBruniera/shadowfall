@@ -5,7 +5,9 @@ import {
 import {
   MAX_PLAYERS, HEAL_ALLY_RADIUS, REVIVE_TIME, REVIVE_RADIUS, XP_RADIUS, PORTAL_HOLD,
   xpShare, groupScale, floorPopulation, GROUP_SCALE_CAP,
+  bossCurve, HARDCORE_EVERY, HARDCORE_HP_MULT, HARDCORE_ATK_MULT,
 } from '../js/balance.js';
+import { BOSSES } from '../js/data.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -235,6 +237,73 @@ function forapdoPortal(G, p) { p.x = G.map.portal.x + 20; p.y = G.map.portal.y +
   noPortal(G, ps[0]);
   run(G, PORTAL_HOLD + 0.2);
   check('portal: com 1 jogador vivo, basta ele cumprir os 1,5s', G.pendingFloor === true);
+}
+
+console.log('\n== composição da dificuldade do chefe ==');
+{
+  // maxHp do chefe é o produto de três fatores independentes: curva do andar,
+  // groupScale e degrau HARDCORE. Nenhum deles é reescrito em sim.js.
+  const cenarios = [
+    { floor: 3, players: 1 }, { floor: 3, players: 10 },
+    { floor: 5, players: 1 }, { floor: 6, players: 4 },
+    { floor: 9, players: 10 }, { floor: 12, players: 2 },
+  ];
+  let produtoOk = true, produtoDet = '';
+  for (const { floor, players } of cenarios) {
+    const G = createGame(3131, floor, players);
+    const b = G.monsters.find((m) => m.isBoss);
+    const tipo = BOSSES[(floor - 1) % BOSSES.length];
+    const curva = bossCurve(floor);
+    const hc = floor % HARDCORE_EVERY === 0;
+    const hpEsperado = Math.round(
+      tipo.hp * curva.hpMult * groupScale(players) * (hc ? HARDCORE_HP_MULT : 1));
+    const atkEsperado = Math.floor(
+      tipo.atk * curva.atkMult * (hc ? HARDCORE_ATK_MULT : 1));
+    if (b.maxHp !== hpEsperado || b.atk !== atkEsperado || b.level !== curva.level) {
+      produtoOk = false;
+      produtoDet = `andar ${floor}/${players}: ${b.maxHp}x${b.atk}x${b.level} != ${hpEsperado}x${atkEsperado}x${curva.level}`;
+    }
+  }
+  check('chefe: maxHp e atk são o produto de curva x groupScale x fator HARDCORE',
+    produtoOk, produtoDet);
+
+  // A ordem dos fatores não muda o resultado até o arredondamento final.
+  const curva9 = bossCurve(9);
+  const tipo9 = BOSSES[(9 - 1) % BOSSES.length];
+  const ordemA = tipo9.hp * curva9.hpMult * groupScale(6) * HARDCORE_HP_MULT;
+  const ordemB = HARDCORE_HP_MULT * groupScale(6) * curva9.hpMult * tipo9.hp;
+  check('chefe: o produto independe da ordem dos fatores',
+    Math.abs(ordemA - ordemB) < 1e-9, `${ordemA} vs ${ordemB}`);
+
+  // Degrau HARDCORE: mesmo chefe, mesmo grupo, andares 9 e 21 (ambos ferumbras
+  // e ambos múltiplos de 3) contra o mesmo chefe fora do ciclo.
+  for (const players of [1, 10]) {
+    const hcG = createGame(3131, 3, players).monsters.find((m) => m.isBoss);
+    const tipo = BOSSES[(3 - 1) % BOSSES.length];
+    const curva = bossCurve(3);
+    const hpComum = Math.round(tipo.hp * curva.hpMult * groupScale(players));
+    const atkComum = Math.floor(tipo.atk * curva.atkMult);
+    check(`chefe: HARDCORE tem HP e dano estritamente maiores (grupo de ${players})`,
+      hcG.maxHp > hpComum && hcG.atk > atkComum,
+      `${hcG.maxHp}/${hcG.atk} vs ${hpComum}/${atkComum}`);
+  }
+
+  // A escala por grupo continua valendo nas duas variantes.
+  for (const floor of [3, 5]) {
+    const solo = createGame(3131, floor, 1).monsters.find((m) => m.isBoss);
+    const cheio = createGame(3131, floor, 10).monsters.find((m) => m.isBoss);
+    check(`chefe: HP cresce com o grupo no andar ${floor}`,
+      cheio.maxHp > solo.maxHp, `${solo.maxHp} -> ${cheio.maxHp}`);
+  }
+
+  // A curva é a fonte única da dificuldade: monotônica não decrescente em 1..30.
+  let mono = true;
+  for (let f = 2; f <= 30; f++) {
+    const prev = bossCurve(f - 1);
+    const cur = bossCurve(f);
+    if (cur.level < prev.level || cur.hpMult < prev.hpMult || cur.atkMult < prev.atkMult) mono = false;
+  }
+  check('chefe: bossCurve é monotônica não decrescente de 1 a 30', mono);
 }
 
 console.log('\n== escala do andar ==');

@@ -1,6 +1,7 @@
 import { createGame, addPlayer, setInput, step, stats, nextFloor, hitMonster, rollItem, TICK } from '../js/sim.js';
 import { generateMap, findPath } from '../js/world.js';
 import { VOC_LIST } from '../js/data.js';
+import { isCriticalEvent, drainEvents } from '../js/net.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -151,6 +152,124 @@ for (let t = 0; t < 90 / TICK; t++) {
 check('A* encontra caminho na maioria das vezes', pathsFound > pathsFailed * 3, `(ok ${pathsFound} / falha ${pathsFailed})`);
 check('jogador matou e acumulou ouro', p4.gold > 0, `(ouro ${p4.gold}, kills ${p4.kills}, mortes ${p4.deaths})`);
 check('equipou ou guardou algum item', Object.values(p4.equip).some(Boolean) || p4.inv.some(Boolean));
+
+console.log('\n== variante HARDCORE do chefe ==');
+{
+  // Chefes giram em ciclo de 4 e o HARDCORE cai em ciclo de 3: o par só se
+  // repete a cada 12 andares, um HARDCORE por chefe em cada bloco.
+  const esperado = { 3: 'glacier', 6: 'morgaroth', 9: 'ferumbras', 12: 'bonelord' };
+  let flagOk = true, idOk = true, detalhe = '';
+  for (const [f, typeId] of Object.entries(esperado)) {
+    const G = createGame(7777, Number(f));
+    const b = G.monsters.find((m) => m.isBoss);
+    if (b.hardcore !== true) { flagOk = false; detalhe = `andar ${f} sem flag`; }
+    if (b.typeId !== typeId) { idOk = false; detalhe = `andar ${f} é ${b.typeId}`; }
+  }
+  check('HARDCORE: flag verdadeira nos andares 3, 6, 9 e 12', flagOk, detalhe);
+  check('HARDCORE: a identidade do chefe do andar não muda', idOk, detalhe);
+
+  let comumOk = true, comumDet = '';
+  for (const f of [1, 2, 4, 5, 7, 8, 10, 11]) {
+    const G = createGame(7777, f);
+    const b = G.monsters.find((m) => m.isBoss);
+    if (b.hardcore !== false) { comumOk = false; comumDet = `andar ${f}`; }
+  }
+  check('HARDCORE: flag falsa fora do ciclo de 3', comumOk, comumDet);
+
+  // A marcação precisa existir antes do primeiro step(): quem lê o snapshot
+  // do nascimento já tem de saber que o andar é HARDCORE.
+  const G = createGame(7777, 3);
+  check('HARDCORE: a marcação existe antes do primeiro step()',
+    G.monsters.find((m) => m.isBoss).hardcore === true);
+}
+
+console.log('\n== eventos empilhados fora do tique ==');
+{
+  // step() zera G.events no primeiro comando: sem o buffer, o anúncio da
+  // virada de andar era apagado antes de qualquer consumidor ler.
+  const G = createGame(4242, 1);
+  addPlayer(G, { id: 'p1', name: 'Filipe', voc: 'knight' });
+  step(G, TICK);
+  nextFloor(G);
+  const lote = step(G, TICK).slice();
+  const floorEv = lote.filter((e) => e.t === 'floor');
+  const floorLog = lote.filter((e) => e.t === 'log' && /^Andar \d+ —/.test(e.m || ''));
+  check('buffer: virada de andar entrega exatamente um evento floor',
+    floorEv.length === 1 && floorEv[0].floor === G.floor, `(${floorEv.length})`);
+  check('buffer: virada de andar entrega exatamente uma linha de log do andar',
+    floorLog.length === 1, `(${floorLog.length})`);
+  const seguinte = step(G, TICK).slice();
+  check('buffer: o tique seguinte não repete a virada de andar',
+    !seguinte.some((e) => e.t === 'floor')
+    && !seguinte.some((e) => e.t === 'log' && /^Andar \d+ —/.test(e.m || '')),
+    `(${seguinte.filter((e) => e.t === 'floor').length} floor)`);
+  check('buffer: esvaziado depois da drenagem', G.pendingEvents.length === 0);
+}
+
+console.log('\n== nascimento do chefe HARDCORE ==');
+{
+  // Um evento por andar múltiplo de 3, zero nos demais.
+  let hcOk = true, hcDet = '';
+  for (let f = 1; f <= 12; f++) {
+    const G = createGame(8181, f);
+    const lote = step(G, TICK).slice();
+    const spawns = lote.filter((e) => e.t === 'bossSpawn');
+    const esperado = f % 3 === 0 ? 1 : 0;
+    if (spawns.length !== esperado) { hcOk = false; hcDet = `andar ${f}: ${spawns.length} != ${esperado}`; }
+  }
+  check('bossSpawn: exatamente 1 por andar HARDCORE e 0 nos demais', hcOk, hcDet);
+
+  const G = createGame(8181, 3);
+  const lote = step(G, TICK).slice();
+  const spawn = lote.find((e) => e.t === 'bossSpawn');
+  const b = G.monsters.find((m) => m.isBoss);
+  check('bossSpawn: o evento carrega id, typeId, andar e as marcas hardcore/boss',
+    !!spawn && spawn.id === b.id && spawn.typeId === 'glacier'
+    && spawn.floor === 3 && spawn.hardcore === 1 && spawn.boss === 1,
+    JSON.stringify(spawn));
+  check('bossSpawn: boss: 1 torna o evento crítico', isCriticalEvent(spawn));
+
+  // Eventos de nascimento são entregues uma vez só.
+  const seguinte = step(G, TICK).slice();
+  check('bossSpawn: o tique seguinte não repete o nascimento',
+    !seguinte.some((e) => e.t === 'bossSpawn')
+    && !seguinte.some((e) => e.t === 'log' && /HARDCORE/.test(e.m || '')));
+
+  // Fila saturada: o teto de 120 de drainEvents não pode comer o aviso.
+  const fila = lote.slice();
+  for (let i = 0; i < 400; i++) fila.push({ t: 'd', x: 0, y: 0, v: String(i), c: '#fff' });
+  const drenado = drainEvents(fila);
+  check('bossSpawn: sobrevive a drainEvents com a fila saturada',
+    drenado.some((e) => e.t === 'bossSpawn' && e.id === b.id), `(${drenado.length} eventos)`);
+
+  // O andar comum não recebe nem o evento nem a linha de aviso.
+  const comum = createGame(8181, 4);
+  const loteComum = step(comum, TICK).slice();
+  check('bossSpawn: em andar comum não há evento nem linha HARDCORE',
+    !loteComum.some((e) => e.t === 'bossSpawn')
+    && !loteComum.some((e) => e.t === 'log' && /HARDCORE/.test(e.m || '')));
+}
+
+console.log('\n== ordem do lote de virada para andar HARDCORE ==');
+{
+  const G = createGame(8282, 2);
+  step(G, TICK);
+  nextFloor(G);
+  const lote = step(G, TICK).slice();
+  const iFloor = lote.findIndex((e) => e.t === 'floor');
+  const iAndar = lote.findIndex((e) => e.t === 'log' && /^Andar \d+ —/.test(e.m || ''));
+  const iHc = lote.findIndex((e) => e.t === 'log' && /HARDCORE/.test(e.m || ''));
+  const iSpawn = lote.findIndex((e) => e.t === 'bossSpawn');
+  check('UI: o mesmo lote traz virada de andar e nascimento HARDCORE',
+    iFloor >= 0 && iAndar >= 0 && iHc >= 0 && iSpawn >= 0,
+    `floor ${iFloor} andar ${iAndar} hc ${iHc} spawn ${iSpawn}`);
+  check('UI: a linha do andar sai antes da linha HARDCORE',
+    iAndar < iHc, `${iAndar} vs ${iHc}`);
+  // O aviso precede qualquer dano do chefe: no lote de nascimento não há
+  // evento de dano nenhum.
+  check('UI: o aviso HARDCORE sai antes de qualquer evento de dano',
+    !lote.some((e) => e.t === 'd' || e.t === 'hurt'));
+}
 
 console.log('\n== desempenho ==');
 const G5 = createGame(5150, 8);

@@ -10,6 +10,8 @@ import {
   DEATH_GOLD_LOSS, REVIVE_HP_FRAC, REVIVE_MP_FRAC,
   PORTAL_HOLD, XP_RADIUS, FLOOR_RESTORE_FRAC, floorPopulation, xpShare, groupScale,
   HEAL_ALLY_RADIUS, TAUNT_TIME, REVIVE_MAX_HELPERS,
+  bossCurve, HARDCORE_EVERY, HARDCORE_HP_MULT, HARDCORE_ATK_MULT,
+  LEVEL_HP_SCALE, LEVEL_ATK_SCALE, LEVEL_DEF_SCALE, LEVEL_XP_SCALE,
 } from './balance.js';
 
 export { TICK };
@@ -27,6 +29,10 @@ export function createGame(seed = randomSeed(), floor = 1, groupSize = 1) {
     projectiles: [],
     zones: [],
     events: [],
+    // step() zera G.events no primeiro comando, então evento empilhado fora do
+    // tique (nascimento do andar, virada de andar) morria antes de qualquer
+    // consumidor ler. Este buffer segura até o próximo step() drenar.
+    pendingEvents: [],
     time: 0,
     nextId: 1,
     rng: makeRng((seed ^ 0xabcd1234) >>> 0),
@@ -47,6 +53,10 @@ export function createGame(seed = randomSeed(), floor = 1, groupSize = 1) {
 
 export function nextFloor(G) {
   G.floor++;
+  // Anúncio do andar sai antes de populate() para a linha do andar aparecer na
+  // tela antes da linha do chefe HARDCORE que populate() empilha.
+  pushPending(G, { t: 'floor', floor: G.floor });
+  logPending(G, `Andar ${G.floor} — o ar fica mais pesado.`, 'system');
   // A escala do andar novo considera quem está vivo agora, incluindo quem
   // acabou de entrar pela fila.
   G.groupSize = Math.max(1, Object.values(G.players).filter((p) => !p.dead).length);
@@ -72,8 +82,6 @@ export function nextFloor(G) {
     p.status = emptyStatus();
     p.portalHold = 0;
   }
-  pushEvent(G, { t: 'floor', floor: G.floor });
-  log(G, `Andar ${G.floor} — o ar fica mais pesado.`, 'system');
   return G;
 }
 
@@ -98,19 +106,38 @@ function populate(G) {
   }
 
   const boss = BOSSES[(floor - 1) % BOSSES.length];
-  const b = makeMonster(G, boss, G.map.bossRoom.cx + 0.5, G.map.bossRoom.cy - 1.5, floor + 3);
+  // A identidade do chefe continua vindo do ciclo de 4; HARDCORE é acréscimo
+  // por andar múltiplo de 3, nunca troca de chefe.
+  const hardcore = floor % HARDCORE_EVERY === 0;
+  const curve = bossCurve(floor);
+  const b = makeMonster(G, boss, G.map.bossRoom.cx + 0.5, G.map.bossRoom.cy - 1.5, curve.level);
   b.isBoss = true;
-  // O chefe escala pela mesma curva dos comuns: 10 pessoas não podem
-  // transformá-lo num ponto de passagem.
-  b.maxHp = Math.round(b.maxHp * groupScale(G.groupSize || 1));
+  b.hardcore = hardcore;
+  // Três fatores independentes e multiplicativos: curva do andar, tamanho do
+  // grupo (groupScale, nunca reescrita aqui) e o degrau HARDCORE. 10 pessoas
+  // não podem transformar o chefe num ponto de passagem.
+  const gScale = groupScale(G.groupSize || 1);
+  const hcHp = hardcore ? HARDCORE_HP_MULT : 1;
+  const hcAtk = hardcore ? HARDCORE_ATK_MULT : 1;
+  b.maxHp = Math.round(boss.hp * curve.hpMult * gScale * hcHp);
   b.hp = b.maxHp;
+  b.atk = Math.floor(boss.atk * curve.atkMult * hcAtk);
   b.name = `${boss.name} · Andar ${floor}`;
   G.monsters.push(b);
   G.bossId = b.id;
+
+  if (hardcore) {
+    // Empilha no buffer, não em G.events: populate() roda fora do tique e o
+    // primeiro comando de step() zeraria os dois eventos antes de qualquer
+    // consumidor ler. `boss: 1` é o que faz isCriticalEvent() devolver true,
+    // então nem a fila saturada corta o aviso.
+    pushPending(G, { t: 'bossSpawn', id: b.id, typeId: boss.id, floor, hardcore: 1, boss: 1 });
+    logPending(G, `Andar HARDCORE — ${boss.name} desceu em sua forma mais cruel.`, 'boss');
+  }
 }
 
 function makeMonster(G, type, x, y, level) {
-  const scale = 1 + (level - 1) * 0.22;
+  const scale = 1 + (level - 1) * LEVEL_HP_SCALE;
   const hp = Math.floor(type.hp * scale);
   return {
     id: G.nextId++,
@@ -119,9 +146,9 @@ function makeMonster(G, type, x, y, level) {
     shape: type.shape,
     x, y, dir: 0,
     hp, maxHp: hp,
-    atk: Math.floor(type.atk * (1 + (level - 1) * 0.16)),
-    def: Math.floor(type.def * (1 + (level - 1) * 0.1)),
-    xp: Math.floor(type.xp * (1 + (level - 1) * 0.3)),
+    atk: Math.floor(type.atk * (1 + (level - 1) * LEVEL_ATK_SCALE)),
+    def: Math.floor(type.def * (1 + (level - 1) * LEVEL_DEF_SCALE)),
+    xp: Math.floor(type.xp * (1 + (level - 1) * LEVEL_XP_SCALE)),
     level,
     speed: type.speed,
     vision: type.vision,
@@ -145,6 +172,7 @@ function makeMonster(G, type, x, y, level) {
     status: emptyStatus(),
     hitFlash: 0,
     isBoss: false,
+    hardcore: false,
     summoned: false,
     phase: 0,
   };
@@ -278,6 +306,13 @@ export function setInput(G, id, input) {
 export function step(G, dt) {
   G.time += dt;
   G.events.length = 0;
+  // Drenagem única: o buffer é esvaziado no mesmo comando, senão o lote de
+  // nascimento se repetiria a cada tique.
+  const pending = G.pendingEvents;
+  if (pending && pending.length) {
+    for (const ev of pending) G.events.push(ev);
+    pending.length = 0;
+  }
 
   const alive = Object.values(G.players).filter((p) => !p.dead);
 
@@ -1226,4 +1261,9 @@ export function moveEntity(map, e, dx, dy, r = 0.32) {
 function pushEvent(G, ev) { G.events.push(ev); }
 function log(G, m, c) { G.events.push({ t: 'log', m, c }); }
 
-export { pushEvent, log, MAP_W, MAP_H };
+// Empilham fora do tique: quem chama populate() ou nextFloor() não está dentro
+// de step(), então precisa do buffer para o evento sobreviver até a drenagem.
+function pushPending(G, ev) { (G.pendingEvents || (G.pendingEvents = [])).push(ev); }
+function logPending(G, m, c) { pushPending(G, { t: 'log', m, c }); }
+
+export { pushEvent, log, pushPending, logPending, MAP_W, MAP_H };
