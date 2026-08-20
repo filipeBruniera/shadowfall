@@ -1,0 +1,163 @@
+// ============================================================
+// SHADOWFALL — conteúdo do jogo (tiles, vocações, magias, bichos, loot)
+// ============================================================
+
+export const TILE_W = 64;
+export const TILE_H = 32;
+export const WALL_H = 30;
+
+export const T = { VOID: 0, FLOOR: 1, WALL: 2, RUBBLE: 3, WATER: 4, LAVA: 5, GRASS: 6, PORTAL: 7, BRAZIER: 8 };
+
+export const SOLID = new Set([T.VOID, T.WALL, T.BRAZIER]);
+export const HAZARD = { [T.LAVA]: { dps: 14, elem: 1 } };
+
+export function isSolid(t) { return SOLID.has(t); }
+
+// ---------- Elementos ----------
+export const E = { PHYS: 0, FIRE: 1, ICE: 2, ENERGY: 3, EARTH: 4, HOLY: 5, DEATH: 6 };
+export const ELEM_NAME = ['Físico', 'Fogo', 'Gelo', 'Energia', 'Terra', 'Sagrado', 'Morte'];
+export const ELEM_COLOR = ['#d9cbb0', '#ff7a2f', '#7fd4ff', '#ffd84d', '#8fbf4d', '#ffeeba', '#b06bff'];
+
+// ---------- Vocações ----------
+// Cada magia: type define como o simulador resolve.
+// bolt | wave | nova | ground | heal | buff | dash | chain
+export const VOCATIONS = {
+  knight: {
+    id: 'knight', name: 'Cavaleiro', tag: 'EK', color: '#c8433a',
+    blurb: 'Aguenta pancada. Segura a linha de frente e puxa os monstros pra cima de si.',
+    hp: 185, mp: 40, atk: 11, def: 9, ml: 0, atkSpeed: 0.85, range: 1.15,
+    gHp: 22, gMp: 3, gAtk: 3.2, gDef: 2.4, gMl: 0.3,
+    elem: E.PHYS,
+    skills: [
+      { key: 'Q', name: 'Exori', icon: '⚔', mana: 22, cd: 3.2, type: 'nova', elem: E.PHYS, mult: 1.9, radius: 2.0, desc: 'Golpe circular em tudo ao redor.' },
+      { key: 'W', name: 'Exori Min', icon: '🗡', mana: 30, cd: 5.0, type: 'wave', elem: E.PHYS, mult: 2.6, range: 4, width: 1.6, desc: 'Investida frontal que corta em linha.' },
+      { key: 'E', name: 'Exeta Res', icon: '🛡', mana: 34, cd: 12, type: 'buff', radius: 7, buff: { def: 2.2, dmgRes: 0.35, time: 7 }, taunt: true, desc: 'Provoca os inimigos por perto e endurece sua pele por 7s.' },
+      { key: 'R', name: 'Exori Gran', icon: '💥', mana: 70, cd: 22, type: 'nova', elem: E.PHYS, mult: 4.6, radius: 3.2, stun: 1.4, shake: 14, desc: 'Estouro devastador que atordoa.' },
+    ],
+  },
+  paladin: {
+    id: 'paladin', name: 'Paladino', tag: 'RP', color: '#e8b54c',
+    blurb: 'Dano à distância e cura de emergência. O melhor par pra quem tá aprendendo.',
+    hp: 125, mp: 80, atk: 9, def: 5, ml: 2, atkSpeed: 0.55, range: 6.5,
+    gHp: 14, gMp: 7, gAtk: 2.4, gDef: 1.3, gMl: 1.0,
+    elem: E.HOLY,
+    skills: [
+      { key: 'Q', name: 'Exori San', icon: '✦', mana: 16, cd: 1.6, type: 'bolt', elem: E.HOLY, mult: 2.1, speed: 16, range: 9, desc: 'Míssil sagrado teleguiado.' },
+      { key: 'W', name: 'Divine Caldera', icon: '☀', mana: 38, cd: 6.0, type: 'nova', elem: E.HOLY, mult: 2.4, radius: 3.2, desc: 'Explosão sagrada ao redor.' },
+      { key: 'E', name: 'Exura San', icon: '✚', mana: 40, cd: 7.0, type: 'heal', power: 1.9, flat: 45, ally: true, desc: 'Cura você e o aliado mais ferido por perto.' },
+      { key: 'R', name: 'Avatar da Luz', icon: '👁', mana: 95, cd: 40, type: 'buff', buff: { atk: 1.8, ml: 1.6, speed: 1.2, time: 9 }, desc: 'Transformação: dano e velocidade muito maiores por 9s.' },
+    ],
+  },
+  sorcerer: {
+    id: 'sorcerer', name: 'Feiticeiro', tag: 'MS', color: '#6f8cff',
+    blurb: 'Vidro puro. Dano absurdo em área, morre se levar dois tapas.',
+    hp: 82, mp: 150, atk: 4, def: 2, ml: 6, atkSpeed: 0.7, range: 6.0,
+    gHp: 8, gMp: 16, gAtk: 0.8, gDef: 0.7, gMl: 2.2,
+    elem: E.FIRE,
+    skills: [
+      { key: 'Q', name: 'Flam Hur', icon: '🔥', mana: 18, cd: 1.5, type: 'bolt', elem: E.FIRE, mult: 2.3, speed: 14, range: 9, burn: { dps: 8, time: 3 }, desc: 'Bola de fogo que incendeia o alvo.' },
+      { key: 'W', name: 'Vis Lux', icon: '⚡', mana: 34, cd: 4.5, type: 'wave', elem: E.ENERGY, mult: 3.1, range: 7, width: 1.2, desc: 'Feixe de energia que atravessa tudo em linha reta.' },
+      { key: 'E', name: 'Utana Vid', icon: '༄', mana: 26, cd: 8.0, type: 'dash', range: 5, desc: 'Piscada arcana: teleporta na direção do cursor.' },
+      { key: 'R', name: 'Hellfire', icon: '☄', mana: 90, cd: 26, type: 'ground', elem: E.FIRE, mult: 1.5, radius: 3.4, time: 4.5, tick: 0.45, shake: 10, desc: 'Chuva de meteoros num ponto do chão por 4,5s.' },
+    ],
+  },
+  druid: {
+    id: 'druid', name: 'Druida', tag: 'ED', color: '#5fb39a',
+    blurb: 'Controla o campo: congela, envenena e mantém o grupo de pé.',
+    hp: 90, mp: 140, atk: 4, def: 2, ml: 5, atkSpeed: 0.7, range: 6.0,
+    gHp: 9, gMp: 14, gAtk: 0.8, gDef: 0.8, gMl: 2.0,
+    elem: E.ICE,
+    skills: [
+      { key: 'Q', name: 'Frigo Hur', icon: '❄', mana: 20, cd: 1.8, type: 'wave', elem: E.ICE, mult: 2.0, range: 5, width: 1.8, slow: { mult: 0.45, time: 2.5 }, desc: 'Onda de gelo que reduz a velocidade.' },
+      { key: 'W', name: 'Tera Hur', icon: '☘', mana: 32, cd: 5.5, type: 'ground', elem: E.EARTH, mult: 0.9, radius: 2.6, time: 6, tick: 0.6, poison: { dps: 10, time: 4 }, desc: 'Campo de espinhos venenosos.' },
+      { key: 'E', name: 'Exura Sio', icon: '✚', mana: 36, cd: 5.5, type: 'heal', power: 2.3, flat: 30, ally: true, allyFirst: true, desc: 'Cura forte no aliado mais ferido (ou em você).' },
+      { key: 'R', name: 'Inverno Eterno', icon: '🌨', mana: 88, cd: 28, type: 'nova', elem: E.ICE, mult: 4.2, radius: 4.5, freeze: 2.2, shake: 8, desc: 'Congela e despedaça tudo num raio enorme.' },
+    ],
+  },
+};
+
+export const VOC_LIST = ['knight', 'paladin', 'sorcerer', 'druid'];
+
+// ---------- Monstros ----------
+// shape controla o desenho procedural: bones | beast | robed | brute | wisp | dragon
+export const MONSTERS = [
+  { id: 'rat', name: 'Rato Podre', shape: 'beast', tier: 0, hp: 26, atk: 5, def: 0, xp: 6, speed: 3.0, vision: 7, ai: 'melee', elem: E.PHYS, weak: E.FIRE, color: '#6b5a45', size: 0.72 },
+  { id: 'spider', name: 'Aranha das Sombras', shape: 'beast', tier: 0, hp: 30, atk: 7, def: 1, xp: 10, speed: 3.3, vision: 8, ai: 'melee', elem: E.EARTH, weak: E.FIRE, color: '#4b3f55', size: 0.8, poison: { dps: 5, time: 3 } },
+  { id: 'skeleton', name: 'Esqueleto', shape: 'bones', tier: 1, hp: 46, atk: 9, def: 2, xp: 16, speed: 2.4, vision: 8, ai: 'melee', elem: E.DEATH, weak: E.HOLY, resist: E.DEATH, color: '#cbc2ae', size: 0.95 },
+  { id: 'wolf', name: 'Lobo Negro', shape: 'beast', tier: 1, hp: 54, atk: 11, def: 2, xp: 22, speed: 4.0, vision: 10, ai: 'pack', elem: E.PHYS, weak: E.ICE, color: '#3c3a44', size: 0.95 },
+  { id: 'ghost', name: 'Alma Penada', shape: 'wisp', tier: 1, hp: 44, atk: 10, def: 1, xp: 24, speed: 2.2, vision: 9, ai: 'ranged', elem: E.DEATH, weak: E.HOLY, resist: E.PHYS, color: '#9fb3c8', size: 0.9, phasing: true },
+  { id: 'cultist', name: 'Cultista', shape: 'robed', tier: 2, hp: 58, atk: 13, def: 2, xp: 30, speed: 2.4, vision: 10, ai: 'caster', elem: E.FIRE, weak: E.HOLY, color: '#7a3f9c', size: 0.95 },
+  { id: 'witch', name: 'Bruxa do Gelo', shape: 'robed', tier: 2, hp: 55, atk: 14, def: 1, xp: 32, speed: 2.3, vision: 10, ai: 'caster', elem: E.ICE, weak: E.FIRE, resist: E.ICE, color: '#5aa9d6', size: 0.95 },
+  { id: 'orc', name: 'Orc Berserker', shape: 'brute', tier: 2, hp: 92, atk: 15, def: 4, xp: 38, speed: 3.1, vision: 9, ai: 'melee', elem: E.PHYS, weak: E.ENERGY, color: '#5c7a3f', size: 1.1, enrage: true },
+  { id: 'golem', name: 'Golem de Pedra', shape: 'brute', tier: 3, hp: 170, atk: 14, def: 9, xp: 55, speed: 1.8, vision: 6, ai: 'tank', elem: E.EARTH, weak: E.ENERGY, resist: E.PHYS, color: '#7d7a72', size: 1.25 },
+  { id: 'vampire', name: 'Vampiro', shape: 'robed', tier: 3, hp: 130, atk: 18, def: 5, xp: 60, speed: 3.2, vision: 11, ai: 'melee', elem: E.DEATH, weak: E.HOLY, resist: E.DEATH, color: '#8f2233', size: 1.05, lifesteal: 0.35 },
+  { id: 'demon', name: 'Demônio Menor', shape: 'brute', tier: 4, hp: 210, atk: 22, def: 7, xp: 90, speed: 2.9, vision: 11, ai: 'caster', elem: E.FIRE, weak: E.HOLY, resist: E.FIRE, color: '#c03a1f', size: 1.3 },
+  { id: 'wyrm', name: 'Dragão Jovem', shape: 'dragon', tier: 4, hp: 260, atk: 24, def: 8, xp: 120, speed: 2.6, vision: 12, ai: 'caster', elem: E.FIRE, weak: E.ICE, resist: E.FIRE, color: '#c8602a', size: 1.35 },
+];
+
+export const BOSSES = [
+  { id: 'ferumbras', name: 'Arauto de Cinzas', shape: 'robed', hp: 900, atk: 30, def: 10, xp: 700, speed: 2.4, vision: 16, ai: 'boss', elem: E.FIRE, weak: E.ICE, resist: E.FIRE, color: '#ff6a2a', size: 1.9 },
+  { id: 'morgaroth', name: 'Senhor do Fosso', shape: 'brute', hp: 1200, atk: 36, def: 14, xp: 900, speed: 2.6, vision: 16, ai: 'boss', elem: E.DEATH, weak: E.HOLY, resist: E.PHYS, color: '#7b2d8f', size: 2.0 },
+  { id: 'glacier', name: 'Rainha Glacial', shape: 'robed', hp: 1050, atk: 32, def: 12, xp: 850, speed: 2.5, vision: 16, ai: 'boss', elem: E.ICE, weak: E.FIRE, resist: E.ICE, color: '#6fc8ec', size: 1.9 },
+  { id: 'bonelord', name: 'Ossuário Ancião', shape: 'bones', hp: 1400, atk: 34, def: 12, xp: 1000, speed: 2.2, vision: 16, ai: 'boss', elem: E.DEATH, weak: E.HOLY, resist: E.DEATH, color: '#e3d8bd', size: 2.0 },
+];
+
+export const MONSTER_BY_ID = Object.fromEntries([...MONSTERS, ...BOSSES].map((m) => [m.id, m]));
+
+// ---------- Itens ----------
+export const RARITY = {
+  common: { name: 'Comum', color: '#a49b88', mult: 1.0, affixes: 0, weight: 100 },
+  rare: { name: 'Raro', color: '#6f8cff', mult: 1.35, affixes: 1, weight: 38 },
+  epic: { name: 'Épico', color: '#b06bff', mult: 1.8, affixes: 2, weight: 13 },
+  legendary: { name: 'Lendário', color: '#ff9c2f', mult: 2.5, affixes: 3, weight: 3 },
+};
+export const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary'];
+
+export const ITEM_BASES = [
+  { id: 'sword', name: 'Espada', slot: 'weapon', glyph: 'sword', atk: 9, forVoc: ['knight'] },
+  { id: 'axe', name: 'Machado de Guerra', slot: 'weapon', glyph: 'axe', atk: 11, atkSpeed: -0.08, forVoc: ['knight'] },
+  { id: 'bow', name: 'Arco Élfico', slot: 'weapon', glyph: 'bow', atk: 8, forVoc: ['paladin'] },
+  { id: 'spear', name: 'Lança Real', slot: 'weapon', glyph: 'spear', atk: 10, forVoc: ['paladin'] },
+  { id: 'wand', name: 'Varinha', slot: 'weapon', glyph: 'wand', atk: 3, ml: 6, forVoc: ['sorcerer'] },
+  { id: 'rod', name: 'Cajado', slot: 'weapon', glyph: 'rod', atk: 3, ml: 6, forVoc: ['druid'] },
+  { id: 'leather', name: 'Armadura de Couro', slot: 'armor', glyph: 'armor', def: 5 },
+  { id: 'plate', name: 'Peitoral de Placas', slot: 'armor', glyph: 'armor', def: 11, forVoc: ['knight', 'paladin'] },
+  { id: 'robe', name: 'Manto Arcano', slot: 'armor', glyph: 'robe', def: 4, ml: 3, forVoc: ['sorcerer', 'druid'] },
+  { id: 'boots', name: 'Botas de Pressa', slot: 'boots', glyph: 'boots', speed: 0.5 },
+  { id: 'ring', name: 'Anel', slot: 'ring', glyph: 'ring', atk: 2, ml: 2 },
+  { id: 'amulet', name: 'Amuleto', slot: 'amulet', glyph: 'amulet', def: 3, hp: 15 },
+  { id: 'shield', name: 'Escudo', slot: 'offhand', glyph: 'shield', def: 7, forVoc: ['knight', 'paladin'] },
+  { id: 'book', name: 'Grimório', slot: 'offhand', glyph: 'book', ml: 5, mp: 20, forVoc: ['sorcerer', 'druid'] },
+];
+
+export const AFFIXES = [
+  { id: 'atk', name: 'Afiado', stat: 'atk', min: 2, max: 6 },
+  { id: 'def', name: 'Reforçado', stat: 'def', min: 2, max: 5 },
+  { id: 'ml', name: 'Arcano', stat: 'ml', min: 2, max: 5 },
+  { id: 'hp', name: 'Vital', stat: 'hp', min: 12, max: 40 },
+  { id: 'mp', name: 'Etéreo', stat: 'mp', min: 10, max: 35 },
+  { id: 'speed', name: 'Veloz', stat: 'speed', min: 0.2, max: 0.6, dec: 2 },
+  { id: 'crit', name: 'Cruel', stat: 'crit', min: 0.03, max: 0.09, pct: true },
+  { id: 'leech', name: 'Vampírico', stat: 'leech', min: 0.02, max: 0.07, pct: true },
+];
+
+export const CONSUMABLES = {
+  hpPot: { id: 'hpPot', name: 'Poção de Vida', slot: 'consumable', glyph: 'potionRed', heal: 70, stack: 20 },
+  mpPot: { id: 'mpPot', name: 'Poção de Mana', slot: 'consumable', glyph: 'potionBlue', mana: 60, stack: 20 },
+};
+
+export const EQUIP_SLOTS = ['weapon', 'offhand', 'armor', 'boots', 'ring', 'amulet'];
+export const SLOT_LABEL = {
+  weapon: 'Arma', offhand: 'Mão sec.', armor: 'Armadura', boots: 'Botas', ring: 'Anel', amulet: 'Amuleto',
+};
+
+// Multiplicador elemental: fraqueza 1.5x, resistência 0.55x
+export function elemMult(elem, def) {
+  if (def.weak === elem) return 1.5;
+  if (def.resist === elem) return 0.55;
+  return 1;
+}
+
+export function xpForLevel(level) {
+  return Math.floor(80 * Math.pow(level, 1.55));
+}
