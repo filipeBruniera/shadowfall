@@ -2,8 +2,8 @@
 import { ActionQueue } from '../js/actqueue.js';
 import { ACT_QUEUE_MAX } from '../js/balance.js';
 import { createGame, addPlayer, setInput, step, TICK } from '../js/sim.js';
-import { buildSnapshot, drainEvents, isCriticalEvent, Net, NetMode } from '../js/net.js';
-import { MAX_PLAYERS, AOI_RADIUS, NET_EVENT_CAP, floorPopulation } from '../js/balance.js';
+import { applySnapshot, buildSnapshot, drainEvents, isCriticalEvent, Net, NetMode } from '../js/net.js';
+import { MAX_PLAYERS, AOI_RADIUS, NET_EVENT_CAP, HARDCORE_EVERY, floorPopulation } from '../js/balance.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -165,6 +165,25 @@ console.log('\n== fila de eventos ==');
 
   const small = [{ t: 'd' }, { t: 'log' }];
   check('eventos: abaixo do teto passa tudo, sem reordenar', drainEvents(small, NET_EVENT_CAP).length === 2);
+
+  // RF-08: o nascimento do chefe HARDCORE é anúncio único do andar. Se ele cair
+  // no corte da fila, o convidado nunca fica sabendo — e é justamente numa fila
+  // saturada (andar cheio, grupo de 10) que o chefe nasce.
+  const fila = [];
+  for (let i = 0; i < 400; i++) fila.push({ t: 'd', v: '10' });
+  fila.push({ t: 'bossSpawn', id: 91, typeId: 'glacier', floor: 3, hardcore: 1, boss: 1 });
+  fila.push({ t: 'log', m: 'Andar 3 — variante HARDCORE', c: 'boss', boss: 1 });
+  const saida = drainEvents(fila, NET_EVENT_CAP);
+
+  check('RF-08: bossSpawn com boss: 1 é evento crítico',
+    isCriticalEvent({ t: 'bossSpawn', id: 91, typeId: 'glacier', floor: 3, hardcore: 1, boss: 1 }));
+  check('RF-08: bossSpawn sobrevive a drainEvents com 400 eventos na fila',
+    saida.filter((e) => e.t === 'bossSpawn').length === 1,
+    `${saida.filter((e) => e.t === 'bossSpawn').length} de ${saida.length} entregues`);
+  check('UI-01: a linha HARDCORE do andar sobrevive ao mesmo corte',
+    saida.some((e) => e.t === 'log' && e.m.includes('HARDCORE')));
+  check('RF-08: a saturação não reordena o crítico para fora do teto',
+    saida.length === NET_EVENT_CAP && fila.length === 0, `${saida.length}`);
 }
 
 console.log('\n== custo do host com a sala cheia ==');
@@ -190,6 +209,57 @@ console.log('\n== custo do host com a sala cheia ==');
   check('escala: tamanho do snapshot com 10 jogadores é registrado e tem teto',
     bytesCut < 60000, `${bytesCut}B`);
   check('escala: o corte por área reduz o pacote', bytesCut <= bytesWhole, `${bytesCut} vs ${bytesWhole}`);
+
+  // CT-01 / RNF-03: o campo `hc` é opcional e só existe no chefe do andar
+  // HARDCORE. A conta é a mesma de cima — o pacote inteiro, com e sem a chave.
+  const bytesSemChave = (pacote) => JSON.stringify(pacote).replace(/,"hc":1/g, '').length;
+  const chefe = G.monsters.find((m) => m.isBoss);
+  check('RNF-01: o cenário de custo roda mesmo em andar HARDCORE',
+    G.floor % HARDCORE_EVERY === 0 && chefe.hardcore === true, `andar ${G.floor}`);
+
+  // O pacote medido é o de quem está de fato olhando para o chefe: fora do
+  // raio de interesse o chefe nem entra no snapshot, e a conta mediria zero
+  // por ausência, não por economia.
+  viewer.x = chefe.x + 1; viewer.y = chefe.y + 1;
+  const pacoteHc = buildSnapshot(G, { viewer, aoi: true });
+  const entradaChefe = pacoteHc.M.find((m) => m.b === 1);
+  check('CT-01: o chefe do andar HARDCORE viaja com hc: 1',
+    !!entradaChefe && entradaChefe.hc === 1, JSON.stringify(entradaChefe && { b: entradaChefe.b, hc: entradaChefe.hc }));
+  check('CT-01: nenhum monstro comum carrega a chave hc',
+    pacoteHc.M.filter((m) => m.hc !== undefined).length === 1,
+    `${pacoteHc.M.filter((m) => m.hc !== undefined).length} entradas com hc`);
+
+  const deltaHc = JSON.stringify(pacoteHc).length - bytesSemChave(pacoteHc);
+  console.log(`      chefe HARDCORE: +${deltaHc}B por pacote`);
+  check('RNF-03: o chefe HARDCORE acrescenta no máximo 8 bytes ao pacote',
+    deltaHc > 0 && deltaHc <= 8, `${deltaHc}B`);
+
+  // O convidado precisa reconstruir a flag: sem isso a barra do chefe não teria
+  // como marcar a variante do lado de quem não é host.
+  const visao = { playerMap: new Map(), monsterMap: new Map() };
+  applySnapshot(visao, pacoteHc);
+  const chefeVisto = [...visao.monsterMap.values()].find((m) => m.isBoss);
+  check('CT-01: applySnapshot devolve hardcore verdadeiro no lado do convidado',
+    !!chefeVisto && chefeVisto.hardcore === true);
+
+  // Andar não múltiplo de 3: a chave não existe e o custo da feature é zero.
+  const Gcomum = createGame(4242, 5);
+  Gcomum.groupSize = MAX_PLAYERS;
+  const espectador = addPlayer(Gcomum, { id: 'c0', name: 'C', voc: 'sorcerer' });
+  const chefeComum = Gcomum.monsters.find((m) => m.isBoss);
+  espectador.x = chefeComum.x + 1; espectador.y = chefeComum.y + 1;
+  const pacoteComum = buildSnapshot(Gcomum, { viewer: espectador, aoi: true });
+  const deltaComum = JSON.stringify(pacoteComum).length - bytesSemChave(pacoteComum);
+  check('CT-01: em andar não múltiplo de 3 o chefe não carrega a chave hc',
+    chefeComum.hardcore === false && !JSON.stringify(pacoteComum).includes('"hc"'));
+  check('RNF-03: fora do andar HARDCORE o acréscimo por pacote é exatamente 0 byte',
+    deltaComum === 0, `${deltaComum}B`);
+
+  const visaoComum = { playerMap: new Map(), monsterMap: new Map() };
+  applySnapshot(visaoComum, pacoteComum);
+  const chefeVistoComum = [...visaoComum.monsterMap.values()].find((m) => m.isBoss);
+  check('CT-01: sem a chave o convidado reconstrói hardcore falso, nunca indefinido',
+    !!chefeVistoComum && chefeVistoComum.hardcore === false);
 }
 
 console.log(failures ? `\n${failures} FALHA(S)\n` : '\nTudo verde.\n');

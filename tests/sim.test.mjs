@@ -5,8 +5,13 @@ import { VOC_LIST, VOCATIONS, CONSUMABLES, ELEM_STATUS, BOSSES, bossSpecials, E 
 import { isCriticalEvent, drainEvents } from '../js/net.js';
 import {
   WITHER_TIME, WITHER_DPS, WITHER_HEAL_MULT,
-  BOSS_TELEGRAPH_TIME, BOSS_WINDUP, BOSS_SPECIAL_CD,
+  BOSS_TELEGRAPH_TIME, BOSS_WINDUP, MONSTER_WINDUP, BOSS_SPECIAL_CD,
+  bossCurve, groupScale, HARDCORE_HP_MULT, HARDCORE_ATK_MULT,
 } from '../js/balance.js';
+// Puras e sem DOM: bossBarLabel só monta string e telegraphProgress só divide.
+// Importá-las aqui mantém a asserção de UI no mesmo lugar que a de simulação.
+import { bossBarLabel } from '../js/ui.js';
+import { telegraphProgress } from '../js/render.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -645,6 +650,141 @@ console.log('\n== kit de especiais por chefe ==');
   check('RF-01: o ramo do chefe não usa Math.random()',
     ramo.length > 0 && !ramo.includes('Math.random'),
     `(${ramo.length} caracteres inspecionados)`);
+}
+
+
+console.log('\n== kit declarado na tabela de conteúdo ==');
+{
+  // Varredura estática de BOSSES. O bloco anterior prova o que o sorteio
+  // conseguiu disparar dentro do tempo do teste; este prova o contrato da
+  // tabela, que é onde a identidade mecânica de cada chefe realmente mora.
+  for (const boss of BOSSES) {
+    const comum = bossSpecials(boss, false);
+    check(`RF-01: ${boss.id} declara ao menos 3 especiais próprios`,
+      comum.length >= 3, `(${comum.length})`);
+    check(`RF-04: ${boss.id} declara ao menos 1 especial exclusivo do HARDCORE`,
+      boss.specials.some((sp) => sp.hc === true),
+      `(${boss.specials.filter((sp) => sp.hc).length})`);
+    check(`RF-01: todo especial de ${boss.id} tem id e primitiva conhecida`,
+      boss.specials.every((sp) => typeof sp.id === 'string' && sp.id.length > 0
+        && ['nova', 'burst', 'summon', 'zone'].includes(sp.kind)));
+  }
+
+  // Interseção vazia para todo par (A, B) com A != B: dois chefes que
+  // compartilhassem um id voltariam a ser o mesmo bicho com cores diferentes.
+  let intersecaoOk = true, intersecaoDet = '';
+  for (const a of BOSSES) {
+    for (const b of BOSSES) {
+      if (a.id === b.id) continue;
+      const idsB = new Set(b.specials.map((sp) => sp.id));
+      const repetidos = a.specials.filter((sp) => idsB.has(sp.id)).map((sp) => sp.id);
+      if (repetidos.length) {
+        intersecaoOk = false;
+        intersecaoDet = `${a.id} x ${b.id}: ${repetidos.join(',')}`;
+      }
+    }
+  }
+  check('RF-01: a interseção de especiais entre todo par de chefes é vazia',
+    intersecaoOk, intersecaoDet);
+
+  const todos = BOSSES.flatMap((b) => b.specials.map((sp) => sp.id));
+  check('RF-01: nenhum identificador de especial se repete no jogo inteiro',
+    new Set(todos).size === todos.length, `(${todos.length} ids)`);
+}
+
+console.log('\n== degrau numérico da variante HARDCORE ==');
+{
+  // Mesmo andar, mesmo chefe e mesmo grupo: o HARDCORE precisa ser degrau de
+  // número além de degrau de mecânica. A referência comum é reconstruída da
+  // mesma curva que sim.js consome — nenhum número de balanceamento é escrito
+  // aqui, tudo vem de js/balance.js e da tabela de conteúdo.
+  for (const floor of [3, 6, 9, 12]) {
+    for (const players of [1, 10]) {
+      const G = createGame(2468, floor, players);
+      const b = G.monsters.find((m) => m.isBoss);
+      const tipo = BOSSES[(floor - 1) % BOSSES.length];
+      const curva = bossCurve(floor);
+      const hpComum = Math.round(tipo.hp * curva.hpMult * groupScale(players));
+      const atkComum = Math.floor(tipo.atk * curva.atkMult);
+      check(`RF-04: ${b.typeId} HARDCORE tem maxHp e atk maiores que o comum (grupo de ${players})`,
+        b.hardcore === true && b.maxHp > hpComum && b.atk > atkComum,
+        `${b.maxHp}/${b.atk} vs ${hpComum}/${atkComum}`);
+    }
+  }
+
+  check('RF-04: os dois fatores HARDCORE são estritamente maiores que 1',
+    HARDCORE_HP_MULT > 1 && HARDCORE_ATK_MULT > 1,
+    `(${HARDCORE_HP_MULT} / ${HARDCORE_ATK_MULT})`);
+
+  // Mecânica exclusiva: o kit HARDCORE contém id ausente do kit comum do
+  // mesmo chefe, e nunca o contrário — o HARDCORE acrescenta, não troca.
+  for (const boss of BOSSES) {
+    const kitHc = bossSpecials(boss, true).map((sp) => sp.id);
+    const kitComum = bossSpecials(boss, false).map((sp) => sp.id);
+    check(`RF-04: o kit HARDCORE de ${boss.id} acrescenta mecânica ao kit comum`,
+      kitHc.some((id) => !kitComum.includes(id))
+      && kitComum.every((id) => kitHc.includes(id)),
+      `${kitComum.length} -> ${kitHc.length}`);
+  }
+}
+
+console.log('\n== marca HARDCORE na barra do chefe ==');
+{
+  // bossBarLabel é pura: importar ui.js em Node não toca DOM porque el() só
+  // procura elemento quando é chamada.
+  const chefeHc = createGame(7777, 3).monsters.find((m) => m.isBoss);
+  const chefeComum = createGame(7777, 4).monsters.find((m) => m.isBoss);
+  const rotuloHc = bossBarLabel(chefeHc);
+  const rotuloComum = bossBarLabel(chefeComum);
+
+  check('UI-02: a barra do chefe HARDCORE traz o termo HARDCORE',
+    rotuloHc.includes('HARDCORE'), rotuloHc);
+  check('UI-02: o rótulo do HARDCORE mantém nome e nível do chefe',
+    rotuloHc.includes(chefeHc.name) && rotuloHc.includes(String(chefeHc.level)), rotuloHc);
+  check('UI-02: com chefe comum o termo HARDCORE está ausente',
+    !rotuloComum.includes('HARDCORE'), rotuloComum);
+
+  // A distinção precisa sobreviver à escala de cinza: o mesmo chefe com e sem
+  // a flag tem de produzir textos diferentes, não só cores diferentes.
+  const semFlag = bossBarLabel({ ...chefeHc, hardcore: false });
+  check('UI-02: a distinção é textual — o mesmo chefe muda de rótulo com a flag',
+    rotuloHc !== semFlag && !semFlag.includes('HARDCORE'), `${semFlag} | ${rotuloHc}`);
+}
+
+console.log('\n== anel de telegrafia ==');
+{
+  // telegraphProgress é pura e importada de render.js: o anel precisa fechar
+  // ao fim da janela para qualquer duração, e não no 0,5s que o divisor fixo
+  // assumia.
+  for (const D of [BOSS_TELEGRAPH_TIME, BOSS_WINDUP, MONSTER_WINDUP]) {
+    check(`UI-03: com janela de ${D}s o anel começa em 0`,
+      Math.abs(telegraphProgress(D, D) - 0) <= 0.02, `(${telegraphProgress(D, D)})`);
+    check(`UI-03: com janela de ${D}s o anel fecha em 1`,
+      Math.abs(telegraphProgress(0, D) - 1) <= 0.02, `(${telegraphProgress(0, D)})`);
+    check(`UI-03: com janela de ${D}s o anel é 1 - restante/duração no meio dela`,
+      Math.abs(telegraphProgress(D / 2, D) - 0.5) <= 0.02, `(${telegraphProgress(D / 2, D)})`);
+
+    // Erro máximo ao longo de toda a janela, tique a tique.
+    let pior = 0, monotonico = true, anterior = -1;
+    for (let restante = D; restante >= 0; restante -= TICK) {
+      const prog = telegraphProgress(restante, D);
+      pior = Math.max(pior, Math.abs(prog - (1 - restante / D)));
+      if (prog < anterior) monotonico = false;
+      anterior = prog;
+    }
+    check(`UI-03: com janela de ${D}s o erro do anel fica em 0,02 ou menos`,
+      pior <= 0.02, `(${pior.toFixed(4)})`);
+    check(`UI-03: com janela de ${D}s o anel só avança`, monotonico);
+  }
+
+  // Prova de que o divisor não é mais fixo: o mesmo restante em janelas
+  // diferentes precisa dar progresso diferente.
+  check('UI-03: o progresso depende da duração declarada, não de um divisor fixo',
+    telegraphProgress(BOSS_WINDUP, BOSS_TELEGRAPH_TIME) !== telegraphProgress(BOSS_WINDUP, BOSS_WINDUP),
+    `(${telegraphProgress(BOSS_WINDUP, BOSS_TELEGRAPH_TIME)} vs ${telegraphProgress(BOSS_WINDUP, BOSS_WINDUP)})`);
+  check('UI-03: fora da janela o progresso fica preso entre 0 e 1',
+    telegraphProgress(BOSS_TELEGRAPH_TIME * 2, BOSS_TELEGRAPH_TIME) === 0
+    && telegraphProgress(-1, BOSS_TELEGRAPH_TIME) === 1);
 }
 
 console.log('\n== desempenho ==');

@@ -6,8 +6,13 @@ import {
   MAX_PLAYERS, HEAL_ALLY_RADIUS, REVIVE_TIME, REVIVE_RADIUS, XP_RADIUS, PORTAL_HOLD,
   xpShare, groupScale, floorPopulation, GROUP_SCALE_CAP,
   bossCurve, HARDCORE_EVERY, HARDCORE_HP_MULT, HARDCORE_ATK_MULT,
+  BOSS_LEVEL_OFFSET, LEVEL_HP_SCALE, LEVEL_ATK_SCALE, RESPAWN_DELAY,
 } from '../js/balance.js';
-import { BOSSES } from '../js/data.js';
+import { BOSSES, VOC_LIST } from '../js/data.js';
+// A medição de duração de luta precisa repetir de uma execução para a outra, e
+// o crítico do jogador ainda sai de Math.random(): o gerador semeado entra no
+// lugar dele durante a medição e sai logo depois.
+import { mulberry32 } from '../js/rng.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -304,6 +309,158 @@ console.log('\n== composição da dificuldade do chefe ==');
     if (cur.level < prev.level || cur.hpMult < prev.hpMult || cur.atkMult < prev.atkMult) mono = false;
   }
   check('chefe: bossCurve é monotônica não decrescente de 1 a 30', mono);
+}
+
+
+console.log('\n== valor da curva de chefe ==');
+{
+  // Monotonicidade sozinha aceitaria uma curva constante: estes três andares
+  // fixam o valor. Tudo vem das constantes exportadas — o teste falha se a
+  // curva mudar de forma, não se alguém reescrever o mesmo número aqui.
+  for (const floor of [1, 10, 30]) {
+    const curva = bossCurve(floor);
+    const nivel = floor + BOSS_LEVEL_OFFSET;
+    check(`chefe: bossCurve(${floor}) devolve nível, hpMult e atkMult da curva declarada`,
+      curva.level === nivel
+      && Math.abs(curva.hpMult - (1 + (nivel - 1) * LEVEL_HP_SCALE)) < 1e-9
+      && Math.abs(curva.atkMult - (1 + (nivel - 1) * LEVEL_ATK_SCALE)) < 1e-9,
+      `${curva.level}/${curva.hpMult}/${curva.atkMult}`);
+  }
+  check('chefe: a curva cresce de verdade entre o primeiro e o último andar medido',
+    bossCurve(30).hpMult > bossCurve(1).hpMult && bossCurve(30).atkMult > bossCurve(1).atkMult);
+}
+
+console.log('\n== duração de luta: HARDCORE contra o comum (RF-11) ==');
+{
+  // O requisito vinculante do degrau não é o multiplicador e sim quanto tempo
+  // a luta dura: derrubar o HARDCORE tem de custar cerca do dobro do comum do
+  // mesmo andar. Por isso a medição roda a luta inteira, com o dano do chefe
+  // ligado — um harness que só batesse no chefe mediria a razão de HP, não a
+  // de luta.
+  const SEEDS = [20260820, 771003, 424242, 90210, 13579];
+  const GRUPO_MEDICAO = 6;
+  const NIVEL_ACIMA = 8;        // nível do grupo acima do nível do chefe do andar
+  const LIMITE_S = 600;         // teto de segurança: luta que não acaba invalida a medida
+  const RAZAO_MIN = 1.8;
+  const RAZAO_MAX = 2.4;
+
+  // Uma luta isolada: só o chefe do andar, o grupo em volta e nada mais. Os
+  // monstros comuns do andar sairiam da conta de qualquer jeito e só
+  // acrescentariam ruído — a razão é sobre a luta de chefe.
+  function medirLuta(floor, hardcore, seed) {
+    const G = createGame(seed, floor, GRUPO_MEDICAO);
+    const chefe = G.monsters.find((m) => m.isBoss);
+    G.monsters = [chefe];
+
+    // A variante comum do MESMO chefe no MESMO andar: a fórmula é a de
+    // populate(), sem o degrau. Reconstruir aqui é o que permite comparar
+    // chefe com ele mesmo em vez de comparar andares diferentes.
+    const tipo = BOSSES[(floor - 1) % BOSSES.length];
+    const curva = bossCurve(floor);
+    chefe.hardcore = hardcore;
+    chefe.maxHp = Math.round(
+      tipo.hp * curva.hpMult * groupScale(GRUPO_MEDICAO) * (hardcore ? HARDCORE_HP_MULT : 1));
+    chefe.hp = chefe.maxHp;
+    chefe.atk = Math.floor(tipo.atk * curva.atkMult * (hardcore ? HARDCORE_ATK_MULT : 1));
+
+    const ps = [];
+    for (let i = 0; i < GRUPO_MEDICAO; i++) {
+      const p = addPlayer(G, { id: 'medic' + i, name: 'M' + i, voc: VOC_LIST[i % VOC_LIST.length] });
+      p.level = curva.level + NIVEL_ACIMA;
+      const st = stats(p);
+      p.hp = st.maxHp; p.mp = st.maxMp;
+      // Grupo que chegou preparado: sem poção o teste mediria a mochila, não o chefe.
+      p.potions.hp = 99; p.potions.mp = 99;
+      ps.push(p);
+    }
+    const posto = (p, i) => {
+      const ang = (i / GRUPO_MEDICAO) * Math.PI * 2;
+      const raio = stats(p).range > 3 ? 4.0 : 1.1;
+      p.x = chefe.x + Math.cos(ang) * raio;
+      p.y = chefe.y + Math.sin(ang) * raio;
+    };
+    ps.forEach(posto);
+
+    const limite = Math.round(LIMITE_S / TICK);
+    let t = 0;
+    for (; t < limite && chefe.hp > 0; t++) {
+      ps.forEach((p, i) => {
+        const acts = [];
+        if (p.dead) {
+          if (p.deathTimer > RESPAWN_DELAY) acts.push({ id: t * 8 + 1, k: 'respawn' });
+          setInput(G, p.id, { mx: 0, my: 0, target: 0, acts });
+          return;
+        }
+        const st = stats(p);
+        if (p.hp < st.maxHp * 0.65 && t % 10 === 0) acts.push({ id: t * 8 + 2, k: 'pot', slot: 'hp' });
+        if (t % 12 === 0) {
+          acts.push({ id: t * 8 + 3, k: 'cast', slot: ['Q', 'W', 'E', 'R'][(t / 12 + i) % 4], ax: chefe.x, ay: chefe.y });
+        }
+        const alcance = st.range > 3 ? 4.0 : 1.1;
+        let mx = 0, my = 0;
+        if (Math.hypot(chefe.x - p.x, chefe.y - p.y) > alcance + 0.3) {
+          const ang = Math.atan2(chefe.y - p.y, chefe.x - p.x);
+          mx = Math.cos(ang); my = Math.sin(ang);
+        }
+        setInput(G, p.id, { mx, my, target: chefe.id, acts });
+      });
+      step(G, TICK);
+      // Quem renasce volta ao posto: a caminhada de volta depende do desenho
+      // do mapa, não do chefe. O tempo caído, esse sim, continua na conta — é
+      // por ele que o atk maior do HARDCORE entra na razão.
+      ps.forEach((p, i) => { if (!p.dead && p.foraDePosto) { posto(p, i); p.foraDePosto = false; } });
+      ps.forEach((p) => { if (p.dead) p.foraDePosto = true; });
+    }
+    return {
+      s: t * TICK,
+      caiu: chefe.hp <= 0,
+      mortes: ps.reduce((soma, p) => soma + p.deaths, 0),
+      maxHp: chefe.maxHp,
+    };
+  }
+
+  // Uma seed só mede o acaso de uma luta. A razão sai do tempo somado das
+  // seeds: mesma comparação, menos ruído de crítico e de sorteio de especial.
+  function medirAndar(floor) {
+    let tHc = 0, tComum = 0, mortesHc = 0, mortesComum = 0, todasCairam = true;
+    for (const seed of SEEDS) {
+      // Crítico de jogador ainda sai de Math.random() na produção: sem semear
+      // aqui a medição não repetiria de uma execução para a outra.
+      Math.random = mulberry32(seed);
+      const hc = medirLuta(floor, true, seed);
+      Math.random = mulberry32(seed);
+      const comum = medirLuta(floor, false, seed);
+      tHc += hc.s; tComum += comum.s;
+      mortesHc += hc.mortes; mortesComum += comum.mortes;
+      if (!hc.caiu || !comum.caiu) todasCairam = false;
+    }
+    return { floor, tHc, tComum, razao: tHc / tComum, mortesHc, mortesComum, todasCairam };
+  }
+
+  const original = Math.random;
+  let medidas, repeticao;
+  try {
+    medidas = [3, 6, 9, 12].map(medirAndar);
+    // Reprodutibilidade: a mesma medição, de novo, no mesmo processo.
+    repeticao = [3, 6, 9, 12].map(medirAndar);
+  } finally {
+    Math.random = original;
+  }
+
+  for (const m of medidas) {
+    const tipo = BOSSES[(m.floor - 1) % BOSSES.length];
+    console.log(`      andar ${m.floor} ${tipo.id}: HARDCORE ${m.tHc.toFixed(1)}s (${m.mortesHc} mortes) x comum ${m.tComum.toFixed(1)}s (${m.mortesComum} mortes) → razão ${m.razao.toFixed(3)}`);
+    check(`RF-11: o chefe ${tipo.id} cai nas duas variantes dentro do teto de medição`,
+      m.todasCairam, `${m.tHc.toFixed(1)}s / ${m.tComum.toFixed(1)}s`);
+    check(`RF-11: derrubar o ${tipo.id} HARDCORE custa entre 1,8x e 2,4x o tempo do comum`,
+      m.razao >= RAZAO_MIN && m.razao <= RAZAO_MAX, `razão ${m.razao.toFixed(3)}`);
+  }
+
+  const iguais = medidas.every((m, i) => m.tHc === repeticao[i].tHc && m.tComum === repeticao[i].tComum);
+  check('RF-11: duas execuções seguidas devolvem exatamente a mesma razão',
+    iguais, medidas.map((m, i) => `${m.razao.toFixed(3)} vs ${repeticao[i].razao.toFixed(3)}`).join(' | '));
+  check('RF-11: a medição devolve Math.random intacto para as suítes seguintes',
+    Math.random === original);
 }
 
 console.log('\n== escala do andar ==');
