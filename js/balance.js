@@ -97,12 +97,33 @@ export function bossCurve(floor) {
 // variante.
 export const HARDCORE_EVERY = 3;
 
-// PROVISÓRIOS. O requisito vinculante não é o multiplicador e sim a razão de
-// duração de luta (derrubar o HARDCORE deve levar ~2x o tempo do comum, banda
-// 1,8-2,4). Estes dois números são substituídos pela medição headless dos 4
-// chefes; até lá servem só para o degrau existir e ser estritamente maior.
-export const HARDCORE_HP_MULT = 1.85;
-export const HARDCORE_ATK_MULT = 1.3;
+// MEDIDOS, não escolhidos. O requisito vinculante não é o multiplicador e sim
+// a razão de duração de luta: derrubar o HARDCORE tem de custar ~2x o tempo do
+// comum do mesmo andar (banda 1,8-2,4). Os dois números abaixo saíram do
+// harness de RF-11 em tests/group.test.mjs — 5 seeds por andar, grupo de 6,
+// nível do chefe + 8, dano do chefe ligado.
+//
+// Medição de 20/08/2026, razão t_hc / t_comum por chefe:
+//   andar  3  glacier   (Rainha Glacial)  → 1,943
+//   andar  6  morgaroth (Senhor do Fosso) → 1,990
+//   andar  9  ferumbras (Arauto de Cinzas)→ 2,054
+//   andar 12  bonelord  (Ossuário Ancião) → 1,987
+// Os 4 chefes ficam dentro da banda com margem: pior caso 1,943 (0,14 acima do
+// piso) e 2,054 (0,35 abaixo do teto).
+//
+// Por que 1.75 e não o provisório 1.85: com 1.85 as razões medidas eram
+// 2,114 / 2,184 / 2,223 / 2,173 — dentro da banda, mas encostadas no teto de
+// 2,4 e longe do "dobro" que o requisito pede. 1.60 derruba tudo para
+// 1,74-1,79, abaixo do piso.
+//
+// Por que o ATK para em 1.45: a razão é dominada pelo HP; o atk só entra pelo
+// tempo em que o grupo fica caído. Até 1.45 a medição não registra nenhuma
+// morte e as razões não se mexem (idênticas a 1.30); em 1.60 aparece a
+// primeira morte e a razão do andar 6 pula para 2,036, ou seja, o degrau de
+// dano passa a injetar ruído de seed na medida. 1.45 é o degrau de ameaça mais
+// alto que ainda mede estável.
+export const HARDCORE_HP_MULT = 1.75;
+export const HARDCORE_ATK_MULT = 1.45;
 
 // ---------- Janelas de carga ----------
 // Golpe carregado: a janela existe para dar tempo de reagir, então ela é

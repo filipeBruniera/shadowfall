@@ -95,6 +95,41 @@ const floorTest = await page.evaluate(async () => {
 await new Promise((r) => setTimeout(r, 600));
 await page.screenshot({ path: `${OUT}/07-floor2.png` });
 
+// UI-02: em andar múltiplo de 3 a barra do chefe tem de dizer HARDCORE por
+// texto, não por cor. É a única asserção da SPEC que só o navegador fecha —
+// tests/sim.test.mjs cobre bossBarLabel(), mas não o texto real do #bossName.
+const hardcore = await page.evaluate(async () => {
+  const G = window.__SF.G;
+  // Desce pelo mesmo gatilho do jogo: main.js consome pendingFloor e chama
+  // nextFloor(). Nada de fabricar estado que a partida real não produziria.
+  let guarda = 0;
+  while (G.floor % 3 !== 0 && guarda++ < 6) {
+    G.pendingFloor = true;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  const boss = G.monsters.find((m) => m.isBoss && m.hp > 0);
+  if (!boss) return { error: 'sem chefe no andar' };
+  // A barra só aparece com o chefe a menos de 18 tiles do jogador local.
+  const p = G.players.host;
+  p.x = boss.x + 2; p.y = boss.y + 2;
+  await new Promise((r) => setTimeout(r, 700));
+  const bar = document.getElementById('bossBar');
+  return {
+    floor: G.floor,
+    hardcore: !!boss.hardcore,
+    barVisivel: !bar.classList.contains('hidden'),
+    bossName: document.getElementById('bossName').textContent,
+  };
+});
+await page.screenshot({ path: `${OUT}/10-boss-hardcore.png` });
+if (hardcore.error) errors.push('HARDCORE: ' + hardcore.error);
+else {
+  if (hardcore.floor % 3 !== 0) errors.push(`HARDCORE: não chegou a andar múltiplo de 3 (andar ${hardcore.floor})`);
+  if (!hardcore.hardcore) errors.push(`HARDCORE: o chefe do andar ${hardcore.floor} não veio marcado`);
+  if (!hardcore.barVisivel) errors.push('HARDCORE: a barra do chefe não apareceu');
+  if (!/HARDCORE/.test(hardcore.bossName)) errors.push(`HARDCORE: #bossName sem o termo — "${hardcore.bossName}"`);
+}
+
 const fps = await page.evaluate(() => new Promise((res) => {
   let frames = 0;
   const t0 = performance.now();
@@ -116,6 +151,7 @@ await mob.screenshot({ path: `${OUT}/09-mobile-game.png` });
 console.log('\n--- resultado ---');
 console.log('combate:', JSON.stringify(combat));
 console.log('andar:  ', JSON.stringify(floorTest));
+console.log('chefe HC:', JSON.stringify(hardcore));
 console.log('fps:    ', fps);
 console.log('erros:  ', errors.length ? errors : 'nenhum');
 const warn = logs.filter((l) => l.startsWith('[error]') || l.startsWith('[warning]'));
