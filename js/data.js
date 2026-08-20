@@ -95,12 +95,80 @@ export const MONSTERS = [
   { id: 'wyrm', name: 'Dragão Jovem', shape: 'dragon', tier: 4, hp: 260, atk: 24, def: 8, xp: 120, speed: 2.6, vision: 12, ai: 'caster', elem: E.FIRE, weak: E.ICE, resist: E.FIRE, color: '#c8602a', size: 1.35 },
 ];
 
+// ---------- Chefes ----------
+// Antes os 4 chefes só diferiam em elemento, cor e stats base: mecanicamente
+// eram o mesmo bicho, sorteando de um pool único de 3 especiais. Agora cada um
+// declara o próprio kit aqui, como conteúdo, e o simulador só seleciona —
+// nenhuma tabela de chefe volta a morar dentro de sim.js.
+//
+// Contrato de cada especial:
+//   id     prefixado pelo id do chefe, garantindo interseção vazia entre pares
+//   kind   primitiva que sim.js já resolve: nova | burst | summon | zone
+//   hc     true = exclusivo da variante HARDCORE (a mecânica que o chefe comum
+//          não tem). Todo chefe tem pelo menos um, senão o degrau HARDCORE
+//          seria só número maior.
+//   mult   dano relativo ao atk do chefe; o número absoluto sai da curva
+// O kit comum guarda 3 opções em todo chefe: menos que isso regrediria a
+// variedade do pool único que existia antes.
 export const BOSSES = [
-  { id: 'ferumbras', name: 'Arauto de Cinzas', shape: 'robed', hp: 900, atk: 30, def: 10, xp: 700, speed: 2.4, vision: 16, ai: 'boss', elem: E.FIRE, weak: E.ICE, resist: E.FIRE, color: '#ff6a2a', size: 1.9 },
-  { id: 'morgaroth', name: 'Senhor do Fosso', shape: 'brute', hp: 1200, atk: 36, def: 14, xp: 900, speed: 2.6, vision: 16, ai: 'boss', elem: E.DEATH, weak: E.HOLY, resist: E.PHYS, color: '#7b2d8f', size: 2.0 },
-  { id: 'glacier', name: 'Rainha Glacial', shape: 'robed', hp: 1050, atk: 32, def: 12, xp: 850, speed: 2.5, vision: 16, ai: 'boss', elem: E.ICE, weak: E.FIRE, resist: E.ICE, color: '#6fc8ec', size: 1.9 },
-  { id: 'bonelord', name: 'Ossuário Ancião', shape: 'bones', hp: 1400, atk: 34, def: 12, xp: 1000, speed: 2.2, vision: 16, ai: 'boss', elem: E.DEATH, weak: E.HOLY, resist: E.DEATH, color: '#e3d8bd', size: 2.0 },
+  {
+    id: 'ferumbras', name: 'Arauto de Cinzas', shape: 'robed', hp: 900, atk: 30, def: 10, xp: 700, speed: 2.4, vision: 16, ai: 'boss', elem: E.FIRE, weak: E.ICE, resist: E.FIRE, color: '#ff6a2a', size: 1.9,
+    specials: [
+      { id: 'ferumbras_nova_cinzas', name: 'Nova de Cinzas', kind: 'nova', r: 4.5, mult: 1.6, shake: 12 },
+      { id: 'ferumbras_chuva_brasas', name: 'Chuva de Brasas', kind: 'burst', count: 8, speed: 8, mult: 0.9, range: 9 },
+      { id: 'ferumbras_trilha_lava', name: 'Trilha de Lava', kind: 'zone', r: 2.8, time: 6, tick: 0.6, mult: 0.5 },
+      { id: 'ferumbras_pira_funeraria', name: 'Pira Funerária', kind: 'nova', hc: true, r: 6.5, mult: 2.2, shake: 16 },
+    ],
+  },
+  {
+    id: 'morgaroth', name: 'Senhor do Fosso', shape: 'brute', hp: 1200, atk: 36, def: 14, xp: 900, speed: 2.6, vision: 16, ai: 'boss', elem: E.DEATH, weak: E.HOLY, resist: E.PHYS, color: '#7b2d8f', size: 2.0,
+    specials: [
+      { id: 'morgaroth_bramido_fosso', name: 'Bramido do Fosso', kind: 'nova', r: 5.0, mult: 1.7, shake: 13 },
+      { id: 'morgaroth_lancas_sombrias', name: 'Lanças Sombrias', kind: 'burst', count: 10, speed: 8.5, mult: 0.85, range: 9 },
+      { id: 'morgaroth_horda_fosso', name: 'Horda do Fosso', kind: 'summon', count: 3, tierMax: 2 },
+      { id: 'morgaroth_maldicao_fosso', name: 'Maldição do Fosso', kind: 'zone', hc: true, r: 3.4, time: 7, tick: 0.6, mult: 0.6 },
+    ],
+  },
+  {
+    id: 'glacier', name: 'Rainha Glacial', shape: 'robed', hp: 1050, atk: 32, def: 12, xp: 850, speed: 2.5, vision: 16, ai: 'boss', elem: E.ICE, weak: E.FIRE, resist: E.ICE, color: '#6fc8ec', size: 1.9,
+    specials: [
+      { id: 'glacier_explosao_gelida', name: 'Explosão Gélida', kind: 'nova', r: 4.8, mult: 1.55, shake: 11 },
+      { id: 'glacier_estilhacos', name: 'Estilhaços', kind: 'burst', count: 12, speed: 9, mult: 0.75, range: 10 },
+      { id: 'glacier_servos_de_gelo', name: 'Servos de Gelo', kind: 'summon', count: 3, tierMax: 2 },
+      { id: 'glacier_manto_invernal', name: 'Manto Invernal', kind: 'zone', hc: true, r: 3.6, time: 8, tick: 0.5, mult: 0.55 },
+    ],
+  },
+  {
+    id: 'bonelord', name: 'Ossuário Ancião', shape: 'bones', hp: 1400, atk: 34, def: 12, xp: 1000, speed: 2.2, vision: 16, ai: 'boss', elem: E.DEATH, weak: E.HOLY, resist: E.DEATH, color: '#e3d8bd', size: 2.0,
+    specials: [
+      { id: 'bonelord_grito_ossos', name: 'Grito de Ossos', kind: 'nova', r: 4.6, mult: 1.5, shake: 12 },
+      { id: 'bonelord_chuva_ossos', name: 'Chuva de Ossos', kind: 'burst', count: 9, speed: 8, mult: 0.9, range: 9 },
+      { id: 'bonelord_legiao_ossuaria', name: 'Legião Ossuária', kind: 'summon', count: 4, tierMax: 2 },
+      { id: 'bonelord_ressurgir_ancestral', name: 'Ressurgir Ancestral', kind: 'summon', hc: true, count: 5, tierMax: 3 },
+    ],
+  },
 ];
+
+// Elemento -> campo de status que o acerto do chefe aplica no jogador.
+// Fonte única do mapeamento: sem isto o `if` encadeado se espalharia por
+// resolveMonsterAttack e pelo impacto do projétil, e os dois divergiriam.
+// Elementos ausentes (PHYS, ENERGY, HOLY) não carregam status por design.
+// `poison` continua assinatura de E.EARTH (aranha) e Morte usa `wither`,
+// senão Terra e Morte ficariam indistinguíveis em jogo.
+export const ELEM_STATUS = {
+  [E.FIRE]: 'burn',
+  [E.ICE]: 'freeze',
+  [E.DEATH]: 'wither',
+  [E.EARTH]: 'poison',
+};
+
+// Kit ativo do chefe. O filtro mora aqui e não em sim.js para que simulação e
+// teste leiam exatamente a mesma lista. Devolve cópia: a tabela de conteúdo é
+// imutável para quem consome.
+export function bossSpecials(boss, hardcore = false) {
+  const kit = (boss && boss.specials) || [];
+  return hardcore ? kit.slice() : kit.filter((s) => !s.hc);
+}
 
 export const MONSTER_BY_ID = Object.fromEntries([...MONSTERS, ...BOSSES].map((m) => [m.id, m]));
 

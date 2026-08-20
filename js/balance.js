@@ -59,6 +59,84 @@ export function xpShare(livingCount) {
   return 1 / Math.sqrt(n);
 }
 
+// ---------- Chefe ----------
+// O chefe do andar era o único conteúdo com número de dificuldade escrito
+// dentro de sim.js (`floor + 3` no nascimento e `1 + (level - 1) * 0.22` no
+// makeMonster). Isso quebrava a regra da casa e, pior, escondia a curva: para
+// saber se o andar 12 estava duro demais era preciso ler o laço de combate.
+// Agora a curva mora aqui e sim.js só consome.
+
+// Chefe nasce acima do andar: no andar 1 ele já é nível 4, senão o grupo
+// atravessa o portal sem sentir que enfrentou um chefe.
+export const BOSS_LEVEL_OFFSET = 3;
+
+// Escala por nível — valores herdados de makeMonster, movidos sem alteração.
+// Mudar qualquer um destes reescala TODO monstro do jogo, não só o chefe.
+export const LEVEL_HP_SCALE = 0.22;
+export const LEVEL_ATK_SCALE = 0.16;
+export const LEVEL_DEF_SCALE = 0.1;
+export const LEVEL_XP_SCALE = 0.3;
+
+// Fonte única da dificuldade do chefe por andar. Monotônica não decrescente
+// porque `floor` só cresce e um andar mais fundo nunca pode devolver um chefe
+// mais fraco que o anterior.
+export function bossCurve(floor) {
+  const f = Math.max(1, Math.floor(floor) || 1);
+  const level = f + BOSS_LEVEL_OFFSET;
+  return {
+    level,
+    hpMult: 1 + (level - 1) * LEVEL_HP_SCALE,
+    atkMult: 1 + (level - 1) * LEVEL_ATK_SCALE,
+  };
+}
+
+// ---------- Variante HARDCORE ----------
+// Cai a cada 3 andares. Os chefes giram em ciclo de 4, então o par
+// chefe x HARDCORE só se repete a cada 12 andares: cada um dos 4 chefes recebe
+// exatamente uma aparição HARDCORE por bloco de 12, e nenhum monopoliza a
+// variante.
+export const HARDCORE_EVERY = 3;
+
+// PROVISÓRIOS. O requisito vinculante não é o multiplicador e sim a razão de
+// duração de luta (derrubar o HARDCORE deve levar ~2x o tempo do comum, banda
+// 1,8-2,4). Estes dois números são substituídos pela medição headless dos 4
+// chefes; até lá servem só para o degrau existir e ser estritamente maior.
+export const HARDCORE_HP_MULT = 1.85;
+export const HARDCORE_ATK_MULT = 1.3;
+
+// ---------- Janelas de carga ----------
+// Golpe carregado: a janela existe para dar tempo de reagir, então ela é
+// tuning de legibilidade, não detalhe de implementação.
+export const MONSTER_WINDUP = 0.35;
+export const BOSS_WINDUP = 0.5;
+
+// Ataque perigoso do chefe é telegrafado por uma janela maior que o windup
+// comum: com 0,5 s o jogador só descobre a área depois de já ter tomado o
+// dano. Precisa ser estritamente > BOSS_WINDUP, senão a telegrafia não
+// acrescenta nada sobre o golpe normal.
+export const BOSS_TELEGRAPH_TIME = 1.1;
+
+// Intervalo entre especiais do chefe. Menor que isso e a luta vira sequência
+// de cinemáticas sem espaço para o grupo agir.
+export const BOSS_SPECIAL_CD = 7;
+
+// ---------- Status wither (elemento Morte) ----------
+// Decisão de projeto: o que dá identidade ao elemento Morte é a redução da
+// cura recebida, não o dano por tempo. Reusar `poison` deixaria Morte e Terra
+// indistinguíveis em jogo — os dois virariam "o inimigo que tira HP devagar".
+// Com o funil de cura, a resposta certa do grupo muda: não adianta o druida
+// segurar o alvo na cura, alguém precisa terminar a luta antes do tique.
+//
+// O DPS segue o padrão absoluto de `burn`/`poison` (dano por segundo já
+// resolvido, não fração de atk), para caber no mesmo tickStatus.
+export const WITHER_TIME = 4;
+export const WITHER_DPS = 9;
+
+// Fator da cura recebida enquanto wither está ativo: estritamente entre 0 e 1,
+// senão o status ou não faz nada (>= 1) ou trava a cura por completo (<= 0) e
+// vira morte garantida sem contrajogo.
+export const WITHER_HEAL_MULT = 0.5;
+
 // ---------- Sala ----------
 export const MAX_PLAYERS = 10;
 
