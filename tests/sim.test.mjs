@@ -1,7 +1,12 @@
-import { createGame, addPlayer, setInput, step, stats, nextFloor, hitMonster, rollItem, TICK } from '../js/sim.js';
+import { createGame, addPlayer, setInput, step, stats, nextFloor, hitMonster, rollItem, healPlayer, TICK } from '../js/sim.js';
+import { readFile } from 'node:fs/promises';
 import { generateMap, findPath } from '../js/world.js';
-import { VOC_LIST } from '../js/data.js';
+import { VOC_LIST, VOCATIONS, CONSUMABLES, ELEM_STATUS, BOSSES, bossSpecials, E } from '../js/data.js';
 import { isCriticalEvent, drainEvents } from '../js/net.js';
+import {
+  WITHER_TIME, WITHER_DPS, WITHER_HEAL_MULT,
+  BOSS_TELEGRAPH_TIME, BOSS_WINDUP, BOSS_SPECIAL_CD,
+} from '../js/balance.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -269,6 +274,377 @@ console.log('\n== ordem do lote de virada para andar HARDCORE ==');
   // evento de dano nenhum.
   check('UI: o aviso HARDCORE sai antes de qualquer evento de dano',
     !lote.some((e) => e.t === 'd' || e.t === 'hurt'));
+}
+
+console.log('\n== status wither ==');
+{
+  // Andar sem monstro: assim o único capaz de mexer no HP do jogador é o
+  // próprio status, e o teste não depende de quem estava perto do spawn.
+  function soloWither(seed, voc = 'druid') {
+    const G = createGame(seed, 1);
+    addPlayer(G, { id: 'p1', name: 'Filipe', voc });
+    G.monsters.length = 0;
+    return G;
+  }
+
+  const G = soloWither(3131);
+  const p = G.players.p1;
+  const st = stats(p);
+  p.hp = st.maxHp * 0.6;
+  p.status.wither = WITHER_TIME;
+  const antes = p.hp;
+  for (let i = 0; i < 10; i++) step(G, TICK);
+  check('wither: HP decresce a cada tique sem outra fonte de dano',
+    p.hp < antes, `(${antes.toFixed(1)} -> ${p.hp.toFixed(1)})`);
+  check('wither: o dano por tique sai de WITHER_DPS',
+    Math.abs((antes - p.hp) - WITHER_DPS * TICK * 10) < st.maxHp * 0.012 * TICK * 10 + 0.01,
+    `(perdeu ${(antes - p.hp).toFixed(2)})`);
+  check('wither: o status não escreve em poison', p.status.poison === 0);
+
+  // Comparação direta: a mesma cura H nos dois estados, mesmo jogador.
+  const H = 40;
+  const base = st.maxHp * 0.2;
+  const G2 = soloWither(3232);
+  const p2 = G2.players.p1;
+  p2.status.wither = 0;
+  p2.hp = base;
+  const semStatus = healPlayer(G2, p2, H);
+  p2.status.wither = WITHER_TIME;
+  p2.hp = base;
+  const comStatus = healPlayer(G2, p2, H);
+  check('wither: a mesma cura restaura estritamente menos com o status ativo',
+    comStatus < semStatus, `(${comStatus.toFixed(2)} vs ${semStatus.toFixed(2)})`);
+  check('wither: sem o status a cura restaura exatamente o valor pedido',
+    Math.abs(semStatus - H) < 1e-9, `(${semStatus})`);
+  check('wither: a cura reduzida é o valor pedido vezes WITHER_HEAL_MULT',
+    Math.abs(comStatus - H * WITHER_HEAL_MULT) < 1e-9, `(${comStatus})`);
+
+  // Ao expirar o campo zera e a cura volta cheia.
+  p2.status.wither = TICK;
+  step(G2, TICK);
+  check('wither: zera ao expirar', p2.status.wither === 0, `(${p2.status.wither})`);
+  p2.hp = base;
+  const depois = healPlayer(G2, p2, H);
+  check('wither: expirado, a cura volta ao valor cheio',
+    Math.abs(depois - H) < 1e-9, `(${depois})`);
+
+  // Poção de vida: os dois casos passam pelo mesmo funil.
+  function bebePocao(comWither) {
+    const g = soloWither(3333, 'knight');
+    const jog = g.players.p1;
+    const sj = stats(jog);
+    jog.hp = sj.maxHp * 0.2;
+    jog.status.wither = comWither ? WITHER_TIME : 0;
+    const hpAntes = jog.hp;
+    setInput(g, 'p1', { mx: 0, my: 0, acts: [{ id: 1, k: 'pot', slot: 'hp' }] });
+    step(g, TICK);
+    return { ganho: jog.hp - hpAntes, esperado: CONSUMABLES.hpPot.heal + sj.maxHp * 0.12 };
+  }
+  const potSem = bebePocao(false);
+  const potCom = bebePocao(true);
+  check('wither: sem o status a poção restaura o mesmo valor de antes da mudança',
+    Math.abs(potSem.ganho - potSem.esperado) < 0.5,
+    `(${potSem.ganho.toFixed(2)} vs ${potSem.esperado.toFixed(2)})`);
+  check('wither: a poção de vida passa pelo funil e restaura menos',
+    potCom.ganho < potSem.ganho, `(${potCom.ganho.toFixed(2)} vs ${potSem.ganho.toFixed(2)})`);
+
+  // Magia de cura: mesmo funil, mesma comparação.
+  function lancaCura(comWither, casta = true) {
+    const g = soloWither(3434, 'druid');
+    const jog = g.players.p1;
+    const sj = stats(jog);
+    jog.mp = sj.maxMp;
+    jog.hp = sj.maxHp * 0.2;
+    jog.status.wither = comWither ? WITHER_TIME : 0;
+    const hpAntes = jog.hp;
+    const acts = casta ? [{ id: 1, k: 'cast', slot: 'E', ax: jog.x, ay: jog.y }] : [];
+    setInput(g, 'p1', { mx: 0, my: 0, acts });
+    step(g, TICK);
+    // Valor de antes da mudança, recalculado pela fórmula de castSkill: sem
+    // ele o teste só saberia dizer "curou menos", nunca "curou o de sempre".
+    const skill = VOCATIONS.druid.skills.find((s) => s.key === 'E');
+    const power = sj.atk * 0.8 + sj.ml * 2.0 + jog.level * 2;
+    return { ganho: jog.hp - hpAntes, esperado: skill.flat + power * skill.power * 0.5 };
+  }
+  // O tique também regenera HP por conta própria; sem descontar essa deriva a
+  // comparação exata mediria o regen junto com a cura.
+  const derivaTique = lancaCura(false, false).ganho;
+  const curaSem = lancaCura(false);
+  const curaCom = lancaCura(true);
+  check('wither: sem o status a magia de cura restaura exatamente o valor de antes da mudança',
+    Math.abs((curaSem.ganho - derivaTique) - curaSem.esperado) < 1e-9,
+    `(${(curaSem.ganho - derivaTique).toFixed(4)} vs ${curaSem.esperado.toFixed(4)})`);
+  check('wither: a magia de cura passa pelo funil e restaura menos',
+    curaCom.ganho < curaSem.ganho, `(${curaCom.ganho.toFixed(2)} vs ${curaSem.ganho.toFixed(2)})`);
+}
+
+console.log('\n== status do elemento no acerto do chefe ==');
+{
+  // Um caso por chefe. O andar define quem nasce: BOSSES gira em ciclo de 4,
+  // então os andares 1 a 4 cobrem os quatro chefes.
+  const CHAVES = ['burn', 'freeze', 'wither', 'poison'];
+  function statusDoAcerto(floor, comum = false) {
+    const G = createGame(6161, floor);
+    const chefe = G.monsters.find((m) => m.isBoss);
+    // Só o chefe no andar: o status precisa vir dele, não de quem passava perto.
+    G.monsters = [chefe];
+    if (comum) chefe.isBoss = false;
+    addPlayer(G, { id: 'p1', name: 'Alvo', voc: 'knight' });
+    const p = G.players.p1;
+    p.x = chefe.x + 1.0; p.y = chefe.y + 0.2;
+    chefe.aggro = p.id;
+    const esperado = ELEM_STATUS[chefe.elem];
+    for (let t = 0; t < 900; t++) {
+      setInput(G, 'p1', { mx: 0, my: 0, acts: [] });
+      step(G, TICK);
+      if (!comum && p.status[esperado] > 0) {
+        return { typeId: chefe.typeId, esperado, achou: true, ticks: t,
+          outros: CHAVES.filter((k) => k !== esperado && p.status[k] > 0) };
+      }
+      // O teste é sobre o status aplicado, não sobre sobreviver ao chefe.
+      p.hp = stats(p).maxHp;
+    }
+    return { typeId: chefe.typeId, esperado, achou: false, ticks: 900,
+      outros: CHAVES.filter((k) => k !== esperado && G.players.p1.status[k] > 0) };
+  }
+
+  const esperados = { ferumbras: 'burn', morgaroth: 'wither', glacier: 'freeze', bonelord: 'wither' };
+  for (const floor of [1, 2, 3, 4]) {
+    const r = statusDoAcerto(floor);
+    check(`RF-02: ${r.typeId} aplica ${esperados[r.typeId]} no acerto`,
+      r.achou && r.esperado === esperados[r.typeId], `(${r.esperado}, ${r.ticks} tiques)`);
+    check(`RF-02: ${r.typeId} não aplica status de outro elemento`,
+      r.outros.length === 0, `(${r.outros.join(',')})`);
+  }
+
+  // Nenhum chefe de Morte encosta em poison: é o que separa Morte de Terra.
+  for (const floor of [2, 4]) {
+    const r = statusDoAcerto(floor);
+    check(`RF-02: chefe de Morte do andar ${floor} não aplica poison`,
+      r.esperado === 'wither' && !r.outros.includes('poison'), `(${r.outros.join(',')})`);
+  }
+
+  // O mapa só vale para isBoss: monstro comum segue no caminho de sempre.
+  const semChefe = statusDoAcerto(2, true);
+  check('RF-02: monstro comum não passa a aplicar o status do elemento',
+    semChefe.outros.length === 0, `(${semChefe.outros.join(',')})`);
+
+  // A fonte do mapeamento é única — nada de elemento decidido dentro de sim.js.
+  check('RF-02: ELEM_STATUS cobre os elementos dos 4 chefes',
+    BOSSES.every((b) => !!ELEM_STATUS[b.elem]));
+  check('RF-02: poison continua reservado ao elemento Terra',
+    ELEM_STATUS[E.EARTH] === 'poison' && ELEM_STATUS[E.DEATH] === 'wither');
+}
+
+console.log('\n== telegrafia do ataque perigoso ==');
+{
+  // Arena controlada: só o chefe no andar, golpe básico desligado por um cd
+  // alto e o especial pronto para sair no primeiro tique. Sem isolar assim, o
+  // dano do golpe básico entraria na conta e o teste mediria a coisa errada.
+  function arenaChefe(floor) {
+    const G = createGame(7171, floor);
+    const chefe = G.monsters.find((m) => m.isBoss);
+    G.monsters = [chefe];
+    addPlayer(G, { id: 'p1', name: 'Alvo', voc: 'knight' });
+    const p = G.players.p1;
+    p.x = chefe.x + 1.0; p.y = chefe.y + 0.2;
+    chefe.aggro = p.id;
+    chefe.cd = 999;
+    chefe.special = 0;
+    return { G, chefe, p };
+  }
+  const tique = (G) => { setInput(G, 'p1', { mx: 0, my: 0, acts: [] }); step(G, TICK); };
+  // HP cheio antes da janela: o regen do tique é limitado por maxHp, então
+  // qualquer HP abaixo do teto só pode ter vindo de dano.
+  const encheHp = (p) => { p.hp = stats(p).maxHp; return p.hp; };
+
+  check('RF-07: a janela de telegrafia é maior que o windup genérico',
+    BOSS_TELEGRAPH_TIME > BOSS_WINDUP && BOSS_TELEGRAPH_TIME > 0.5,
+    `(${BOSS_TELEGRAPH_TIME} vs ${BOSS_WINDUP})`);
+
+  const a = arenaChefe(1);
+  tique(a.G);
+  const abertura = a.G.events.filter((e) => e.t === 'fx' && e.k === 'telegraph');
+  check('RF-07: a telegrafia abre com exatamente 1 evento no primeiro tique',
+    abertura.length === 1, `(${abertura.length})`);
+  const ev = abertura[0] || {};
+  check('CT-02: o evento de telegrafia carrega id, posição, raio, duração, cor e marca de chefe',
+    ev.id === a.chefe.id && Number.isFinite(ev.x) && Number.isFinite(ev.y) &&
+    ev.r > 0 && ev.d === BOSS_TELEGRAPH_TIME && !!ev.c && ev.boss === 1,
+    JSON.stringify(ev));
+  check('CT-02: o evento de telegrafia é crítico e escapa do teto da fila',
+    isCriticalEvent(ev));
+  check('RF-07: a fase começa marcada com o especial escolhido',
+    a.chefe.windupKind !== null && a.chefe.windup === BOSS_TELEGRAPH_TIME &&
+    a.chefe.windupTotal === BOSS_TELEGRAPH_TIME,
+    `(${a.chefe.windupKind}, ${a.chefe.windup})`);
+
+  // Percorre a janela inteira medindo o que o mundo viu enquanto ela durava.
+  const cheioA = encheHp(a.p);
+  let perdeuNaJanela = false, projNaJanela = false, zonaNaJanela = false;
+  let lacaiosNaJanela = false, telegrafiasExtras = 0, tiques = 0;
+  const monstrosAntes = a.G.monsters.length;
+  while (a.chefe.windup > 0 && tiques < 200) {
+    tiques++;
+    tique(a.G);
+    if (a.chefe.windup <= 0) break;
+    telegrafiasExtras += a.G.events.filter((e) => e.t === 'fx' && e.k === 'telegraph').length;
+    if (a.p.hp < cheioA) perdeuNaJanela = true;
+    if (a.G.projectiles.length > 0) projNaJanela = true;
+    if (a.G.zones.length > 0) zonaNaJanela = true;
+    if (a.G.monsters.length > monstrosAntes) lacaiosNaJanela = true;
+  }
+  check('RF-07: nenhum jogador perde HP durante a janela', !perdeuNaJanela);
+  check('RF-07: nenhum projétil do ataque existe durante a janela', !projNaJanela);
+  check('RF-07: nenhuma zona e nenhum lacaio aparecem durante a janela',
+    !zonaNaJanela && !lacaiosNaJanela);
+  check('RF-07: o evento de telegrafia não se repete a cada tique da janela',
+    telegrafiasExtras === 0, `(${telegrafiasExtras} repetições)`);
+  check('RF-07: a janela dura o tempo declarado em js/balance.js',
+    Math.abs(tiques * TICK - BOSS_TELEGRAPH_TIME) <= TICK + 1e-9,
+    `(${(tiques * TICK).toFixed(3)}s vs ${BOSS_TELEGRAPH_TIME}s)`);
+  check('RF-07: a fase se fecha ao resolver',
+    a.chefe.windup === 0 && a.chefe.windupTotal === 0 && a.chefe.windupKind === null);
+  check('RF-07: o especial entra em cooldown ao ser escolhido, não ao resolver',
+    a.chefe.special > 0 && a.chefe.special <= BOSS_SPECIAL_CD, `(${a.chefe.special.toFixed(2)})`);
+
+  // O dano depois da janela: o especial é fixado numa nova para que o efeito
+  // seja dano, e não invocação, sem depender do sorteio.
+  {
+    const b = arenaChefe(1);
+    tique(b.G);
+    b.chefe.windupKind = BOSSES[0].specials.find((sp) => sp.kind === 'nova').id;
+    const cheio = encheHp(b.p);
+    let perdeu = false, n = 0;
+    while (b.chefe.windup > 0 && n < 200) {
+      n++;
+      tique(b.G);
+      if (b.chefe.windup > 0 && b.p.hp < cheio) perdeu = true;
+    }
+    check('RF-07: o dano do ataque perigoso só ocorre depois da janela',
+      !perdeu && b.p.hp < cheio, `(hp ${b.p.hp.toFixed(1)} de ${cheio})`);
+  }
+
+  // Cancelamento (RF-09): morte, atordoamento e congelamento no meio da janela.
+  function cancelaNoMeio(aplica) {
+    const { G, chefe, p } = arenaChefe(1);
+    tique(G);
+    const abriu = chefe.windupKind !== null;
+    const cheio = encheHp(p);
+    // Metade da janela e nada mais: o cancelamento precisa pegar a fase aberta.
+    for (let i = 0; i < Math.floor(BOSS_TELEGRAPH_TIME / TICK / 2); i++) tique(G);
+    const aindaAberta = chefe.windup > 0;
+    aplica(G, chefe, p);
+    const zerou = chefe.windup === 0 && chefe.windupTotal === 0 && chefe.windupKind === null;
+    // Sobra de janela mais folga, ainda dentro do cooldown do especial: o
+    // ataque cancelado não pode ressurgir depois.
+    for (let i = 0; i < Math.ceil(BOSS_TELEGRAPH_TIME / TICK) + 30; i++) tique(G);
+    return {
+      abriu, aindaAberta, zerou,
+      semDano: p.hp >= cheio,
+      semProjetil: G.projectiles.length === 0,
+      semZona: G.zones.length === 0,
+      semLacaio: G.monsters.filter((m) => m.summoned).length === 0,
+    };
+  }
+
+  const morte = cancelaNoMeio((G, chefe, p) => hitMonster(G, chefe, 999999, 0, p, {}));
+  check('RF-09: chefe morto no meio da janela zera a fase sem resolver',
+    morte.abriu && morte.aindaAberta && morte.zerou);
+  check('RF-09: chefe morto não causa dano nem cria projétil, zona ou lacaio',
+    morte.semDano && morte.semProjetil && morte.semZona && morte.semLacaio);
+
+  const atordoado = cancelaNoMeio((G, chefe) => { chefe.status.stun = 2; tique(G); });
+  check('RF-09: chefe atordoado no meio da janela zera a fase sem resolver',
+    atordoado.abriu && atordoado.aindaAberta && atordoado.zerou);
+  check('RF-09: chefe atordoado não causa dano nem cria projétil, zona ou lacaio',
+    atordoado.semDano && atordoado.semProjetil && atordoado.semZona && atordoado.semLacaio);
+
+  const congelado = cancelaNoMeio((G, chefe) => { chefe.status.freeze = 2; tique(G); });
+  check('RF-09: chefe congelado no meio da janela zera a fase sem resolver',
+    congelado.abriu && congelado.aindaAberta && congelado.zerou);
+  check('RF-09: chefe congelado não causa dano nem cria projétil, zona ou lacaio',
+    congelado.semDano && congelado.semProjetil && congelado.semZona && congelado.semLacaio);
+}
+
+console.log('\n== kit de especiais por chefe ==');
+{
+  // Registra a sequência de especiais que o chefe realmente escolheu, lendo a
+  // marca da fase de telegrafia. É a única leitura que prova o que foi
+  // sorteado sem espiar dentro da função de seleção.
+  function sequenciaEspeciais(floor, hardcore, seed) {
+    const G = createGame(seed, floor);
+    const chefe = G.monsters.find((m) => m.isBoss);
+    G.monsters = [chefe];
+    chefe.hardcore = hardcore;
+    addPlayer(G, { id: 'p1', name: 'Alvo', voc: 'knight' });
+    const p = G.players.p1;
+    p.x = chefe.x + 3.0; p.y = chefe.y;
+    chefe.aggro = p.id;
+    const ids = [];
+    let anterior = null;
+    const n = Math.round(180 / TICK);
+    for (let i = 0; i < n; i++) {
+      // O teste é sobre o kit escolhido, não sobre sobreviver ao chefe.
+      p.hp = stats(p).maxHp;
+      setInput(G, 'p1', { mx: 0, my: 0, acts: [] });
+      step(G, TICK);
+      if (chefe.windupKind && chefe.windupKind !== anterior) ids.push(chefe.windupKind);
+      anterior = chefe.windupKind;
+    }
+    return ids;
+  }
+
+  const SEED = 4242;
+  const todosIds = new Set(BOSSES.flatMap((b) => b.specials.map((sp) => sp.id)));
+
+  for (let floor = 1; floor <= 4; floor++) {
+    const boss = BOSSES[(floor - 1) % BOSSES.length];
+    const proprios = new Set(boss.specials.map((sp) => sp.id));
+    const idsHc = new Set(boss.specials.filter((sp) => sp.hc).map((sp) => sp.id));
+    const alheios = [...todosIds].filter((id) => !proprios.has(id));
+
+    const seqHc = sequenciaEspeciais(floor, true, SEED);
+    const seqComum = sequenciaEspeciais(floor, false, SEED);
+
+    check(`RF-01: ${boss.id} dispara especiais e só os do próprio kit`,
+      seqComum.length > 0 && seqComum.every((id) => proprios.has(id)),
+      `(${seqComum.length} disparos)`);
+    check(`RF-01: nenhum especial de outro chefe aparece em ${boss.id}`,
+      !seqHc.concat(seqComum).some((id) => alheios.includes(id)));
+    check(`RF-04: o ${boss.id} HARDCORE dispara ao menos uma vez um especial hc`,
+      seqHc.some((id) => idsHc.has(id)),
+      `(${seqHc.filter((id) => idsHc.has(id)).length} de ${seqHc.length})`);
+    check(`RF-04: o ${boss.id} comum nunca dispara nenhum especial hc`,
+      !seqComum.some((id) => idsHc.has(id)));
+    check(`RF-04: o kit HARDCORE de ${boss.id} tem id ausente do kit comum`,
+      bossSpecials(boss, true).some((sp) => !bossSpecials(boss, false).some((o) => o.id === sp.id)));
+
+    const repeticao = sequenciaEspeciais(floor, true, SEED);
+    check(`RF-01: com a mesma seed o ${boss.id} repete a mesma sequência de especiais`,
+      repeticao.length === seqHc.length && repeticao.every((id, i) => id === seqHc[i]),
+      `(${repeticao.length} vs ${seqHc.length})`);
+  }
+
+  // Determinismo por seed é o que a medição de duração de luta vai exigir:
+  // seeds diferentes precisam produzir sequências diferentes, senão o sorteio
+  // virou constante e o teste acima passaria por acidente.
+  const outraSeed = sequenciaEspeciais(1, true, 909090);
+  const mesmaSeed = sequenciaEspeciais(1, true, SEED);
+  check('RF-01: seeds diferentes produzem sequências diferentes',
+    outraSeed.join(',') !== mesmaSeed.join(','));
+
+  // Nada de sorteio global no ramo do chefe: o texto da função é a prova mais
+  // direta de que a seleção e a invocação passam por G.rng.
+  const fonte = await readFile(new URL('../js/sim.js', import.meta.url), 'utf8');
+  const ramo = fonte
+    .slice(fonte.indexOf('function startBossSpecial'), fonte.indexOf('function resolveMonsterAttack'))
+    // Sem os comentários: um deles cita o nome da função justamente para
+    // explicar por que ela não é usada ali.
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  check('RF-01: o ramo do chefe não usa Math.random()',
+    ramo.length > 0 && !ramo.includes('Math.random'),
+    `(${ramo.length} caracteres inspecionados)`);
 }
 
 console.log('\n== desempenho ==');

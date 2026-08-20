@@ -137,6 +137,30 @@ export const WITHER_DPS = 9;
 // vira morte garantida sem contrajogo.
 export const WITHER_HEAL_MULT = 0.5;
 
+// ---------- Status que o acerto do chefe aplica ----------
+// Magnitude por status, indexada pela mesma chave que ELEM_STATUS devolve
+// (js/data.js). Tabela e não `if` encadeado: o acerto corpo a corpo e o
+// impacto do projétil leem daqui, e com dois caminhos escrevendo número
+// próprio eles divergiriam na primeira mudança de balanceamento.
+// Só o chefe marca — rebalancear monstro comum está fora do escopo, então
+// `poison` da aranha continua vindo da própria tabela de conteúdo.
+//
+// A janela do freeze é curta de propósito: o golpe básico do chefe sai a cada
+// ~2 s (cd + windup) e um congelamento mais longo que isso encadearia,
+// tirando o controle do jogador pela luta inteira.
+export const BOSS_BURN_TIME = 4;
+export const BOSS_BURN_DPS = 11;
+export const BOSS_FREEZE_TIME = 0.6;
+export const BOSS_POISON_TIME = 4;
+export const BOSS_POISON_DPS = 8;
+
+export const BOSS_STATUS_MAG = {
+  burn: { time: BOSS_BURN_TIME, dps: BOSS_BURN_DPS },
+  freeze: { time: BOSS_FREEZE_TIME },
+  wither: { time: WITHER_TIME },
+  poison: { time: BOSS_POISON_TIME, dps: BOSS_POISON_DPS },
+};
+
 // ---------- Sala ----------
 export const MAX_PLAYERS = 10;
 

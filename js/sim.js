@@ -2,6 +2,7 @@ import { makeRng, randomSeed } from './rng.js';
 import {
   T, E, VOCATIONS, MONSTERS, BOSSES, MONSTER_BY_ID, RARITY, RARITY_ORDER,
   ITEM_BASES, AFFIXES, CONSUMABLES, EQUIP_SLOTS, elemMult, xpForLevel, ELEM_COLOR,
+  ELEM_STATUS, bossSpecials,
 } from './data.js';
 import { generateMap, tileAt, buildFlowField, MAP_W, MAP_H } from './world.js';
 import {
@@ -12,6 +13,8 @@ import {
   HEAL_ALLY_RADIUS, TAUNT_TIME, REVIVE_MAX_HELPERS,
   bossCurve, HARDCORE_EVERY, HARDCORE_HP_MULT, HARDCORE_ATK_MULT,
   LEVEL_HP_SCALE, LEVEL_ATK_SCALE, LEVEL_DEF_SCALE, LEVEL_XP_SCALE,
+  WITHER_DPS, WITHER_HEAL_MULT, BOSS_STATUS_MAG,
+  MONSTER_WINDUP, BOSS_WINDUP, BOSS_TELEGRAPH_TIME, BOSS_SPECIAL_CD,
 } from './balance.js';
 
 export { TICK };
@@ -164,6 +167,11 @@ function makeMonster(G, type, x, y, level) {
     home: { x, y },
     cd: G.rng.range(0, 1.5),
     windup: 0,
+    // A telegrafia reusa o windup em vez de abrir uma máquina paralela:
+    // windupTotal é o que o anel precisa para fechar em qualquer duração, e
+    // windupKind diz qual especial resolve no fim (null = golpe básico).
+    windupTotal: 0,
+    windupKind: null,
     windupTarget: null,
     special: G.rng.range(4, 8),
     aggro: null,
@@ -178,8 +186,11 @@ function makeMonster(G, type, x, y, level) {
   };
 }
 
+// `wither` é campo próprio e não reuso de `poison`. Morte também tira HP com o
+// tempo, mas o que a define é o funil de cura de healPlayer(); somados no mesmo
+// campo, Terra e Morte ficariam indistinguíveis em jogo.
 function emptyStatus() {
-  return { burn: 0, burnDps: 0, poison: 0, poisonDps: 0, slow: 0, slowMult: 1, stun: 0, freeze: 0 };
+  return { burn: 0, burnDps: 0, poison: 0, poisonDps: 0, wither: 0, slow: 0, slowMult: 1, stun: 0, freeze: 0 };
 }
 
 // ============================================================
@@ -540,9 +551,7 @@ function usePotion(G, p, kind, st) {
     if (p.potions.hp <= 0) { log(G, 'Sem poção de vida.', 'warn'); return; }
     if (p.hp >= st.maxHp) return;
     p.potions.hp--;
-    const heal = CONSUMABLES.hpPot.heal + st.maxHp * 0.12;
-    p.hp = Math.min(st.maxHp, p.hp + heal);
-    pushEvent(G, { t: 'd', x: p.x, y: p.y, v: '+' + Math.floor(heal), c: '#7de08a' });
+    healPlayer(G, p, CONSUMABLES.hpPot.heal + st.maxHp * 0.12);
   } else {
     if (p.potions.mp <= 0) { log(G, 'Sem poção de mana.', 'warn'); return; }
     if (p.mp >= st.maxMp) return;
@@ -632,10 +641,7 @@ function castSkill(G, p, slotKey, ax, ay, st) {
         }
         if (worst) target = worst;
       }
-      const tst = stats(target);
-      const before = target.hp;
-      target.hp = Math.min(tst.maxHp, target.hp + amount);
-      pushEvent(G, { t: 'd', x: target.x, y: target.y, v: '+' + Math.floor(target.hp - before), c: '#7de08a' });
+      healPlayer(G, target, amount);
       pushEvent(G, { t: 'fx', k: 'heal', x: target.x, y: target.y });
       break;
     }
@@ -709,6 +715,9 @@ export function hitMonster(G, m, raw, elem, source, opts = {}) {
 function killMonster(G, m, source) {
   m.hp = 0;
   m.deathFade = 0.6;
+  // Morrer no meio da telegrafia não resolve o golpe: o grupo que derrubou o
+  // chefe a tempo não pode levar o ataque de um cadáver.
+  cancelWindup(m);
   pushEvent(G, { t: 'fx', k: 'death', x: m.x, y: m.y, c: m.color, boss: m.isBoss });
 
   const living = Object.values(G.players).filter((p) => !p.dead);
@@ -773,6 +782,22 @@ export function damagePlayer(G, p, raw, elem, opts = {}) {
   }
 }
 
+// Ponto único por onde passa toda cura recebida por jogador — poção e magia.
+// Existe por causa do funil de `wither`: com dois caminhos de cura, o status
+// reduziria um e esqueceria o outro, e a diferença só apareceria em jogo.
+// O número que sobe na tela é o ganho real, não o valor pedido: com wither
+// ativo mostrar o valor cheio seria mentira para o jogador.
+export function healPlayer(G, p, amount) {
+  if (p.dead || !(amount > 0)) return 0;
+  const st = stats(p);
+  const eff = p.status.wither > 0 ? amount * WITHER_HEAL_MULT : amount;
+  const before = p.hp;
+  p.hp = Math.min(st.maxHp, p.hp + eff);
+  const gained = p.hp - before;
+  pushEvent(G, { t: 'd', x: p.x, y: p.y, v: '+' + Math.floor(gained), c: '#7de08a' });
+  return gained;
+}
+
 // ============================================================
 // MONSTROS
 // ============================================================
@@ -791,7 +816,12 @@ function updateMonster(G, m, dt) {
   if (m.tauntTime > 0) { m.tauntTime -= dt; if (m.tauntTime <= 0) m.tauntedBy = null; }
   tickStatus(G, m, dt, false);
   if (m.hp <= 0) return;
-  if (m.status.stun > 0 || m.status.freeze > 0) return;
+  if (m.status.stun > 0 || m.status.freeze > 0) {
+    // Atordoado ou congelado no meio da janela, o golpe telegrafado morre sem
+    // resolver: quem gastou o controle no chefe precisa ver o ataque sumir.
+    cancelWindup(m);
+    return;
+  }
 
   // Alvo
   let target = null;
@@ -833,10 +863,17 @@ function updateMonster(G, m, dt) {
   const attackRange = m.ai === 'ranged' || m.ai === 'caster' || m.ai === 'boss' ? 7.5 : 0.9 + m.size * 0.4;
   const keepAway = (m.ai === 'ranged' || m.ai === 'caster') ? 4.0 : 0;
 
-  // Golpe carregado: dá tempo do jogador reagir.
+  // Golpe carregado: dá tempo do jogador reagir. Com windupKind, a janela é a
+  // telegrafia do ataque perigoso e nada acontece até ela fechar — nenhum dano,
+  // nenhum projétil.
   if (m.windup > 0) {
     m.windup -= dt;
-    if (m.windup <= 0) resolveMonsterAttack(G, m, target, attackRange);
+    if (m.windup <= 0) {
+      const kind = m.windupKind;
+      cancelWindup(m);
+      if (kind) resolveBossSpecial(G, m, kind, target);
+      else resolveMonsterAttack(G, m, target, attackRange);
+    }
     return;
   }
 
@@ -846,45 +883,109 @@ function updateMonster(G, m, dt) {
     moveEntity(G.map, m, -Math.cos(m.dir) * speed * 0.8, -Math.sin(m.dir) * speed * 0.8, 0.3);
   }
 
-  if (d <= attackRange && m.cd <= 0) {
+  // O ataque perigoso tem precedência sobre o golpe básico: os dois na mesma
+  // janela empilhariam duas telegrafias no mesmo anel.
+  if (m.ai === 'boss' && m.special <= 0) startBossSpecial(G, m, target);
+
+  if (d <= attackRange && m.cd <= 0 && m.windup <= 0) {
     m.cd = m.ai === 'boss' ? 1.5 : (m.ai === 'caster' || m.ai === 'ranged' ? 2.2 : 1.4);
-    m.windup = m.ai === 'boss' ? 0.5 : 0.35;
+    m.windup = m.windupTotal = m.ai === 'boss' ? BOSS_WINDUP : MONSTER_WINDUP;
+    m.windupKind = null;
     m.windupTarget = target.id;
     pushEvent(G, { t: 'fx', k: 'windup', x: m.x, y: m.y, id: m.id });
   }
+}
 
-  // Habilidade especial do chefe
-  if (m.ai === 'boss' && m.special <= 0) {
-    m.special = 7;
-    const kind = Math.random();
-    if (kind < 0.45) {
+// Fecha a fase de carga sem resolver nada. Um lugar só porque são três os
+// caminhos que cancelam (morte, atordoamento, congelamento) e um deles
+// esquecido deixaria o chefe preso numa telegrafia que nunca fecha.
+function cancelWindup(m) {
+  m.windup = 0;
+  m.windupTotal = 0;
+  m.windupKind = null;
+}
+
+// Área ameaçada em tiles, para o aviso desenhar o tamanho certo. Sai da própria
+// declaração do especial: quem muda o raio na tabela de conteúdo muda o aviso
+// junto, sem tocar em sim.js.
+function specialRadius(sp) {
+  return sp.r || sp.range || 0;
+}
+
+// Abre a telegrafia do ataque perigoso. Nada é resolvido aqui — nem dano, nem
+// projétil, nem invocação: tudo espera o fim da janela em resolveBossSpecial().
+function startBossSpecial(G, m, target) {
+  const type = MONSTER_BY_ID[m.typeId];
+  const kit = bossSpecials(type, m.hardcore);
+  if (!kit.length) return;
+  // G.rng e não Math.random(): o host é autoritativo, então o sorteio global
+  // não era bug de correção, mas impedia medir o kit do chefe com seed fixa.
+  const sp = G.rng.pick(kit);
+  m.special = BOSS_SPECIAL_CD;
+  m.windup = m.windupTotal = BOSS_TELEGRAPH_TIME;
+  m.windupKind = sp.id;
+  m.windupTarget = target.id;
+  // Uma única vez, no primeiro tique da fase: o aviso é o que dá ao grupo a
+  // chance de sair da área, então repeti-lo por tique só entupiria a fila.
+  pushEvent(G, {
+    t: 'fx', k: 'telegraph', id: m.id, x: m.x, y: m.y,
+    r: specialRadius(sp), d: BOSS_TELEGRAPH_TIME, c: ELEM_COLOR[m.elem], boss: 1,
+  });
+}
+
+// Fim da janela: agora o golpe existe no mundo.
+function resolveBossSpecial(G, m, id, target) {
+  const type = MONSTER_BY_ID[m.typeId];
+  const sp = ((type && type.specials) || []).find((x) => x.id === id);
+  if (!sp) return;
+  switch (sp.kind) {
+    case 'nova': {
       for (const p of Object.values(G.players)) {
         if (p.dead) continue;
-        if (dist(p, m) < 4.5) damagePlayer(G, p, m.atk * 1.6, m.elem);
+        if (dist(p, m) < sp.r) damagePlayer(G, p, m.atk * sp.mult, m.elem);
       }
-      pushEvent(G, { t: 'fx', k: 'nova', x: m.x, y: m.y, r: 4.5, c: ELEM_COLOR[m.elem] });
-      pushEvent(G, { t: 'shake', v: 12 });
-    } else if (kind < 0.75) {
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
+      pushEvent(G, { t: 'fx', k: 'nova', x: m.x, y: m.y, r: sp.r, c: ELEM_COLOR[m.elem] });
+      pushEvent(G, { t: 'shake', v: sp.shake });
+      break;
+    }
+    case 'burst': {
+      for (let i = 0; i < sp.count; i++) {
+        const a = (i / sp.count) * Math.PI * 2;
         spawnProjectile(G, {
-          x: m.x, y: m.y, tx: m.x + Math.cos(a) * 6, ty: m.y + Math.sin(a) * 6,
-          speed: 8, dmg: m.atk * 0.9, elem: m.elem, ownerId: m.id, owner: 'monster', range: 9, big: true,
+          x: m.x, y: m.y, tx: m.x + Math.cos(a) * sp.range, ty: m.y + Math.sin(a) * sp.range,
+          speed: sp.speed, dmg: m.atk * sp.mult, elem: m.elem, ownerId: m.id,
+          owner: 'monster', range: sp.range, big: true,
+          bossElem: m.isBoss ? m.elem : null,
         });
       }
-    } else {
-      const pool = MONSTERS.filter((t) => t.tier <= 2);
-      for (let i = 0; i < 3; i++) {
-        const t = pool[Math.floor(Math.random() * pool.length)];
+      break;
+    }
+    case 'summon': {
+      const pool = MONSTERS.filter((t) => t.tier <= sp.tierMax);
+      for (let i = 0; i < sp.count; i++) {
+        const t = G.rng.pick(pool);
         const spot = findFreeSpot(G.map, m.x, m.y, 2.5);
         const s = makeMonster(G, t, spot.x, spot.y, m.level - 1);
         s.summoned = true;
-        s.aggro = target.id;
+        s.aggro = target ? target.id : null;
         G.monsters.push(s);
         pushEvent(G, { t: 'fx', k: 'summon', x: s.x, y: s.y });
       }
       log(G, `${m.name} invoca lacaios!`, 'boss');
+      break;
     }
+    case 'zone': {
+      // Zona do chefe: a de jogador bate em monstro, esta bate em jogador. O
+      // campo `owner` é o que separa os dois lados em updateZones.
+      G.zones.push({
+        id: G.nextId++, x: m.x, y: m.y, r: sp.r, elem: m.elem,
+        dmg: m.atk * sp.mult, time: sp.time, tick: sp.tick, tickTimer: 0,
+        ownerId: m.id, owner: 'monster', poison: null, color: ELEM_COLOR[m.elem],
+      });
+      pushEvent(G, { t: 'fx', k: 'ground', x: m.x, y: m.y, r: sp.r, c: ELEM_COLOR[m.elem] });
+      break;
+    }
+    default: break;
   }
 }
 
@@ -896,13 +997,34 @@ function resolveMonsterAttack(G, m, target, attackRange) {
     spawnProjectile(G, {
       x: m.x, y: m.y, tx: p.x, ty: p.y, speed: 9,
       dmg: m.atk, elem: m.elem, ownerId: m.id, owner: 'monster', range: 12,
+      // O chefe ataca de longe: sem carimbar o elemento aqui, o status teria de
+      // ser decidido no impacto procurando o dono na lista de monstros.
+      bossElem: m.isBoss ? m.elem : null,
     });
   } else if (d <= attackRange + 0.5) {
     damagePlayer(G, p, m.atk, m.elem);
     pushEvent(G, { t: 'fx', k: 'slash', x: p.x, y: p.y, a: m.dir, c: m.color });
     if (m.lifesteal) m.hp = Math.min(m.maxHp, m.hp + m.atk * m.lifesteal);
     if (m.poison) { p.status.poison = Math.max(p.status.poison, m.poison.time); p.status.poisonDps = m.poison.dps; }
+    if (m.isBoss) applyBossStatus(G, p, m.elem);
   }
+}
+
+// Status do elemento do chefe no jogador atingido. O mapeamento vem inteiro de
+// ELEM_STATUS (js/data.js) e a magnitude de BOSS_STATUS_MAG (js/balance.js):
+// nenhum `if` por elemento mora aqui, senão o acerto corpo a corpo e o impacto
+// do projétil manteriam duas cópias da mesma regra.
+// Elemento sem entrada no mapa (PHYS, ENERGY, HOLY) não marca — é por projeto.
+function applyBossStatus(G, p, elem) {
+  if (p.dead) return;
+  const key = ELEM_STATUS[elem];
+  const mag = key && BOSS_STATUS_MAG[key];
+  if (!mag) return;
+  // Math.max: um segundo acerto renova a janela, nunca a encurta.
+  p.status[key] = Math.max(p.status[key], mag.time);
+  // Os status de dano por tempo guardam o DPS ao lado do tempo (burnDps,
+  // poisonDps); os de controle puro não têm campo equivalente.
+  if (mag.dps) p.status[key + 'Dps'] = Math.max(p.status[key + 'Dps'] || 0, mag.dps);
 }
 
 // Desce o gradiente do campo de fluxo; se travar, tenta ir reto.
@@ -950,6 +1072,15 @@ function tickStatus(G, e, dt, isPlayer) {
     if (isPlayer) damagePlayer(G, e, dmg, E.EARTH, { silent: true });
     else { e.hp -= dmg; if (e.hp <= 0) killMonster(G, e, null); }
   }
+  if (s.wither > 0) {
+    // Zera de fato no fim, em vez de ficar negativo como burn/poison: quem lê
+    // este campo é healPlayer(), e "expirou" precisa ser exatamente 0 para a
+    // cura voltar cheia sem depender do sinal.
+    s.wither = Math.max(0, s.wither - dt);
+    const dmg = WITHER_DPS * dt;
+    if (isPlayer) damagePlayer(G, e, dmg, E.DEATH, { silent: true });
+    else { e.hp -= dmg; if (e.hp <= 0) killMonster(G, e, null); }
+  }
   if (s.slow > 0) s.slow -= dt;
   if (s.stun > 0) s.stun -= dt;
   if (s.freeze > 0) s.freeze -= dt;
@@ -967,6 +1098,7 @@ function spawnProjectile(G, o) {
     dmg: o.dmg, elem: o.elem, owner: o.owner, ownerId: o.ownerId,
     life: (o.range || 8) / o.speed, homing: o.homing || 0,
     burn: o.burn || null, big: !!o.big, a,
+    bossElem: o.bossElem == null ? null : o.bossElem,
   });
 }
 
@@ -1015,6 +1147,7 @@ function updateProjectiles(G, dt) {
         if (p.dead) continue;
         if (Math.hypot(p.x - pr.x, p.y - pr.y) > 0.45) continue;
         damagePlayer(G, p, pr.dmg, pr.elem);
+        if (pr.bossElem != null) applyBossStatus(G, p, pr.bossElem);
         pushEvent(G, { t: 'fx', k: 'impact', x: pr.x, y: pr.y, c: ELEM_COLOR[pr.elem] });
         G.projectiles.splice(i, 1);
         break;
@@ -1030,6 +1163,15 @@ function updateZones(G, dt) {
     z.tickTimer -= dt;
     if (z.tickTimer <= 0) {
       z.tickTimer = z.tick;
+      if (z.owner === 'monster') {
+        for (const p of Object.values(G.players)) {
+          if (p.dead) continue;
+          if (Math.hypot(p.x - z.x, p.y - z.y) > z.r) continue;
+          damagePlayer(G, p, z.dmg, z.elem);
+        }
+        if (z.time <= 0) G.zones.splice(i, 1);
+        continue;
+      }
       const owner = G.players[z.ownerId];
       for (const m of G.monsters) {
         if (m.hp <= 0) continue;
