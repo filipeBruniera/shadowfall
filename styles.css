@@ -308,6 +308,11 @@ input::placeholder { color: var(--placeholder); }
    o #actionBar, e o Enter de js/main.js:574 continua sendo o caminho do teclado.
    O bloco pointer: coarse devolve o display com id contra id. */
 #btnChat { display: none; }
+/* Mesma regra para o ✕ do chat: no mouse o Escape de js/main.js:571 já fecha e
+   uma caixa nova mudaria a geometria medida do #chatInput (RNF-06). O nó é
+   criado por js/main.js junto do campo, então só o CSS o mantém fora do
+   desktop; o bloco pointer: coarse devolve o display com id contra id. */
+#btnChatClose { display: none; }
 
 #stick {
   position: absolute; width: 128px; height: 128px; border-radius: 50%;
@@ -398,7 +403,14 @@ input::placeholder { color: var(--placeholder); }
 
 /* ============ TOQUE / TELAS PEQUENAS ============ */
 @media (pointer: coarse) {
-  #log { width: 50vw; max-height: 18vh; font-size: 11px; }
+  /* O bottom sobe o log 52px — os 44 da linha do chat mais 8 de respiro — e o
+     tira do caminho do #chatInput de uma vez, sem estado novo em JS: o
+     empilhamento é estático, então nem a abertura nem o fechamento do campo
+     mexem no log (chat-grupo.md §5). */
+  #log {
+    width: 50vw; max-height: 18vh; font-size: 11px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
+  }
   /* Uma ação por linha no dedo: em 360 as três do #lobby sob flex: 1 empurravam o
      #btnStart até x = 363,4 e estouravam a viewport (UI-06 AC 1). min-width: 0
      sozinho resolveria o estouro cortando o rótulo — com ~69px de conteúdo por
@@ -439,6 +451,34 @@ input::placeholder { color: var(--placeholder); }
   position: absolute; left: 12px; bottom: 12px; width: min(340px, 60vw);
   background: rgba(9, 7, 13, .96); border: 1px solid var(--ember);
   padding: 9px 12px; font-size: 14px; outline: none; z-index: 25;
+}
+/* A linha de chat no dedo: campo à esquerda, ✕ à direita, os dois rentes à
+   borda de baixo. O bloco vive AQUI e não no @media (pointer: coarse) de
+   styles.css:400 porque `left`, `bottom` e `width` do #chatInput acima têm a
+   mesma especificidade de id — declarados depois, venceriam a versão de toque
+   e o campo voltaria a min(340px, 60vw) com bottom: 12px. */
+@media (pointer: coarse) {
+  /* O 126px repete a conta do #portalHold (styles.css:538): 12 de gutter, 102 de
+     #actionBar (2 x 48 + gap 6) e 12 de respiro. O 52px reserva o ✕ de 44 mais
+     8 de folga, então right = 178 e o campo nunca encosta no alvo de fechar.
+     `max(12px, env(safe-area-inset-bottom))` é exigência de
+     tokens-componentes.md:146 — a emulação do harness reporta env() como 0,
+     então o piso de 12px é o que os testes medem e a área segura só aparece em
+     aparelho real. */
+  #chatInput {
+    left: 12px; right: calc(126px + 52px); width: auto;
+    min-block-size: 44px; box-sizing: border-box;
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  /* Alinhado com a borda esquerda do #actionBar, na mesma linha do campo e com
+     a moldura dele. O piso de 44x44 vem da regra .x deste mesmo bloco de toque
+     (styles.css:559-562); o z-index acompanha o do campo para o ✕ ficar acima
+     do #canvas — sem ele o elementFromPoint do dedo cai no canvas. */
+  #btnChatClose {
+    position: absolute; right: 126px; bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 25; display: inline-flex;
+    background: rgba(9, 7, 13, .96); border: 1px solid var(--ember);
+  }
 }
 
 /* ============================================================

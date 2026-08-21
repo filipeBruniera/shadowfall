@@ -675,12 +675,19 @@ UI.el('btnSell').onclick = () => {
 
 // --- Conversa ---
 let chatEl = null;
+// O ✕ é o único caminho de fechamento no dedo: closeChat() só era alcançado
+// pelo Escape de js/main.js:571 ou pelo envio de mensagem não vazia, o celular
+// não tem Escape e enviar vazio é descartado em silêncio por chatGate.clean('') —
+// quem abrisse a conversa no toque ficava preso no campo.
+let chatCloseEl = null;
 function openChat() {
   S.chatting = true;
   if (!chatEl) {
     chatEl = document.createElement('input');
     chatEl.id = 'chatInput';
-    chatEl.maxLength = 120;
+    // O teto de caracteres é primitiva de js/balance.js (AGENTS.md:57): o literal
+    // 120 daqui divergia do CHAT_MAX_LEN = 140 que o chatGate do host já aplica.
+    chatEl.maxLength = CHAT_MAX_LEN;
     chatEl.placeholder = 'Falar com o grupo…';
     chatEl.addEventListener('keydown', (e) => {
       e.stopPropagation();
@@ -696,14 +703,32 @@ function openChat() {
       } else if (e.key === 'Escape') closeChat();
     });
     UI.el('game').appendChild(chatEl);
+    // Memoizado junto do campo, no mesmo bloco: o alvo de fechar acompanha o
+    // ciclo de vida do #chatInput e nunca vira um segundo nó no DOM. O handler
+    // chama closeChat() direto — sem lógica duplicada e sem estado paralelo ao
+    // S.chatting. onpointerdown é o padrão da casa para alvo de toque
+    // (js/ui.js:120) e o preventDefault impede o botão de roubar o foco do campo
+    // antes de closeChat() dar o blur.
+    chatCloseEl = document.createElement('button');
+    chatCloseEl.id = 'btnChatClose';
+    chatCloseEl.className = 'x';
+    chatCloseEl.type = 'button';
+    chatCloseEl.setAttribute('aria-label', 'Fechar conversa');
+    chatCloseEl.textContent = '✕';
+    chatCloseEl.onpointerdown = (e) => { e.preventDefault(); closeChat(); };
+    UI.el('game').appendChild(chatCloseEl);
   }
   chatEl.value = '';
   chatEl.classList.remove('hidden');
+  // A visibilidade do ✕ é exatamente S.chatting: sai junto do campo aqui e volta
+  // junto dele em closeChat(), senão sobraria flutuando sobre o jogo.
+  chatCloseEl.classList.remove('hidden');
   chatEl.focus();
 }
 function closeChat() {
   S.chatting = false;
   if (chatEl) { chatEl.blur(); chatEl.classList.add('hidden'); }
+  if (chatCloseEl) chatCloseEl.classList.add('hidden');
 }
 
 // ============================================================
