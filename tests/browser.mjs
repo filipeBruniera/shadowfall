@@ -626,11 +626,10 @@ async function medirTeclas(page, ctx, modo) {
 const PROIBIDAS_RF02 = [/1\s*[–-]\s*4/, /Q\s*\/\s*E/, /\bTab\b/, /\bEnter\b/];
 const ABERTURA_MOUSE = 'Use 1–4 para magias, Q/E para poções, Enter para conversar.';
 async function medirAbertura(page, ctx, modo) {
-  const m = await page.evaluate((selAbrir) => {
+  const m = await page.evaluate(() => {
     const box = document.getElementById('log');
     if (!box) return { erro: 'o #log não existe no DOM' };
     const linha = box.lastElementChild;
-    const alvoChat = document.querySelector(selAbrir);
     return {
       logInnerText: box.innerText,
       linhas: box.querySelectorAll('p').length,
@@ -639,9 +638,19 @@ async function medirAbertura(page, ctx, modo) {
       // aqui abortaria o arquivo e mataria os outros quatro prefixos.
       texto: linha ? linha.innerText : null,
       classe: linha ? linha.className : null,
-      rotuloChat: alvoChat ? alvoChat.getAttribute('aria-label') : null,
+      // Controles do #actionBar que têm aria-label e NENHUM texto visível.
+      // innerText, e não textContent, justamente porque respeita o CSS: no dedo
+      // os spans .slot .key estão em display: none e não contam como texto que
+      // o jogador enxerga.
+      fantasmas: [...document.querySelectorAll('#actionBar [aria-label]')]
+        .map((el) => ({
+          sel: el.id ? '#' + el.id : el.tagName.toLowerCase(),
+          rotulo: el.getAttribute('aria-label'),
+          textoVisivel: (el.innerText || '').trim(),
+        }))
+        .filter((f) => f.rotulo && !f.textoVisivel),
     };
-  }, SEL_CHAT_ABRIR);
+  });
   if (m.erro) { errors.push(`ABERTURA: ${ctx} ${m.erro}`); return; }
   if (m.texto === null) {
     errors.push(`ABERTURA: ${ctx} o #log não tem nenhuma linha depois da entrada em ${modo}`);
@@ -675,14 +684,33 @@ async function medirAbertura(page, ctx, modo) {
   if (!/joystick/i.test(m.texto)) {
     errors.push(`ABERTURA: ${ctx} (toque) a linha não cita o joystick — "${m.texto}"`);
   }
-  if (m.rotuloChat === null) {
-    errors.push(`ABERTURA: ${ctx} (toque) não encontrou ${SEL_CHAT_ABRIR} para ler o`
-      + ' aria-label exigido pela lista positiva de RF-02 AC 5');
-  } else if (!m.texto.includes(m.rotuloChat)) {
-    // O rótulo é lido do DOM em runtime, nunca reescrito como literal aqui: se o
-    // aria-label mudar sem a mensagem mudar junto, esta AC reprova.
-    errors.push(`ABERTURA: ${ctx} (toque) a linha não cita o rótulo do alvo de chat`
-      + ` "${m.rotuloChat}" — "${m.texto}"`);
+  if (!/convers|falar|balão/i.test(m.texto)) {
+    errors.push(`ABERTURA: ${ctx} (toque) a linha não menciona a conversa — "${m.texto}"`);
+  }
+  // AC 5b — GUARDA DE RÓTULO FANTASMA.
+  //
+  // Este caso nasceu de defeito medido em aparelho real (Chrome/Android,
+  // 375x689), não de leitura de código. A versão anterior desta AC EXIGIA que a
+  // linha citasse o aria-label do #btnChat — e o #btnChat é um botão só de
+  // ícone, sem texto visível. Resultado: a mensagem mandava tocar em
+  // "Conversar com o grupo", rótulo que o jogador vidente não encontra em lugar
+  // nenhum da tela. A frase aparecia em negrito dentro do #log, no canto
+  // ESQUERDO, e o botão fica no DIREITO. O jogador tocava no texto; o #log é
+  // pointer-events: none, o toque atravessava para o #canvas e, por cair em
+  // x < innerWidth/2, virava joystick — o personagem andava e a conversa nunca
+  // abria. Doze toques gravados na sessão real, nenhum a menos de 89,8px da
+  // borda do alvo. A suíte estava verde o tempo todo, porque só toca no centro
+  // exato do botão e porque esta mesma AC obrigava a frase enganosa.
+  //
+  // A regra agora é a inversa e é geral: instrução de toque não pode mandar
+  // procurar um rótulo que só existe em aria-label.
+  for (const f of m.fantasmas) {
+    if (m.texto.includes(f.rotulo)) {
+      errors.push(`ABERTURA: ${ctx} (toque) a linha manda procurar "${f.rotulo}", que é só o`
+        + ` aria-label de ${f.sel} — controle sem texto visível. Quem enxerga não acha esse`
+        + ' rótulo na tela e acaba tocando no próprio texto do #log, que é'
+        + ` pointer-events: none e deixa o toque cair no #canvas — "${m.texto}"`);
+    }
   }
 }
 

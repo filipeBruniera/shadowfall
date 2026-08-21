@@ -268,11 +268,23 @@ function enterGame() {
   const local = getLocal();
   if (local) { cam.x = project(local.x, local.y).x; cam.y = project(local.x, local.y).y; }
   // A abertura só pode citar o que existe na tela daquele modo de entrada: no
-  // dedo não há 1-4, Q/E, Tab nem Enter, e o rótulo do alvo de chat é o que
-  // torna a conversa descobrível. As duas strings ficam lado a lado de
+  // dedo não há 1-4, Q/E, Tab nem Enter. As duas strings ficam lado a lado de
   // propósito, para a diferença saltar na revisão.
+  //
+  // A versão de toque mandava "toque em <b>Conversar com o grupo</b>", que é o
+  // aria-label do #btnChat — um botão SÓ DE ÍCONE, sem texto visível nenhum.
+  // Medido em aparelho real (Chrome/Android, 375x689): o jogador procurava esse
+  // rótulo, achava a frase em negrito no #log — canto ESQUERDO, enquanto o botão
+  // fica no DIREITO — e tocava nela. O #log é pointer-events: none, então o
+  // toque atravessava para o #canvas e, por cair em x < innerWidth/2, virava
+  // joystick: o personagem andava e a conversa nunca abria. Doze toques gravados,
+  // nenhum a menos de 89,8px da borda do alvo.
+  //
+  // Agora a frase descreve o que se vê — posição e desenho do botão — e nada de
+  // negrito nesta linha: negrito era justamente o que fazia o texto do log
+  // parecer um alvo tocável.
   const abertura = matchMedia('(pointer: coarse)').matches
-    ? 'Arraste o polegar na metade esquerda para o joystick; use os botões à direita para magias, poções e mochila; toque em <b>Conversar com o grupo</b> para falar.'
+    ? 'Arraste o polegar na metade esquerda para o joystick; use os botões à direita para magias, poções e mochila; o balão ao lado da mochila abre a conversa.'
     : 'Use <b>1–4</b> para magias, <b>Q/E</b> para poções, <b>Enter</b> para conversar.';
   UI.pushLog(abertura, 'system');
   if (S.role !== 'solo') UI.pushLog('Fiquem por perto: quem cai só levanta se alguém chegar junto.', 'system');

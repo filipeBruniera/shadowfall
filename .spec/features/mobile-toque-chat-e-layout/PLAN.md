@@ -110,10 +110,22 @@ PLAN, não de implementação.
 | Item | Valor congelado | Consumidores |
 |---|---|---|
 | Seletor do alvo de abrir | `#btnChat` | T02 (`SEL_CHAT_ABRIR`), T03, T04, T06, T08, T09, T10 |
-| `aria-label` do alvo de abrir | `Conversar com o grupo` | T08 (DOM), T11 (mensagem), T03 (lido do DOM em runtime) |
+| `aria-label` do alvo de abrir | `Conversar com o grupo` | T08 (DOM), T03 (guarda de rótulo fantasma) — **desacoplado de T11**, ver nota abaixo |
 | Seletor do alvo de fechar | `#btnChatClose` | T02 (`SEL_CHAT_FECHAR`), T04, T12, T13 |
 | `aria-label` do alvo de fechar | `Fechar conversa` | T12, T04 |
-| Mensagem de abertura em `pointer: coarse` | `Arraste o polegar na metade esquerda para o joystick; use os botões à direita para magias, poções e mochila; toque em <b>Conversar com o grupo</b> para falar.` | T11 (string), T03 (regex positiva e negativa) |
+| Mensagem de abertura em `pointer: coarse` | `Arraste o polegar na metade esquerda para o joystick; use os botões à direita para magias, poções e mochila; o balão ao lado da mochila abre a conversa.` | T11 (string), T03 (regex positiva e negativa) |
+
+> **Correção pós-medição em aparelho real (Chrome/Android, 375x689).** A mensagem de toque
+> congelada acima mandava `toque em <b>Conversar com o grupo</b>`, e RF-02 AC 5 exigia que ela
+> citasse o `aria-label` do `#btnChat`. O `#btnChat` é um botão **só de ícone**: esse rótulo não
+> aparece em lugar nenhum da tela para quem enxerga. Em teste com jogador real, a frase — renderizada
+> em negrito no `#log`, canto **esquerdo**, enquanto o botão fica no **direito** — foi lida como o
+> próprio alvo. O `#log` é `pointer-events: none`, então cada toque atravessava para o `#canvas` e,
+> caindo em `x < innerWidth/2`, virava joystick: o personagem andava e a conversa nunca abria.
+> Doze toques gravados, nenhum a menos de 89,8px da borda do alvo. A suíte ficou verde o tempo todo,
+> porque só toca no centro exato do botão — e porque a própria AC obrigava a frase enganosa.
+> RF-02 AC 5 foi invertida: a instrução agora precisa descrever o que se vê (posição e desenho), e
+> é **proibido** citar rótulo que exista apenas em `aria-label`. O `aria-label` do botão não mudou.
 | Mensagem de abertura em mouse | `Use <b>1–4</b> para magias, <b>Q/E</b> para poções, <b>Enter</b> para conversar.` — byte a byte igual a `js/main.js:270`, travessão U+2013 | T11 (ramo preservado), T03 (RF-02 AC 3) |
 
 A mensagem de toque passa nas quatro regex negativas de RF-02 AC 1 (`/1\s*[–-]\s*4/`, `/Q\s*\/\s*E/`,
@@ -388,10 +400,12 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
   (a de mouse byte a byte idêntica à de hoje, travessão U+2013 incluso) para a diferença de
   RF-02 AC 2 ficar óbvia na revisão. As duas saem pelo mesmo `UI.pushLog(<texto>, 'system')`
   (RF-02 AC 4), respeitando o teto de `CHAT_LOG_LINES` de `js/ui.js:97`. Usar exatamente as strings
-  congeladas na tabela deste PLAN: a de toque cita joystick, botões da direita, mochila e o rótulo
-  `Conversar com o grupo` — o mesmo texto do `aria-label` de T08 — e não contém `1–4`, `Q/E`, `Tab`
-  nem `Enter`. **Não** montar a string lendo o `aria-label` do DOM: RF-02 AC 5 existe para reprovar
-  a divergência, e montar a partir do botão tornaria a AC incapaz de falhar.
+  congeladas na tabela deste PLAN: a de toque cita joystick, botões da direita, mochila e descreve o
+  alvo de conversa pelo que se vê — `o balão ao lado da mochila` — e não contém `1–4`, `Q/E`, `Tab`
+  nem `Enter`. **Não** montar a string lendo o `aria-label` do DOM, e **não** citar o `aria-label`
+  no texto: ele nomeia um botão só de ícone, e RF-02 AC 5 agora reprova exatamente isso (guarda de
+  rótulo fantasma — ver a nota na tabela de valores congelados). Sem negrito nesta linha: o negrito
+  era o que fazia o texto do `#log` parecer um alvo tocável.
 - **Covers**: RF-02, RNF-04, RNF-06
 - **Tests**: `URL=http://localhost:5173 npm run test:browser` — nenhum erro `ABERTURA`: regex
   negativas limpas no toque, `/joystick/i` e o `aria-label` presentes, string de mouse intacta e as
