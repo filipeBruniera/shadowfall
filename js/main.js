@@ -267,7 +267,14 @@ function enterGame() {
   }
   const local = getLocal();
   if (local) { cam.x = project(local.x, local.y).x; cam.y = project(local.x, local.y).y; }
-  UI.pushLog('Use <b>1–4</b> para magias, <b>Q/E</b> para poções, <b>Enter</b> para conversar.', 'system');
+  // A abertura só pode citar o que existe na tela daquele modo de entrada: no
+  // dedo não há 1-4, Q/E, Tab nem Enter, e o rótulo do alvo de chat é o que
+  // torna a conversa descobrível. As duas strings ficam lado a lado de
+  // propósito, para a diferença saltar na revisão.
+  const abertura = matchMedia('(pointer: coarse)').matches
+    ? 'Arraste o polegar na metade esquerda para o joystick; use os botões à direita para magias, poções e mochila; toque em <b>Conversar com o grupo</b> para falar.'
+    : 'Use <b>1–4</b> para magias, <b>Q/E</b> para poções, <b>Enter</b> para conversar.';
+  UI.pushLog(abertura, 'system');
   if (S.role !== 'solo') UI.pushLog('Fiquem por perto: quem cai só levanta se alguém chegar junto.', 'system');
 }
 
@@ -652,6 +659,11 @@ for (const b of document.querySelectorAll('.slot.potion')) {
   b.onpointerdown = (e) => { e.preventDefault(); queueAct({ k: 'pot', slot: b.dataset.pot }); };
 }
 UI.el('btnBag').onclick = toggleBag;
+// onpointerdown é o padrão da casa para slot de ação (js/ui.js:120) e evita o
+// clique sintético; o preventDefault impede o foco do botão de brigar com o
+// chatEl.focus() de openChat(). Só abre: o envio continua no caminho único que
+// passa pelo chatGate.
+UI.el('btnChat').onpointerdown = (e) => { e.preventDefault(); openChat(); };
 UI.el('btnCloseBag').onclick = () => UI.el('bag').classList.add('hidden');
 UI.el('btnRespawn').onclick = () => queueAct({ k: 'respawn' });
 UI.el('btnSell').onclick = () => {

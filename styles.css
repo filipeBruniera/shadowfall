@@ -298,6 +298,16 @@ input::placeholder { color: var(--placeholder); }
 .glyph-hp { background: linear-gradient(180deg, #ff5a4a, #7c1410); box-shadow: inset 0 -6px 8px rgba(0, 0, 0, .4); }
 .glyph-mp { background: linear-gradient(180deg, #6f8cff, #1c2a75); box-shadow: inset 0 -6px 8px rgba(0, 0, 0, .4); }
 .glyph-bag { background: linear-gradient(180deg, #7a5c3a, #3a2a18); width: 24px; height: 22px; }
+/* Cantos 3px 3px 3px 0: o canto de baixo à esquerda reto sugere a ponta do
+   balão de fala, no mesmo padrão de bloco com gradiente do .glyph-bag. */
+.glyph-chat {
+  background: linear-gradient(180deg, var(--chat), color-mix(in srgb, var(--chat) 35%, #0e0b14));
+  width: 24px; height: 20px; border-radius: 3px 3px 3px 0;
+}
+/* O alvo de chat é de toque: no mouse a .slots é flex e um quarto slot alargaria
+   o #actionBar, e o Enter de js/main.js:574 continua sendo o caminho do teclado.
+   O bloco pointer: coarse devolve o display com id contra id. */
+#btnChat { display: none; }
 
 #stick {
   position: absolute; width: 128px; height: 128px; border-radius: 50%;
@@ -398,6 +408,15 @@ input::placeholder { color: var(--placeholder); }
   /* 48x48 em qualquer largura de toque: em 360 sobram 104px úteis entre a zona
      do joystick (244) e o gutter de 12, e 2 x 48 + gap 6 = 102px de barra. */
   .slot { width: 48px; height: 48px; }
+  /* Medido no dedo: 7 spans .slot .key visíveis — 1, 2, 3 e 4 gerados em
+     js/ui.js:119 e Q, E e Tab estáticos em index.html:162-164 —, todos
+     anunciando teclas que o celular não tem. Esconder, nunca remover: os nós
+     seguem no DOM porque continuam sendo a fonte do rótulo no mouse. */
+  .slot .key { display: none; }
+  /* Id contra id para vencer o #btnChat { display: none } do mouse: no toque o
+     quarto filho cai na célula livre do grid de poções, ao lado do #btnBag, e
+     herda os 48x48 de .slot deste bloco — sem quarta linha, barra em 102x212. */
+  #btnChat { display: flex; }
   #actionBar { bottom: max(14px, env(safe-area-inset-bottom)); right: 12px; left: auto; transform: none; flex-direction: column-reverse; align-items: flex-end; gap: 8px; }
   .slots { display: grid; grid-template-columns: repeat(2, 1fr); }
   /* Sem o id: com 1,0,1 esta regra vencia .plaque.mate (0,2,0) e a placa de
