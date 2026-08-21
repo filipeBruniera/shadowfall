@@ -65,27 +65,47 @@ Com o chat aberto:
   parar de se mover.
 - A borda do `#chatInput` em `--ember` já sinaliza o foco; acrescentar o `box-shadow` de foco
   padrão (`0 0 0 3px rgba(255,122,47,.14)`).
-- O `#log` sobe para dar lugar ao campo, sem sobrepor.
+- No mouse o `#log` sobe para dar lugar ao campo, sem sobrepor. **No toque o empilhamento é
+  estático**: o `#log` fica permanentemente acima da faixa do `#chatInput`, aberta ou fechada, em
+  vez de subir só na abertura. O `bottom` do log já reserva os 44px da linha do campo mais 8px de
+  respiro, então nem a abertura nem o fechamento mexem na geometria do log — e a medição de 6
+  linhas contidas vale igual nos dois estados.
 
 ## 6. Layout mobile
 
 ```
 ┌──────────────────┐
 │ ...              │
-│ Bruno: vem cá    │  #log 50vw × 18vh
+│ Bruno: vem cá    │  #log 50vw × LOG_MAX_LINES
 │ Andar 7          │
 └──────────────────┘
 [ mensagem…      ] │  #chatInput 60vw
 ```
 
-- O `#log` já cai para `50vw × 18vh` e `11px` em `pointer: coarse` — mantém.
-- Teto de linhas visíveis no celular: **8**. As demais existem em memória e somem pela máscara.
-- Abrir o chat **não** cobre o joystick: o campo fica acima do `#log`, na faixa inferior esquerda,
-  e o teclado do sistema empurra a página — usar `env(keyboard-inset-height)` quando disponível,
-  com recuo de `12px` como alternativa.
+- O `#log` em `pointer: coarse` mantém `50vw` de largura e `11px`, mas a altura passa a ser
+  **derivada de `LOG_MAX_LINES × line-height` medido** (95,7px hoje, com `line-height` de 15,95px),
+  não mais uma fração da viewport. A fração que esta seção mandava manter foi descartada porque
+  variava com a tela: media 151,9px em 390x844, onde couberam 9 linhas inteiras, e 115,2px em
+  360x640, onde couberam 7. Pior, as **8** linhas que esta mesma seção pedia ocupam 127,6px —
+  **19,9vh** em 360x640, acima dos 115,2px que a fração dava ali. Os dois tetos da seção se
+  contradiziam.
+- Teto de linhas visíveis no celular: **`LOG_MAX_LINES = 6`, exportado de `js/balance.js`**. É a
+  **única primitiva**: a altura da caixa é consequência medida dela, nunca um segundo número. As
+  demais linhas existem em memória e somem pela máscara.
+- Abrir o chat **pode** cobrir a zona do joystick, e isso é aceito: o campo ocupa a faixa inferior
+  esquerda enquanto `S.chatting` é verdadeiro e bloqueia só os pixels que cobre, porque o portão de
+  zona vive no listener do `#canvas` e o campo é irmão dele. O bloqueio é temporário — fechado o
+  chat, a mesma coordenada volta a armar o joystick. O teclado do sistema empurra a página — usar
+  `env(keyboard-inset-height)` quando disponível, com recuo de `12px` como alternativa.
 - Com `max-height: 460px` o `#log` some (regra existente), **mas o `#chatInput` continua
   funcionando**: enviar mensagem é possível mesmo sem ver o histórico.
-- Botão de abrir chat no celular: um alvo de `44×44px` no `#actionBar`, abaixo do botão de mochila.
+- Botão de abrir chat no celular: um alvo de `44×44px` no `#actionBar`, **ao lado do botão de
+  mochila**, na célula livre de 48x48 do grid `.slots.potions` — as poções, a mochila e o chat
+  fecham 2x2 e o `#actionBar` continua em 102x212. Pendurá-lo *abaixo* da mochila, como esta seção
+  pedia, abriria uma quinta célula e esticaria a barra, comendo altura que a faixa do `#chatInput`
+  já reserva.
+- Fechar no dedo: um alvo de `44×44px` ao lado do campo, na mesma linha e rente à borda de baixo —
+  o `Esc` do teclado não existe no toque, e sem ele o único jeito de sair do chat seria enviar.
 
 ## 7. Estados
 

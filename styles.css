@@ -349,7 +349,6 @@ input::placeholder { color: var(--placeholder); }
 .x:hover { color: var(--bone); }
 
 .bag-cols { display: grid; grid-template-columns: 176px 1fr; gap: 16px; padding: 16px; }
-@media (max-width: 620px) { .bag-cols { grid-template-columns: 1fr; } }
 
 .equip-col { display: flex; flex-direction: column; gap: 6px; }
 .equip-slot {
@@ -360,6 +359,38 @@ input::placeholder { color: var(--placeholder); }
 .equip-slot .lbl { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
 .equip-slot .nm { font-size: 13px; }
 .equip-slot canvas { flex-shrink: 0; }
+
+/* Em 360x640 a .equip-col empilhada media 306px de 616 do painel — 49,7%, contra
+   o teto de 40% (246px) — e empurrava o #btnSell para y=724,3 com a borda do
+   painel em y=628, 96px abaixo da dobra (scrollHeight 771 contra clientHeight
+   614). Em duas colunas os 6 campos caem de 6 linhas de 46px para 3 (~150px,
+   24% do painel) e o padding/gap menores devolvem mais ~12px: o scrollHeight
+   fica em ~603 e o botão de vender entra inteiro na caixa com scrollTop 0.
+   Reutiliza o ponto de quebra que já existia (tokens-componentes.md §7) e não
+   toca o padding de .equip-slot: a linha tem row.onclick quando há item
+   equipado (js/ui.js:261) e por isso é alvo de toque de 44px do caso TOQUE.
+   O bloco vive DEPOIS das regras base de .equip-col: mesma especificidade, e
+   acima delas o `display: flex` da base venceria por ordem de cascata. */
+@media (max-width: 620px) {
+  /* minmax(0, 1fr) e não 1fr nas duas grades: `1fr` é minmax(auto, 1fr), e o
+     mínimo `auto` é o min-content da linha. Com o nowrap do .nm abaixo, esse
+     min-content vira o nome inteiro sem quebra — medido, "Peitoral de Placas
+     Cruel" inflava a trilha da .bag-cols e levava o #invGrid de 248,8px para
+     281,6px de altura (a .inv-slot tem aspect-ratio: 1, então largura vira
+     altura), estourando o scrollHeight de 610 para 643 contra clientHeight 614.
+     Com o mínimo em 0 a trilha para de crescer e o corte cai no texto, que é
+     onde deve cair. */
+  .bag-cols { grid-template-columns: minmax(0, 1fr); padding: 12px; gap: 12px; }
+  .equip-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  /* Em duas colunas a linha cai para ~150px e um nome longo quebraria em duas
+     linhas, engordando a linha e comendo a folga do scrollHeight — mesmo
+     tratamento de .roster-row .rr-name. O min-width: 0 vai no .equip-slot (item
+     de grade) e no div de texto (item flex): sem ele o mínimo automático dos
+     dois transborda a trilha e a elipse nunca chega a valer. */
+  .equip-slot { min-width: 0; }
+  .equip-slot > div { min-width: 0; }
+  .equip-slot .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 
 .inv-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .inv-slot {

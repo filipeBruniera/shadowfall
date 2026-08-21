@@ -25,7 +25,7 @@ chips, log e barra do chefe. Somar 3 placas de aliado sem regra de corte produz 
 │      ╰───╯                            ├─┼─┤   │
 │ ┌───────────┐                         │3│4│   │
 │ │ log 50vw  │                         ├─┼─┤   │
-│ │ 18vh      │                         │Q│E│   │
+│ │ 6 linhas  │                         │Q│E│   │
 │ └───────────┘                         └─┴─┘   │
 └───────────────────────────────────────────────┘
    metade esquerda: toque = joystick    metade direita: botões
@@ -35,7 +35,12 @@ Zonas que **não podem** ser invadidas:
 - **Metade esquerda inteira** é área do joystick. Ele nasce onde o dedo toca, em qualquer ponto
   dessa metade — por isso o `ally-rail` fica **colado no topo**, nunca no meio vertical.
 - **Canto inferior direito** é o `#actionBar`, que em toque vira coluna com `env(safe-area-inset-bottom)`.
-- **Canto inferior esquerdo** é o `#log` (50vw × 18vh).
+- **Canto inferior esquerdo** é o `#log` (50vw de largura; altura derivada de `LOG_MAX_LINES`,
+  95,7px medidos), com a faixa imediatamente inferior reservada ao `#chatInput` e ao alvo de
+  fechar. A fração de viewport saiu porque não fixava o que importa: a mesma fração media 151,9px
+  em 390x844 e 115,2px em 360x640, deixando 9 linhas inteiras lá e 7 aqui. E as 8 linhas que
+  `chat-grupo.md` pedia ocupam 127,6px — 19,9vh em 360x640, acima dos 115,2px que a própria fração
+  reservava ali.
 
 ## 2. Trilho compacto
 

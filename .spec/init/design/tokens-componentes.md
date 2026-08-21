@@ -139,9 +139,15 @@ Pontos de quebra que já existem — reutilizar, não criar novos:
 |---|---|
 | `max-width: 520px` | `.voc-grid` passa de 4 para 2 colunas |
 | `max-width: 620px` | `.bag-cols` vira coluna única |
-| `pointer: coarse` | Log 50vw/18vh · slot 48px · `#actionBar` vertical à direita · placa 190px · minimapa 108px |
+| `pointer: coarse` | Log 50vw / altura por `LOG_MAX_LINES` · slot 48px · `#actionBar` vertical à direita · placa 190px · minimapa 108px |
 | `max-height: 460px` | Log some · placa 180px |
 | `prefers-reduced-motion` | Animações e transições reduzidas a `.01ms` |
+
+A altura do log deixou de ser fração de viewport porque a fração não fixava linha nenhuma: a mesma
+fração media 151,9px em 390x844 e 115,2px em 360x640, deixando 9 linhas inteiras lá e 7 aqui. E as
+8 linhas que `chat-grupo.md` pedia ocupam 127,6px — 19,9vh em 360x640, acima dos 115,2px que a
+fração reservava ali. `LOG_MAX_LINES`, exportado de `js/balance.js`, é a única primitiva; a altura
+sai dela vezes o `line-height` medido do próprio `#log`.
 
 Regra de área segura: qualquer elemento ancorado embaixo usa `max(12px, env(safe-area-inset-bottom))`,
 como `#actionBar` já faz.
