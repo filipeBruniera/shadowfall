@@ -77,7 +77,11 @@ function serve() {
   }).listen(PORT);
 }
 
-const MEDE_TOQUE = CASE === 'mobile' || CASE === 'all';
+// VIEW=desktop entra aqui de propósito: as medições de toque trocam a viewport
+// das abas para mobile e depois devolvem. Trocar só largura e altura não
+// recarrega a página, mas `isMobile`/`hasTouch` recarregam — e num run desktop
+// cada troca dessas derrubaria a sessão P2P no meio do roteiro.
+const MEDE_TOQUE = (CASE === 'mobile' || CASE === 'all') && VIEW !== 'desktop';
 // A AC 1 de UI-06 só existe com a sala trancada e 10 jogadores no #lobby, e a
 // AC 1 de UI-01 só com 9 em partida e 1 na fila. O caso mobile alcança a
 // primeira janela reaproveitando a tranca; a segunda depende da expulsão do
@@ -203,12 +207,23 @@ async function medirLobbyTrancado(tab) {
         contador: document.getElementById('lobbyCount').textContent.trim(),
         linhas: tela.querySelectorAll('#lobbyList .lobby-row.roster-row').length,
         innerWidth, scrollWidth: tela.scrollWidth, clientWidth: tela.clientWidth,
+        // Alcançabilidade vertical: `.screen` é flex com overflow-y auto, e com
+        // `align-items: center` o que passa da altura vaza ACIMA da origem de
+        // rolagem, onde scrollTop nunca chega. Mede-se o topo real do conteúdo
+        // e a posição do #lobbyCode, que é o dado sem o qual ninguém entra.
+        topoConteudo: +tela.querySelector('.menu-inner').getBoundingClientRect().top.toFixed(1),
+        topoCodigo: +document.getElementById('lobbyCode').getBoundingClientRect().top.toFixed(1),
         fora, truncados, acoes: tela.querySelectorAll('.menu-actions .btn').length,
         pequenos: M.targets('#lobby')
           .filter((t) => t.w < alvoMin || t.h < alvoMin)
           .map((t) => `${t.alvo} ${t.w}x${t.h}`),
       };
     }, ALVO_MIN, ROTULOS_LOBBY);
+
+    check(`MENU: ${ctx} o topo do #lobby não vaza acima da origem de rolagem`,
+      m.topoConteudo >= -0.5, `topo em ${m.topoConteudo}px`);
+    check(`MENU: ${ctx} o #lobbyCode fica dentro da tela`,
+      m.topoCodigo >= -0.5, `#lobbyCode em ${m.topoCodigo}px`);
 
     // Sem o estado certo a varredura passaria vazia e o caso viraria decoração.
     check(`MENU: ${ctx} o #lobby está trancado, visível e com 10 jogadores`,
@@ -278,9 +293,29 @@ async function medirToqueSala(tab) {
     const chips = await tab.page.evaluate(() => {
       const M = window.__M;
       const chip = document.getElementById('crewChip');
+      // O #roster pode ter ficado aberto do passo anterior, e como `.panel` é
+      // centralizado com z-index 20 ele cobre o chip — o teste de acerto mediria
+      // o painel em vez do alvo. Fecha primeiro; o roteiro abaixo reabre.
+      document.getElementById('btnCloseRoster')?.click();
       return {
         crew: M.rect('#crewChip'),
-        clip: chip ? getComputedStyle(chip).backgroundClip : null,
+        // Mede o resultado, não o mecanismo: a placa visível é o ::before, e o
+        // que a AC exige é que ela continue nos 21px de sempre enquanto a caixa
+        // de toque vai a 44. Afirmar `background-clip` amarrava o teste a uma
+        // implementação e reprovava outra igualmente correta.
+        placa: chip ? parseFloat(getComputedStyle(chip, '::before').height) : null,
+        placaFundo: chip ? getComputedStyle(chip, '::before').backgroundColor : null,
+        // Teste de acerto de verdade: #hudRight é `pointer-events: none`, então
+        // um alvo de 44x44 ali dentro pode estar geometricamente certo e mesmo
+        // assim deixar o toque atravessar para o canvas. Abrir o painel por
+        // `.click()` programático não pega isso — só elementFromPoint pega.
+        alvoNoCentro: (() => {
+          if (!chip) return null;
+          const r = chip.getBoundingClientRect();
+          const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          if (!el) return null;
+          return el === chip || chip.contains(el) ? 'crewChip' : (el.id || el.tagName.toLowerCase());
+        })(),
         irmaos: ['floorChip', 'goldChip', 'roomChip', 'crewLock', 'pingChip']
           .map((id) => ({ id, r: M.rect('#' + id) }))
           .filter((x) => x.r)
@@ -290,8 +325,17 @@ async function medirToqueSala(tab) {
     check(`TOQUE: ${ctx} o #crewChip tem caixa de ao menos 44px de altura`,
       !!chips.crew && chips.crew.height >= ALVO_MIN,
       chips.crew ? `${chips.crew.height.toFixed(1)}px` : 'ausente ou invisível');
-    check(`TOQUE: ${ctx} o #crewChip pinta só a caixa de conteúdo`,
-      chips.clip === 'content-box', String(chips.clip));
+    check(`TOQUE: ${ctx} o #crewChip tem caixa de ao menos 44px de largura`,
+      !!chips.crew && chips.crew.width >= ALVO_MIN,
+      chips.crew ? `${chips.crew.width.toFixed(1)}px` : 'ausente ou invisível');
+    check(`TOQUE: ${ctx} o toque no centro do #crewChip chega nele, não no canvas`,
+      chips.alvoNoCentro === 'crewChip', String(chips.alvoNoCentro));
+    check(`TOQUE: ${ctx} a placa pintada do #crewChip fica nos 21px, não nos 44`,
+      chips.placa !== null && chips.placa <= 24 && chips.placa > 0,
+      `${chips.placa}px de placa em ${chips.crew ? chips.crew.height.toFixed(1) : '?'}px de caixa`);
+    check(`TOQUE: ${ctx} a placa do #crewChip é opaca, sem furo entre borda e fundo`,
+      !!chips.placaFundo && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(chips.placaFundo),
+      String(chips.placaFundo));
     const inchados = chips.irmaos.filter((c) => c.h > 24);
     check(`TOQUE: ${ctx} os ${chips.irmaos.length} chips informativos ficam em 24px ou menos`,
       chips.irmaos.length > 0 && inchados.length === 0,
@@ -395,9 +439,25 @@ async function derrubarAliado(tab) {
   });
 }
 
+// Parar o intervalo não bastava: o aliado continuava `dead` com hp 0, e o caso
+// `shot` mais adiante conta as placas do trilho. Como o caído entra ALÉM do teto
+// de vivos (js/allyrail.js), a contagem passava a depender de a ressurreição em
+// jogo acontecer dentro do sleep — ordem, não invariante. Aqui ele volta de pé.
 const erguerAliado = (tab) => tab.page.evaluate(() => {
   clearInterval(window.__mantemCaido);
   window.__mantemCaido = null;
+  const S = window.__SF;
+  if (!S || !S.G) return;
+  // maxHp não mora no jogador do simulador (vem de stats()); a view já resolveu
+  // esse número, então lê de lá quando houver e cai num valor de pé quando não.
+  const daView = new Map((S.view?.players || []).map((p) => [p.id, p.maxHp]));
+  for (const p of Object.values(S.G.players)) {
+    if (!p.dead) continue;
+    p.dead = false;
+    p.deathTimer = 0;
+    p.reviveProg = 0;
+    p.hp = Math.max(1, Math.floor((daView.get(p.id) || 2) * 0.5));
+  }
 });
 
 // Uma leitura só por altura: display, contagem e caixa de tudo que as ACs de
@@ -668,8 +728,11 @@ try {
       await tabs[i].page.screenshot({ path: `${dir}/grupo-${i}.png` });
     }
     const temTrilho = await host.page.evaluate(() => document.querySelectorAll('#partyList .plaque.mate').length);
+    // O teto vale para os vivos: o caído entra além dele (js/allyrail.js), então
+    // contar `.plaque.mate` cru media coisa diferente do invariante.
+    const vivosTrilho = await host.page.evaluate(() => document.querySelectorAll('#partyList .plaque.mate:not(.down)').length);
     check('multi-peer: o trilho de aliados aparece no HUD', temTrilho > 0, `${temTrilho} placas`);
-    check('multi-peer: o trilho respeita o teto de 3 placas', temTrilho <= 3, `${temTrilho} placas`);
+    check('multi-peer: o trilho respeita o teto de 3 placas vivas', vivosTrilho <= 3, `${vivosTrilho} vivas de ${temTrilho} placas`);
   }
 
   if (CASE === 'probe') {

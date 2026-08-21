@@ -228,9 +228,13 @@ async function medirMenu(page, ctx) {
         truncados.push(`${M.label(el)} com text-overflow: ellipsis`);
       }
     }
+    const dentro = tela.querySelector('.menu-inner');
     return {
       id: tela.id, innerWidth,
       scrollWidth: tela.scrollWidth, clientWidth: tela.clientWidth,
+      // Mesmo defeito de `.screen` que derrubou o #lobby: com align-items
+      // center o excedente sobe para fora do alcance de scrollTop.
+      topoConteudo: dentro ? +dentro.getBoundingClientRect().top.toFixed(1) : null,
       fora, truncados,
       pequenos: M.targets('#menu')
         .filter((t) => t.w < alvoMin || t.h < alvoMin)
@@ -241,6 +245,10 @@ async function medirMenu(page, ctx) {
   if (m.scrollWidth !== m.clientWidth) {
     errors.push(`MENU: ${ctx} o #${m.id} rola na horizontal — scrollWidth ${m.scrollWidth}`
       + ` contra clientWidth ${m.clientWidth}`);
+  }
+  if (m.topoConteudo !== null && m.topoConteudo < -0.5) {
+    errors.push(`MENU: ${ctx} o topo do #${m.id} vaza acima da origem de rolagem`
+      + ` — .menu-inner em ${m.topoConteudo}px, inalcançável por scrollTop`);
   }
   if (m.fora.length) {
     errors.push(`MENU: ${ctx} ${m.fora.length} descendente(s) do #${m.id} fora dos`
