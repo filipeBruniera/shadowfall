@@ -1,4 +1,8 @@
 import puppeteer from 'puppeteer';
+// A AC 2 de UI-03 proíbe repetir o 0.5 aqui: a fração da zona do joystick e o
+// raio do #stick vêm de js/balance.js, a mesma fonte que js/main.js consulta
+// para decidir a origem do toque. INV_SIZE fecha a mochila cheia de UI-04.
+import { TOUCH_STICK_ZONE, TOUCH_STICK_RADIUS, INV_SIZE } from '../js/balance.js';
 import {
   VIEWPORT_MOBILE, VIEWPORT_SMALL, ALTURAS_UI03, ALVO_MIN, SLOT_LADO, BARRA_LARGURA,
   alturaMobile, installHelpers,
@@ -143,10 +147,30 @@ const fps = await page.evaluate(() => new Promise((res) => {
 
 // ============================================================
 // CONTEXTOS DE TOQUE — 390x844 e 360x640, os dois de UI-01, UI-02 e UI-03.
-// Aqui só entra o que a partida solo alcança: #actionBar, seus slots e o #bag.
-// O que exige sala de verdade (#roster, #crewChip, #lobby) é medido por
+// Aqui só entra o que a partida solo alcança: #menu, #actionBar, seus slots e o
+// #bag. O que exige sala de verdade (#roster, #crewChip, #lobby) é medido por
 // tests/multipeer.mjs.
 // ============================================================
+
+// Gutter de painel praticado em styles.css:161 e styles.css:372; a altura útil
+// de UI-04 é innerHeight menos ele duas vezes.
+const GUTTER = 12;
+// Tolerância de subpixel: getBoundingClientRect devolve fração e o painel é
+// centrado por translate(-50%, -50%), então o topo de 12 vira 11,7 sem defeito.
+const TOL = 0.5;
+
+// As viewports moram em mobile-helpers.mjs porque tests/multipeer.mjs mede as
+// mesmas caixas. O par pequeno é contrato de RF-02a: se o módulo compartilhado
+// derivar, este harness passaria medindo duas vezes 390 sem avisar ninguém.
+const ALVO_PEQUENO = { width: 360, height: 640 };
+if (VIEWPORT_SMALL.width !== ALVO_PEQUENO.width || VIEWPORT_SMALL.height !== ALVO_PEQUENO.height) {
+  errors.push(`TOQUE: o contexto pequeno virou ${VIEWPORT_SMALL.width}x${VIEWPORT_SMALL.height},`
+    + ` esperado ${ALVO_PEQUENO.width}x${ALVO_PEQUENO.height}`);
+}
+
+// UI-03 AC 3: a borda direita da zona reservada, medida em cada largura, sai no
+// relatório final — 259 em 390 e 244 em 360.
+const zonas = new Map();
 async function abrirToque(viewport) {
   const ctx = `${viewport.width}x${viewport.height}`;
   const p = await browser.newPage();
@@ -159,6 +183,7 @@ async function abrirToque(viewport) {
     errors.push(`TOQUE: ${ctx} não ativou "pointer: coarse" — a medição cairia no CSS de desktop`);
   }
   await p.screenshot({ path: `${OUT}/08-mobile-menu-${ctx}.png` });
+  await medirMenu(p, ctx);
   await p.click('.voc-card[data-voc="paladin"]');
   await p.click('#btnSolo');
   await new Promise((r) => setTimeout(r, 1800));
@@ -166,32 +191,198 @@ async function abrirToque(viewport) {
   return p;
 }
 
-// UI-01: nenhum alvo interativo abaixo de 44x44 nas telas alcançáveis em solo.
-async function medirToque(page, ctx) {
-  await page.evaluate(() => document.getElementById('btnBag').click());
-  await new Promise((r) => setTimeout(r, 400));
-  const m = await page.evaluate(() => {
+// UI-06: nem rolagem horizontal, nem descendente fora da viewport, nem rótulo
+// de botão truncado. Medido com o #menu ainda na tela — o #lobby, que exige sala
+// de verdade, fica com tests/multipeer.mjs. A varredura de UI-01 aproveita a
+// mesma visita: o menu é a primeira superfície de toque da partida.
+async function medirMenu(page, ctx) {
+  const m = await page.evaluate((alvoMin) => {
     const M = window.__M;
-    const pequenos = [];
-    for (const raiz of ['#actionBar', '#bag']) {
-      for (const t of M.targets(raiz)) {
-        if (t.w < 44 || t.h < 44) pequenos.push(`${raiz} ${t.alvo} ${t.w}x${t.h}`);
+    const tela = document.querySelector('.screen:not(.hidden)');
+    if (!tela) return { erro: 'nenhuma .screen visível' };
+    const fora = [];
+    for (const el of tela.querySelectorAll('*')) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0) continue;
+      if (r.left < -0.5 || r.right > innerWidth + 0.5) {
+        fora.push(`${M.label(el)} ocupa ${r.left.toFixed(1)}–${r.right.toFixed(1)}`);
       }
     }
+    // Encolher o flex item de .menu-actions não pode virar corte de texto: a
+    // caixa cabe, mas o rótulo em caixa alta some atrás de um ellipsis.
+    const truncados = [];
+    for (const el of tela.querySelectorAll('.menu-actions .btn')) {
+      if (!M.visible(el)) continue;
+      if (el.scrollWidth > el.clientWidth + 0.5) {
+        truncados.push(`${M.label(el)} pede ${el.scrollWidth}px numa caixa de ${el.clientWidth}px`);
+      }
+      if (getComputedStyle(el).textOverflow === 'ellipsis') {
+        truncados.push(`${M.label(el)} com text-overflow: ellipsis`);
+      }
+    }
+    return {
+      id: tela.id, innerWidth,
+      scrollWidth: tela.scrollWidth, clientWidth: tela.clientWidth,
+      fora, truncados,
+      pequenos: M.targets('#menu')
+        .filter((t) => t.w < alvoMin || t.h < alvoMin)
+        .map((t) => `${t.alvo} ${t.w}x${t.h}`),
+    };
+  }, ALVO_MIN);
+  if (m.erro) { errors.push(`MENU: ${ctx} ${m.erro}`); return; }
+  if (m.scrollWidth !== m.clientWidth) {
+    errors.push(`MENU: ${ctx} o #${m.id} rola na horizontal — scrollWidth ${m.scrollWidth}`
+      + ` contra clientWidth ${m.clientWidth}`);
+  }
+  if (m.fora.length) {
+    errors.push(`MENU: ${ctx} ${m.fora.length} descendente(s) do #${m.id} fora dos`
+      + ` ${m.innerWidth}px da viewport — ${m.fora.join(' · ')}`);
+  }
+  if (m.truncados.length) {
+    errors.push(`MENU: ${ctx} ${m.truncados.length} rótulo(s) truncado(s) em .menu-actions .btn`
+      + ` — ${m.truncados.join(' · ')}`);
+  }
+  if (m.pequenos.length) {
+    errors.push(`TOQUE: ${ctx} o #menu tem ${m.pequenos.length} alvo(s) abaixo de`
+      + ` ${ALVO_MIN}x${ALVO_MIN} — ${m.pequenos.join(' · ')}`);
+  }
+}
+
+// UI-01: nenhum alvo interativo abaixo de 44x44 na barra de ação. O #bag entra
+// pela medirMochila, que só o abre depois de encher o inventário — varrer a
+// mochila vazia deixaria de fora as .inv-slot e as .equip-slot, que só viram
+// alvo de toque quando têm item.
+async function medirToque(page, ctx) {
+  const m = await page.evaluate((alvoMin) => {
+    const M = window.__M;
+    return {
+      pequenos: M.targets('#actionBar')
+        .filter((t) => t.w < alvoMin || t.h < alvoMin)
+        .map((t) => `${t.alvo} ${t.w}x${t.h}`),
+    };
+  }, ALVO_MIN);
+  if (m.pequenos.length) {
+    errors.push(`TOQUE: ${ctx} o #actionBar tem ${m.pequenos.length} alvo(s) abaixo de`
+      + ` ${ALVO_MIN}x${ALVO_MIN} — ${m.pequenos.join(' · ')}`);
+  }
+}
+
+// A mochila cheia é o pior caso de altura de UI-04, e os 20 itens saem do
+// caminho real do jogo: rollItem() (js/sim.js:1241) larga o item no pé do
+// jogador e o próprio updatePickup() (js/sim.js:483) recolhe. Fabricar objeto
+// solto faria renderBag() (js/ui.js:245) receber um item que a partida nunca
+// produziria, e o console pararia de ficar limpo (RNF-04).
+async function encherMochila(page, ctx) {
+  const m = await page.evaluate(async (invSize) => {
+    const sim = await import(new URL('js/sim.js', location.href).href);
+    const G = window.__SF.G;
+    const p = G.players.host;
+    // grabItem equipa sozinho quando o espaço está vazio, devolvendo a vaga à
+    // mochila; por isso o laço repõe só o que falta em vez de largar 20 de uma vez.
+    let rodadas = 0;
+    while (p.inv.some((vaga) => !vaga) && rodadas++ < 8) {
+      const faltam = p.inv.filter((vaga) => !vaga).length;
+      for (let i = 0; i < faltam; i++) {
+        const it = sim.rollItem(G, G.floor + 2);
+        it.x = p.x; it.y = p.y;
+        G.items.push(it);
+      }
+      await new Promise((r) => setTimeout(r, 350));
+    }
+    return { ocupados: p.inv.filter(Boolean).length, esperado: invSize, rodadas, morto: !!p.dead };
+  }, INV_SIZE);
+  if (m.ocupados !== m.esperado) {
+    errors.push(`MOCHILA: ${ctx} a mochila parou em ${m.ocupados} de ${m.esperado} itens`
+      + ` depois de ${m.rodadas} rodada(s)${m.morto ? ' — o jogador morreu antes de recolher' : ''}`);
+  }
+  return m;
+}
+
+// UI-04 e UI-05: com a mochila cheia o painel cabe inteiro na viewport com o
+// gutter de 12px, não corta conteúdo que caiba na altura útil e prende a
+// rolagem em si mesmo. A varredura de UI-01 do #bag vem junto, agora que as
+// .inv-slot e as .equip-slot têm item e portanto são alvo de toque.
+async function medirMochila(page, ctx) {
+  await page.evaluate(() => document.getElementById('btnBag').click());
+  await new Promise((r) => setTimeout(r, 400));
+  const m = await page.evaluate((gutter, alvoMin) => {
+    const M = window.__M;
+    const bag = document.getElementById('bag');
+    const caixa = M.rect('#bag');
+    if (!caixa) return { erro: 'o #bag não ficou visível' };
+    const util = innerHeight - 2 * gutter;
+    const cabe = bag.scrollHeight <= util;
+    const transbordo = [];
+    if (cabe) {
+      for (const el of bag.querySelectorAll('*')) {
+        if (!M.visible(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.bottom > caixa.bottom + 0.5) {
+          transbordo.push(`${M.label(el)} termina em ${r.bottom.toFixed(1)}`);
+        }
+      }
+    }
+    const pequenos = M.targets('#bag')
+      .filter((t) => t.w < alvoMin || t.h < alvoMin)
+      .map((t) => `${t.alvo} ${t.w}x${t.h}`);
     // A AC 1 de UI-01 nomeia estes dois: se sumirem do DOM a varredura acima
     // passaria vazia e o teste viraria enfeite.
     const nomeados = ['#btnCloseBag', '#btnSell'].map((sel) => ({ sel, r: M.rect(sel) }));
-    return { pequenos, nomeados };
-  });
+    // Rolar até o fim é a última medida: mexe no rect de todo descendente.
+    bag.scrollTop = bag.scrollHeight;
+    const doc = document.documentElement;
+    const rolagem = {
+      docTop: doc.scrollTop, bodyTop: document.body.scrollTop,
+      docScroll: doc.scrollHeight, docClient: doc.clientHeight,
+      overscroll: getComputedStyle(bag).overscrollBehaviorY,
+    };
+    bag.scrollTop = 0;
+    return {
+      innerWidth, innerHeight, util, cabe, caixa, transbordo, pequenos, nomeados, rolagem,
+      scrollHeight: bag.scrollHeight, clientHeight: bag.clientHeight,
+      itens: window.__SF.G.players.host.inv.filter(Boolean).length,
+    };
+  }, GUTTER, ALVO_MIN);
+  if (m.erro) { errors.push(`MOCHILA: ${ctx} ${m.erro}`); return; }
+  if (m.itens !== INV_SIZE) {
+    errors.push(`MOCHILA: ${ctx} medida com ${m.itens} de ${INV_SIZE} itens — não é o pior caso`);
+  }
+  const c = m.caixa;
+  if (c.top < GUTTER - TOL || c.bottom > m.innerHeight - GUTTER + TOL
+    || c.left < -TOL || c.right > m.innerWidth + TOL) {
+    errors.push(`MOCHILA: ${ctx} o #bag ocupa ${c.left.toFixed(1)},${c.top.toFixed(1)} até`
+      + ` ${c.right.toFixed(1)},${c.bottom.toFixed(1)} e fura o gutter de ${GUTTER}px`
+      + ` em ${m.innerWidth}x${m.innerHeight}`);
+  }
+  if (m.cabe && m.scrollHeight > m.clientHeight) {
+    errors.push(`MOCHILA: ${ctx} o conteúdo cabe nos ${m.util}px úteis mas transborda —`
+      + ` scrollHeight ${m.scrollHeight} contra clientHeight ${m.clientHeight}`);
+  }
+  if (m.transbordo.length) {
+    errors.push(`MOCHILA: ${ctx} ${m.transbordo.length} descendente(s) abaixo da borda do`
+      + ` painel (${c.bottom.toFixed(1)}) — ${m.transbordo.join(' · ')}`);
+  }
+  const rl = m.rolagem;
+  if (rl.docTop !== 0 || rl.bodyTop !== 0 || rl.docScroll !== rl.docClient) {
+    errors.push(`MOCHILA: ${ctx} a rolagem do painel escapou para a página — scrollTop`
+      + ` ${rl.docTop}/${rl.bodyTop} e documento ${rl.docScroll} contra ${rl.docClient}`);
+  }
+  if (rl.overscroll === 'auto') {
+    errors.push(`MOCHILA: ${ctx} o #bag está com overscroll-behavior-y: ${rl.overscroll} —`
+      + ' o gesto no fim da lista encadeia na página');
+  }
   if (m.pequenos.length) {
-    errors.push(`TOQUE: ${ctx} tem ${m.pequenos.length} alvo(s) abaixo de 44x44 — ${m.pequenos.join(' · ')}`);
+    errors.push(`TOQUE: ${ctx} o #bag tem ${m.pequenos.length} alvo(s) abaixo de`
+      + ` ${ALVO_MIN}x${ALVO_MIN} — ${m.pequenos.join(' · ')}`);
   }
   for (const { sel, r } of m.nomeados) {
     if (!r) errors.push(`TOQUE: ${ctx} não encontrou ${sel} visível com o #bag aberto`);
     else if (r.width < ALVO_MIN || r.height < ALVO_MIN) {
-      errors.push(`TOQUE: ${ctx} ${sel} mede ${r.width.toFixed(1)}x${r.height.toFixed(1)}, abaixo de 44x44`);
+      errors.push(`TOQUE: ${ctx} ${sel} mede ${r.width.toFixed(1)}x${r.height.toFixed(1)},`
+        + ` abaixo de ${ALVO_MIN}x${ALVO_MIN}`);
     }
   }
+  await page.screenshot({ path: `${OUT}/11-mobile-bag-${ctx}.png` });
   await page.evaluate(() => document.getElementById('btnCloseBag').click());
   await new Promise((r) => setTimeout(r, 300));
 }
@@ -265,6 +456,14 @@ async function medirGeometria(page, ctx) {
     if (oculto) ph.classList.add('hidden');
     return medida;
   });
+  // A zona sai da mesma constante que js/main.js usa no pointerdown; conferir a
+  // borda aqui é o que amarra os 259px de 390 e os 244px de 360 da AC 3.
+  const zonaEsperada = TOUCH_STICK_ZONE * m.innerWidth + TOUCH_STICK_RADIUS;
+  zonas.set(m.innerWidth, Math.round(m.zona.right * 10) / 10);
+  if (Math.abs(m.zona.right - zonaEsperada) > TOL) {
+    errors.push(`BARRA: ${ctx} a zona do joystick termina em ${m.zona.right.toFixed(1)},`
+      + ` esperado ${zonaEsperada.toFixed(1)} para ${m.innerWidth}px de largura`);
+  }
   if (!m.barra) { errors.push(`BARRA: ${ctx} não encontrou o #actionBar visível`); return; }
   if (!m.portal) errors.push(`BARRA: ${ctx} não conseguiu medir o #portalHold`);
   if (m.cruzaPortal) {
@@ -291,6 +490,10 @@ for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
   const ctx = `${viewport.width}x${viewport.height}`;
   const mob = await abrirToque(viewport);
   await medirToque(mob, ctx);
+  // Cedo na partida de propósito: o paladino solo sobrevive tranquilo aos
+  // primeiros segundos, e updatePickup() ignora jogador morto.
+  await encherMochila(mob, ctx);
+  await medirMochila(mob, ctx);
   await medirBarra(mob, ctx);
   await medirGeometria(mob, ctx);
   // As sete alturas da AC 1 de UI-03 são medidas na largura 390. Trocar só a
@@ -312,6 +515,7 @@ console.log('combate:', JSON.stringify(combat));
 console.log('andar:  ', JSON.stringify(floorTest));
 console.log('chefe HC:', JSON.stringify(hardcore));
 console.log('fps:    ', fps);
+console.log('zona joystick:', JSON.stringify(Object.fromEntries(zonas)));
 console.log('erros:  ', errors.length ? errors : 'nenhum');
 const warn = logs.filter((l) => l.startsWith('[error]') || l.startsWith('[warning]'));
 console.log('console:', warn.length ? warn.slice(0, 10) : 'limpo');
