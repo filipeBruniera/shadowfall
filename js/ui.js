@@ -1,7 +1,7 @@
 import { VOCATIONS, VOC_LIST, RARITY, EQUIP_SLOTS, SLOT_LABEL, ITEM_BASES, xpForLevel } from './data.js';
 import { drawGlyph } from './render.js';
 import { AllyRail, directionArrow } from './allyrail.js';
-import { EMBER_LINK_FAR, PORTAL_HOLD, CHAT_LOG_LINES } from './balance.js';
+import { EMBER_LINK_FAR, PORTAL_HOLD, CHAT_LOG_LINES, LOG_MAX_LINES } from './balance.js';
 
 export const el = (id) => document.getElementById(id);
 
@@ -107,6 +107,18 @@ export function banner(title, sub = '', ms = 2600) {
 }
 
 // ---------- HUD ----------
+// O teto de linhas do #log no toque é primitiva de js/balance.js (AGENTS.md:57) e o
+// CSS precisa dele sem repetir o número: publicamos a constante como custom
+// property e o styles.css deriva a altura dela. Escrito aqui porque o #log é HUD, e
+// HUD é de js/ui.js pela tabela de camadas de docs/agents/architecture.md. Sem
+// fallback no var() do CSS de propósito: se esta linha sumir, o max-height cai por
+// inteiro e o log volta a crescer — falha barulhenta em vez de literal escondido.
+// A guarda de typeof é pelo Node: tests/sim.test.mjs:13 importa bossBarLabel daqui e
+// um efeito de módulo tocando document quebraria a suíte antes do primeiro check.
+if (typeof document !== 'undefined') {
+  document.documentElement.style.setProperty('--log-linhas', LOG_MAX_LINES);
+}
+
 export function buildSkillBar(voc, onCast) {
   const V = VOCATIONS[voc];
   const box = el('skillSlots');

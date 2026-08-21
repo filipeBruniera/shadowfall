@@ -407,8 +407,16 @@ input::placeholder { color: var(--placeholder); }
      tira do caminho do #chatInput de uma vez, sem estado novo em JS: o
      empilhamento é estático, então nem a abertura nem o fechamento do campo
      mexem no log (chat-grupo.md §5). */
+  /* Teto em linhas, não em fração de viewport: a fração antiga deixava 9 linhas
+     inteiras em 390x844 (151,9px) e 7 em 360x640 (115,2px), variando com a altura
+     da tela. --log-linhas vem de LOG_MAX_LINES por js/ui.js e 1lh resolve o
+     line-height medido do próprio #log (15,95px hoje), então a altura resultante
+     (95,7px) é consequência da primitiva, nunca um segundo número. Sem fallback no
+     var(): se a propriedade faltar a regra cai inteira e o caso LOG acusa, em vez
+     de repor o literal aqui. A regra de max-height: 460px logo abaixo continua
+     apagando o log em tela baixa. */
   #log {
-    width: 50vw; max-height: 18vh; font-size: 11px;
+    width: 50vw; max-height: calc(var(--log-linhas) * 1lh); font-size: 11px;
     bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
   }
   /* Uma ação por linha no dedo: em 360 as três do #lobby sob flex: 1 empurravam o
