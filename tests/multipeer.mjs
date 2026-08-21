@@ -8,14 +8,18 @@
 //   CASE=all PEERS=4 node tests/multipeer.mjs
 //
 // CASE=mobile mede os alvos de toque que só existem dentro de sala (#roster,
-// os botões Expulsar, a confirmação inline e o #crewChip). Nesse caso — e em
-// `all` — a aba do host abre em viewport de toque, porque `pointer: coarse`
-// é a condição de UI-01.
+// os botões Expulsar, a confirmação inline e o #crewChip) e o trilho de aliados
+// sob os cortes por altura (prefixos CORTE e CAIDO). Nesse caso — e em `all` —
+// a aba do host abre em viewport de toque, porque `pointer: coarse` é a
+// condição de UI-01 e dos cortes de UI-07.
+//
+//   PEERS=5 CASE=mobile node tests/multipeer.mjs   # cenário cravado de UI-07
 // ============================================================
 import puppeteer from 'puppeteer';
 import { SNAP_HZ } from '../js/net.js';
 import {
-  VIEWPORT_MOBILE, VIEWPORT_SMALL, VIEWPORT_DESKTOP, ALVO_MIN, installHelpers,
+  VIEWPORT_MOBILE, VIEWPORT_SMALL, VIEWPORT_DESKTOP, ALTURAS_UI03, ALVO_MIN,
+  alturaMobile, installHelpers,
 } from './mobile-helpers.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -219,6 +223,173 @@ async function medirToqueSala(tab) {
 }
 
 // ============================================================
+// TRILHO DE ALIADOS (UI-07) E ALIADO CAÍDO (UI-08)
+// O cenário cravado da SPEC é o jogador local mais 4 aliados, 1 deles caído —
+// estado que só existe dentro de sala, por isso a medição mora aqui e não em
+// tests/browser.mjs. Com PEERS=5 `AllyRail.select` devolve extra 0 e o
+// `.ally-more` não chega ao DOM; com os PEERS=10 de `npm run test:multipeer`
+// roda o outro ramo da AC 5 de UI-07, com a linha de excedente presente. As
+// contagens são as mesmas nos dois ramos porque dependem só da posição no DOM.
+// ============================================================
+const PEERS_TRILHO = 5;             // local + 4 aliados: o mínimo do cenário cravado
+const VIVOS_POR_ALTURA = [3, 1, 1, 0, 0, 0, 0];   // AC 1 de UI-07, na ordem de ALTURAS_UI03
+
+// Derruba um aliado no estado autoritativo do host — o mesmo recurso que
+// tests/browser.mjs:82-94 usa para matar o chefe. Os campos escritos são os que
+// damagePlayer (js/sim.js:774-780) grava na morte. O `setInterval` reafirma a
+// queda a cada 100ms porque qualquer aliado vivo dentro de REVIVE_RADIUS ergue
+// o caído em poucos segundos (js/sim.js:375-392) e a contagem passaria a medir
+// um trilho sem caído no meio da varredura de sete alturas.
+async function derrubarAliado(tab) {
+  return tab.page.evaluate(() => {
+    const S = window.__SF;
+    if (!S || !S.G) return null;
+    const alvo = Object.values(S.G.players).find((p) => p.id !== S.localId);
+    if (!alvo) return null;
+    window.__mantemCaido = setInterval(() => {
+      const p = window.__SF.G.players[alvo.id];
+      if (!p) return;
+      p.hp = 0; p.dead = true; p.reviveProg = 0;
+    }, 100);
+    return alvo.name;
+  });
+}
+
+const erguerAliado = (tab) => tab.page.evaluate(() => {
+  clearInterval(window.__mantemCaido);
+  window.__mantemCaido = null;
+});
+
+// Uma leitura só por altura: display, contagem e caixa de tudo que as ACs de
+// UI-07 e UI-08 nomeiam.
+const lerTrilho = (tab) => tab.page.evaluate(() => {
+  const lista = document.getElementById('partyList');
+  const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
+  const conta = (sel) => [...document.querySelectorAll(sel)].filter(vis).length;
+  const disp = (sel) => { const el = document.querySelector(sel); return el ? getComputedStyle(el).display : null; };
+  const larg = (sel) => { const el = document.querySelector(sel); return el ? el.getBoundingClientRect().width : null; };
+  // A cor do caído é comparada com o valor resolvido de --blood, não com um
+  // literal: se o token mudar, o teste continua medindo a mesma intenção.
+  const sonda = document.createElement('div');
+  sonda.style.cssText = 'position:absolute;left:-9999px;top:-9999px;border:1px solid var(--blood)';
+  document.body.appendChild(sonda);
+  const blood = getComputedStyle(sonda).borderTopColor;
+  sonda.remove();
+
+  const primeiro = lista.firstElementChild;
+  const visiveis = [...lista.children].filter(vis);
+  const more = lista.querySelector('.ally-more');
+  return {
+    vivos: conta('#partyList .plaque.mate:not(.down)'),
+    caidos: conta('#partyList .plaque.mate.down'),
+    visiveis: visiveis.length,
+    // AC 2 de UI-08: o caído é o primeiro filho em todas as faixas.
+    primeiroEhCaido: !!primeiro && primeiro.classList.contains('mate') && primeiro.classList.contains('down'),
+    primeiroVisivel: vis(primeiro),
+    primeiroEhOPrimeiroVisivel: visiveis.length > 0 && visiveis[0] === primeiro,
+    rotuloPrimeiro: primeiro ? (primeiro.className || primeiro.tagName.toLowerCase()) : 'sem filhos',
+    borda: primeiro ? getComputedStyle(primeiro).borderColor : null,
+    blood,
+    texto: primeiro ? primeiro.textContent : '',
+    log: disp('#log'),
+    self: larg('.plaque.self'),
+    mate: larg('#partyList .plaque.mate'),
+    dispSelf: disp('.plaque.self'),
+    dispMinimap: disp('#minimap'),
+    dispBarra: disp('#actionBar'),
+    dispMore: more ? getComputedStyle(more).display : null,
+    temMore: !!more,
+  };
+});
+
+async function medirTrilho(tab) {
+  const nome = await derrubarAliado(tab);
+  if (!nome) { check('CORTE: o host derruba um aliado para montar o cenário cravado', false, 'nenhum aliado no estado do host'); return; }
+  // O trilho só é remontado quando o conjunto de ids muda (js/ui.js:177): a
+  // espera é pela placa `.down` no DOM, não por um tempo fixo.
+  const montou = await waitFor(() => tab.page.evaluate(() => !!document.querySelector('#partyList .plaque.mate.down')), 15000);
+  check('CORTE: o host derruba um aliado e a placa de caído entra no trilho', montou, `alvo ${nome}`);
+  if (!montou) { await erguerAliado(tab); return; }
+  const temMore = await tab.page.evaluate(() => !!document.querySelector('#partyList .ally-more'));
+  console.log(`      ramo da AC 5 de UI-07: .ally-more ${temMore ? 'presente (extra > 0)' : 'ausente (cenário cravado)'}`);
+
+  try {
+    for (let i = 0; i < ALTURAS_UI03.length; i++) {
+      const altura = ALTURAS_UI03[i];
+      const ctx = `390x${altura}`;
+      await tab.page.setViewport(alturaMobile(altura));
+      await sleep(450);
+      const t = await lerTrilho(tab);
+
+      check(`CORTE: ${ctx} o caído é o primeiro filho de #partyList`,
+        t.primeiroEhCaido, `primeiro filho: ${t.rotuloPrimeiro}`);
+      check(`CORTE: ${ctx} o caído continua visível`,
+        t.primeiroVisivel && t.caidos === 1, `${t.caidos} placa(s) .down visível(is)`);
+
+      const esperados = VIVOS_POR_ALTURA[i];
+      check(`CORTE: ${ctx} mostra ${esperados} aliado(s) vivo(s) no trilho`,
+        t.vivos === esperados, `${t.vivos} visível(is)`);
+
+      // O #log some a partir de 460 (styles.css:397). A AC 2 de UI-07 escreve
+      // `block`, mas o #log é `display: flex` desde styles.css:238 e nenhuma
+      // regra desta feature o altera: o que a faixa decide é aparecer ou não.
+      const logEsperado = altura > 460;
+      check(`CORTE: ${ctx} o #log ${logEsperado ? 'continua no HUD' : 'sai do HUD'}`,
+        (t.log !== 'none') === logEsperado, `display ${t.log}`);
+
+      const selfEsperado = altura > 460 ? 190 : 180;
+      check(`CORTE: ${ctx} a .plaque.self mede ${selfEsperado}px`,
+        t.self !== null && Math.abs(t.self - selfEsperado) <= 0.5,
+        t.self === null ? 'ausente' : `${t.self.toFixed(1)}px`);
+      check(`CORTE: ${ctx} a .plaque.mate mede 170px`,
+        t.mate !== null && Math.abs(t.mate - 170) <= 0.5,
+        t.mate === null ? 'ausente' : `${t.mate.toFixed(1)}px`);
+
+      // AC 4: nada pode sumir fora da ordem de corte declarada.
+      const somidos = [
+        ['.plaque.self', t.dispSelf], ['#minimap', t.dispMinimap], ['#actionBar', t.dispBarra],
+      ].filter(([, d]) => d === null || d === 'none');
+      check(`CORTE: ${ctx} .plaque.self, #minimap e #actionBar continuam no HUD`,
+        somidos.length === 0, somidos.map(([sel, d]) => `${sel} ${d || 'ausente'}`).join(' · '));
+
+      // AC 5 tem dois ramos e o harness escolhe pela presença do nó: o cenário
+      // cravado (PEERS=5, extra 0) exige `.ally-more` ausente; com extra > 0 ela
+      // precisa sobreviver a todos os cortes por altura.
+      if (t.temMore) {
+        check(`CORTE: ${ctx} a linha .ally-more do excedente não é cortada pela altura`,
+          t.dispMore !== 'none', `display ${t.dispMore}`);
+      } else {
+        check(`CORTE: ${ctx} sem excedente, o trilho não cria a linha .ally-more`,
+          t.temMore === false);
+      }
+
+      // UI-08 fecha na faixa mais baixa, onde a regra geral de
+      // styles.css:562 esconde toda placa de aliado e só a exceção `.down`
+      // devolve o pedido de ressurreição.
+      if (altura === 360) {
+        // No cenário cravado o caído é o único nó do trilho; com excedente
+        // sobra também a linha `.ally-more`, que a AC 5 de UI-07 manda manter.
+        const esperadoVisivel = t.temMore ? 2 : 1;
+        check(`CAIDO: ${ctx} deixa ${esperadoVisivel} elemento(s) visível(is) em #partyList`,
+          t.visiveis === esperadoVisivel, `${t.visiveis} visível(is)`);
+        check(`CAIDO: ${ctx} o caído é o #partyList.firstElementChild e abre os visíveis`,
+          t.primeiroEhOPrimeiroVisivel && t.primeiroEhCaido, `primeiro filho: ${t.rotuloPrimeiro}`);
+        check(`CAIDO: ${ctx} a placa do caído tem borda --blood`,
+          !!t.borda && t.borda === t.blood, `${t.borda} contra ${t.blood}`);
+        check(`CAIDO: ${ctx} a placa do caído diz "caído" por texto, não só por cor`,
+          /caído/.test(t.texto), JSON.stringify((t.texto || '').trim().slice(0, 40)));
+        check(`CAIDO: ${ctx} a exceção não vaza para aliado vivo`,
+          t.vivos === 0, `${t.vivos} vivo(s) visível(is)`);
+      }
+    }
+  } finally {
+    await erguerAliado(tab);
+    await tab.page.setViewport(VIEW_HOST);
+    await sleep(400);
+  }
+}
+
+// ============================================================
 // Com BASE definido não subimos servidor: o alvo é o que já está no ar.
 const server = BASE ? null : serve();
 if (BASE) console.log(`      alvo: ${BASE}`);
@@ -297,6 +468,11 @@ try {
   if (MEDE_TOQUE) {
     // Antes do `kick`: com a sala ainda cheia, há um botão Expulsar por aliado.
     await medirToqueSala(host);
+    if (PEERS < PEERS_TRILHO) {
+      console.log(`      (pulando o trilho de aliados: precisa de PEERS>=${PEERS_TRILHO}, rodando com ${PEERS})`);
+    } else {
+      await medirTrilho(host);
+    }
   }
 
   if (CASE === 'kick' || CASE === 'all') {

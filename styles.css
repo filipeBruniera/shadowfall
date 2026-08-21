@@ -387,7 +387,10 @@ input::placeholder { color: var(--placeholder); }
   .slot { width: 48px; height: 48px; }
   #actionBar { bottom: max(14px, env(safe-area-inset-bottom)); right: 12px; left: auto; transform: none; flex-direction: column-reverse; align-items: flex-end; gap: 8px; }
   .slots { display: grid; grid-template-columns: repeat(2, 1fr); }
-  #hudLeft .plaque { width: 190px; }
+  /* Sem o id: com 1,0,1 esta regra vencia .plaque.mate (0,2,0) e a placa de
+     aliado ficava 190px no toque. Em 0,1,0 ela vira só o padrão do toque e
+     devolve a vitória aos 170px do aliado e aos 180px de max-height: 460px. */
+  .plaque { width: 190px; }
   #minimap { width: 108px; height: 108px; }
 }
 @media (max-height: 460px) {
@@ -545,14 +548,19 @@ input::placeholder { color: var(--placeholder); }
   .chips { align-items: center; }
 }
 @media (max-height: 620px) {
-  #partyList .plaque.mate:nth-child(n+3) { display: none; }
+  #partyList .plaque.mate:not(.down):nth-child(n+3) { display: none; }
 }
 @media (max-height: 460px) {
-  #partyList .plaque.mate:nth-child(n+2) { display: none; }
+  #partyList .plaque.mate:not(.down):nth-child(n+2) { display: none; }
   #portalHold .ph-missing { display: none; }
 }
 @media (max-height: 380px) {
   #partyList .plaque.mate { display: none; }
+  /* O caído é a única placa que sobrevive à faixa mais baixa: sem ele o HUD
+     esconde o pedido de ressurreição justo onde não cabe mais nada. `block`
+     e não `flex` porque `flex` refluiria plaque-head, barras e .away em
+     linha — um visual que a placa não computa em nenhuma outra faixa. */
+  #partyList .plaque.mate.down { display: block; }
 }
 
 .voc-card.locked { opacity: .5; cursor: not-allowed; }

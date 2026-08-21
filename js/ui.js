@@ -170,7 +170,7 @@ export function updateHUD(view, local, st, dt = 0) {
   const list = el('partyList');
   const mates = view.players.filter((p) => p.id !== local.id);
   const { shown, downed, extra } = rail.select(local, mates, dt);
-  const visible = [...shown, ...downed];
+  const visible = [...downed, ...shown];
   // O minimapa precisa saber quem já tem barra para desenhar o resto diferente.
   view.railIds = visible.map((m) => m.id);
 
