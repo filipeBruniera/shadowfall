@@ -6,9 +6,17 @@
 //   node tests/multipeer.mjs            # 2 abas, fluxo básico
 //   PEERS=10 node tests/multipeer.mjs   # sala cheia
 //   CASE=all PEERS=4 node tests/multipeer.mjs
+//
+// CASE=mobile mede os alvos de toque que só existem dentro de sala (#roster,
+// os botões Expulsar, a confirmação inline e o #crewChip). Nesse caso — e em
+// `all` — a aba do host abre em viewport de toque, porque `pointer: coarse`
+// é a condição de UI-01.
 // ============================================================
 import puppeteer from 'puppeteer';
 import { SNAP_HZ } from '../js/net.js';
+import {
+  VIEWPORT_MOBILE, VIEWPORT_SMALL, VIEWPORT_DESKTOP, ALVO_MIN, installHelpers,
+} from './mobile-helpers.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -44,10 +52,16 @@ function serve() {
   }).listen(PORT);
 }
 
+// O caso mobile precisa de `pointer: coarse` desde o primeiro quadro: trocar
+// isMobile/hasTouch depois recarregaria a aba e derrubaria a sessão P2P.
+const MEDE_TOQUE = CASE === 'mobile' || CASE === 'all';
+const VIEW_HOST = MEDE_TOQUE ? VIEWPORT_MOBILE : VIEWPORT_DESKTOP;
+
 // ---------- aba ----------
-async function openTab(browser, name) {
+async function openTab(browser, name, viewport = VIEWPORT_DESKTOP) {
   const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 760 });
+  await page.setViewport(viewport);
+  await installHelpers(page);
   // Sem isto, só a última aba aberta roda o requestAnimationFrame: as demais
   // ficam ocultas para o navegador e o loop do jogo congela nelas. Com 10 abas
   // isso mediria o congelamento, não o jogo.
@@ -104,6 +118,106 @@ async function joinRoom(tab, code, voc = 'druid') {
   await click(tab, 'btnJoin');
 }
 
+// UI-01 dentro de sala: o #roster só tem linha com ação de moderação, e o
+// #crewChip só perde a classe `hidden`, quando há partida com outros jogadores.
+// Medimos nas duas viewports de toque na mesma aba — trocar só largura e altura
+// não recarrega a página, então a sessão P2P sobrevive à segunda medida.
+async function medirToqueSala(tab) {
+  for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
+    const ctx = `${viewport.width}x${viewport.height}`;
+    await tab.page.setViewport(viewport);
+    await sleep(500);
+    check(`TOQUE: ${ctx} ativa "pointer: coarse" na aba do host`,
+      await tab.page.evaluate(() => matchMedia('(pointer: coarse)').matches));
+
+    // O #crewChip é alvo de toque (abre o #roster, js/main.js:143), mas os
+    // chips irmãos da mesma linha são informação: a caixa de 44px não pode
+    // subir junto com eles, e a pintura do próprio chip fica nos 21px.
+    const chips = await tab.page.evaluate(() => {
+      const M = window.__M;
+      const chip = document.getElementById('crewChip');
+      return {
+        crew: M.rect('#crewChip'),
+        clip: chip ? getComputedStyle(chip).backgroundClip : null,
+        irmaos: ['floorChip', 'goldChip', 'roomChip', 'crewLock', 'pingChip']
+          .map((id) => ({ id, r: M.rect('#' + id) }))
+          .filter((x) => x.r)
+          .map((x) => ({ id: x.id, h: x.r.height })),
+      };
+    });
+    check(`TOQUE: ${ctx} o #crewChip tem caixa de ao menos 44px de altura`,
+      !!chips.crew && chips.crew.height >= ALVO_MIN,
+      chips.crew ? `${chips.crew.height.toFixed(1)}px` : 'ausente ou invisível');
+    check(`TOQUE: ${ctx} o #crewChip pinta só a caixa de conteúdo`,
+      chips.clip === 'content-box', String(chips.clip));
+    const inchados = chips.irmaos.filter((c) => c.h > 24);
+    check(`TOQUE: ${ctx} os ${chips.irmaos.length} chips informativos ficam em 24px ou menos`,
+      chips.irmaos.length > 0 && inchados.length === 0,
+      inchados.map((c) => `#${c.id} ${c.h.toFixed(1)}px`).join(' · ')
+        || chips.irmaos.map((c) => `#${c.id} ${c.h.toFixed(1)}px`).join(' · '));
+
+    // Abre o painel pelo mesmo caminho do jogador (js/main.js:143).
+    await tab.page.evaluate(() => document.getElementById('crewChip').click());
+    await sleep(500);
+
+    const sala = await tab.page.evaluate(() => {
+      const M = window.__M;
+      const pequenos = M.targets('#roster')
+        .filter((t) => t.w < 44 || t.h < 44)
+        .map((t) => `${t.alvo} ${t.w}x${t.h}`);
+      // A AC 1 de UI-01 nomeia estes dois; sem eles a varredura passaria vazia.
+      const nomeados = ['#btnCloseRoster', '#btnRosterLock']
+        .map((sel) => ({ sel, r: M.rect(sel) }));
+      const expulsar = [...document.querySelectorAll('#rosterList .roster-row .rr-actions .btn')]
+        .filter((b) => b.textContent.includes('Expulsar') && M.visible(b))
+        .map((b) => { const r = b.getBoundingClientRect(); return { w: r.width, h: r.height }; });
+      return { pequenos, nomeados, expulsar, aberto: M.visible(document.getElementById('roster')) };
+    });
+
+    check(`TOQUE: ${ctx} abre o #roster pelo #crewChip`, sala.aberto);
+    check(`TOQUE: ${ctx} não deixa alvo do #roster abaixo de 44x44`,
+      sala.pequenos.length === 0, sala.pequenos.join(' · '));
+    for (const { sel, r } of sala.nomeados) {
+      check(`TOQUE: ${ctx} ${sel} tem caixa de 44x44`,
+        !!r && r.width >= ALVO_MIN && r.height >= ALVO_MIN,
+        r ? `${r.width.toFixed(1)}x${r.height.toFixed(1)}` : 'ausente ou invisível');
+    }
+    const curtos = sala.expulsar.filter((b) => b.w < ALVO_MIN || b.h < ALVO_MIN);
+    check(`TOQUE: ${ctx} os ${sala.expulsar.length} botões Expulsar têm caixa de 44x44`,
+      sala.expulsar.length > 0 && curtos.length === 0,
+      curtos.map((b) => `${b.w.toFixed(1)}x${b.h.toFixed(1)}`).join(' · ') || `${sala.expulsar.length} botões`);
+
+    // A confirmação inline troca as ações da linha (js/ui.js:385) e se desfaz
+    // sozinha em 5s: medir e cancelar na mesma volta, sem expulsar ninguém —
+    // o caso `kick` mede a expulsão de verdade mais adiante.
+    const confirma = await tab.page.evaluate(() => {
+      const linha = [...document.querySelectorAll('#rosterList .roster-row')]
+        .find((r) => [...r.querySelectorAll('.rr-actions .btn')].some((b) => b.textContent.includes('Expulsar')));
+      if (!linha) return { erro: 'nenhuma linha com Expulsar' };
+      [...linha.querySelectorAll('.rr-actions .btn')].find((b) => b.textContent.includes('Expulsar')).click();
+      const botoes = [...linha.querySelectorAll('.rr-actions .btn')].map((b) => {
+        const r = b.getBoundingClientRect();
+        return { rotulo: b.textContent, w: r.width, h: r.height };
+      });
+      const nao = [...linha.querySelectorAll('.rr-actions .btn')].find((b) => b.textContent === 'Não');
+      if (nao) nao.click();
+      return { botoes };
+    });
+    const simNao = (confirma.botoes || []).filter((b) => b.rotulo === 'Sim' || b.rotulo === 'Não');
+    const simNaoCurtos = simNao.filter((b) => b.w < ALVO_MIN || b.h < ALVO_MIN);
+    check(`TOQUE: ${ctx} os botões Sim/Não da confirmação inline têm caixa de 44x44`,
+      simNao.length === 2 && simNaoCurtos.length === 0,
+      confirma.erro || simNao.map((b) => `${b.rotulo} ${b.w.toFixed(1)}x${b.h.toFixed(1)}`).join(' · '));
+
+    await tab.page.screenshot({ path: `${process.env.OUT || '/tmp/shadowfall-shots'}/toque-roster-${ctx}.png` });
+    await tab.page.evaluate(() => document.getElementById('btnCloseRoster').click());
+    await sleep(300);
+  }
+  // Devolve a aba à viewport em que os demais casos do roteiro medem.
+  await tab.page.setViewport(VIEW_HOST);
+  await sleep(400);
+}
+
 // ============================================================
 // Com BASE definido não subimos servidor: o alvo é o que já está no ar.
 const server = BASE ? null : serve();
@@ -126,7 +240,9 @@ const tabs = [];
 try {
   console.log(`\n== harness multi-peer: ${PEERS} abas, caso "${CASE}" ==`);
 
-  for (let i = 0; i < PEERS; i++) tabs.push(await openTab(browser, i === 0 ? 'Host' : 'P' + i));
+  for (let i = 0; i < PEERS; i++) {
+    tabs.push(await openTab(browser, i === 0 ? 'Host' : 'P' + i, i === 0 ? VIEW_HOST : VIEWPORT_DESKTOP));
+  }
   const [host, ...guests] = tabs;
 
   const code = await hostRoom(host);
@@ -177,6 +293,11 @@ try {
   const andares = await Promise.all(tabs.slice(0, PEERS).map((t) => text(t, 'floorChip')));
   check('multi-peer: todas as abas concordam sobre o andar',
     new Set(andares).size === 1, andares.join(' | '));
+
+  if (MEDE_TOQUE) {
+    // Antes do `kick`: com a sala ainda cheia, há um botão Expulsar por aliado.
+    await medirToqueSala(host);
+  }
 
   if (CASE === 'kick' || CASE === 'all') {
     const alvo = guests[0];
@@ -293,8 +414,13 @@ try {
     // Cada convidado precisa enxergar a mesma sala que o host: é o que prova
     // que o snapshot chega aos 9, e não só aos primeiros. Comparar com o host
     // e não com PEERS mantém o teste válido depois de uma expulsão.
+    // O expulso precisa sair da conta pelo #dropOverlay, e não por `started`:
+    // guard.endExpected (js/session.js:43) só marca S.expected, então o
+    // convidado removido continua com started true e com a contagem congelada
+    // de antes da expulsão — comparar com ele reprovava o host sem motivo.
+    const encerrados = await Promise.all(tabs.slice(1, PEERS).map((t) => visible(t, 'dropOverlay')));
     const noHost = hostFim.players;
-    const vivos = fim.slice(1).filter((x) => x && x.started && !x.queued);
+    const vivos = fim.slice(1).filter((x, i) => x && x.started && !x.queued && !encerrados[i]);
     const todosRecebendo = vivos.length > 0 && vivos.every((x) => x.players === noHost);
     check('multi-peer: o host envia snapshot a todos os peers', todosRecebendo,
       `host ${noHost} · convidados ${vivos.map((x) => x.players).join(',')}`);

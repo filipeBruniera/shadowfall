@@ -89,7 +89,7 @@ de quem precisa de ajuda.
 |---|---|
 | Linha do trilho | `170×26px` — **não é alvo de toque**, é informação |
 | Chip de lotação (abre moderação) | `44×44px` mínimo, com área de toque estendida além do visual |
-| Botão de magia | `62×62px` (já definido em `pointer: coarse`) |
+| Botão de magia | `48×48px` (definido em `pointer: coarse`; derivação de UI-01: em 360 de largura sobram 104px úteis com `F = 0,50`, piso 44 e teto 49) |
 | Botão do painel de moderação | `44px` de altura mínima |
 
 O trilho não recebe toque de propósito: ele fica dentro da metade do joystick, e qualquer alvo

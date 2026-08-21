@@ -139,7 +139,7 @@ Pontos de quebra que já existem — reutilizar, não criar novos:
 |---|---|
 | `max-width: 520px` | `.voc-grid` passa de 4 para 2 colunas |
 | `max-width: 620px` | `.bag-cols` vira coluna única |
-| `pointer: coarse` | Log 50vw/18vh · slot 62px · `#actionBar` vertical à direita · placa 190px · minimapa 108px |
+| `pointer: coarse` | Log 50vw/18vh · slot 48px · `#actionBar` vertical à direita · placa 190px · minimapa 108px |
 | `max-height: 460px` | Log some · placa 180px |
 | `prefers-reduced-motion` | Animações e transições reduzidas a `.01ms` |
 

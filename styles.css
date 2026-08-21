@@ -368,7 +368,9 @@ input::placeholder { color: var(--placeholder); }
 /* ============ TOQUE / TELAS PEQUENAS ============ */
 @media (pointer: coarse) {
   #log { width: 50vw; max-height: 18vh; font-size: 11px; }
-  .slot { width: 62px; height: 62px; }
+  /* 48x48 em qualquer largura de toque: em 360 sobram 104px úteis entre a zona
+     do joystick (244) e o gutter de 12, e 2 x 48 + gap 6 = 102px de barra. */
+  .slot { width: 48px; height: 48px; }
   #actionBar { bottom: max(14px, env(safe-area-inset-bottom)); right: 12px; left: auto; transform: none; flex-direction: column-reverse; align-items: flex-end; gap: 8px; }
   .slots { display: grid; grid-template-columns: repeat(2, 1fr); }
   #hudLeft .plaque { width: 190px; }
@@ -494,7 +496,39 @@ input::placeholder { color: var(--placeholder); }
   .plaque.mate { width: 170px; padding: 5px 8px; }
   .plaque.mate .bar.mp { display: none; }
   .plaque.mate .plaque-level { display: none; }
-  #portalHold { left: 12px; transform: none; width: min(280px, 80vw); bottom: 28vh; }
+  /* A largura para na coluna livre à esquerda da barra: 12 de gutter esquerdo,
+     102 da barra e 12 de gutter direito. Com 80vw a borda direita caía em 292 e
+     cruzava o #actionBar em qualquer altura. */
+  #portalHold { left: 12px; transform: none; width: min(280px, calc(100vw - 126px)); bottom: 28vh; }
+
+  /* Piso de 44x44 no dedo (UI-01): o ✕ media 15,1 x 23 e não tinha caixa própria. */
+  .x {
+    min-inline-size: 44px; min-block-size: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  /* .btn.small media 31px de altura. Os dois seletores abaixo repetem o piso porque
+     .roster-row .rr-actions .btn e .confirm-inline .btn fixam min-height: 30px com
+     especificidade 0,3,0 e venceriam um .btn.small (0,2,0) sozinho. */
+  .btn.small { min-height: 44px; }
+  .roster-row .rr-actions .btn, .confirm-inline .btn { min-height: 44px; }
+
+  /* #crewChip abre o painel de sala (main.js:143), então também é alvo de toque.
+     A caixa vai a 44px por padding, mas a pintura fica nos 21px de sempre com
+     background-clip: content-box — o #hudRight não pode engordar junto. */
+  #crewChip {
+    position: relative; line-height: 21px; padding-block: 10.5px;
+    background-clip: content-box; border-color: transparent;
+  }
+  /* A borda volta por pseudo-elemento: UI.setCapacity (js/ui.js:411) reescreve o
+     textContent do chip e apagaria qualquer nó filho real. */
+  #crewChip::before {
+    content: ''; position: absolute; inset: 10.5px 0;
+    border: 1px solid var(--edge); pointer-events: none;
+  }
+  #crewChip.near::before { border-color: #6b3a18; }
+  /* .chips é flex sem align-items (styles.css:206): no stretch padrão os chips
+     irmãos subiriam para 44px junto com o #crewChip. */
+  .chips { align-items: center; }
 }
 @media (max-height: 620px) {
   #partyList .plaque.mate:nth-child(n+3) { display: none; }
