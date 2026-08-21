@@ -218,6 +218,11 @@ export const CHAT_LOG_LINES = 40;
 export const CHAT_BURST = 3;            // mensagens...
 export const CHAT_BURST_WINDOW = 5;     // ...por esta janela em segundos
 
+// ---------- Registro ----------
+// 6 linhas = 95,7px com o line-height medido de 15,95px: ~37% menos área pintada
+// em 390x844 que as 9 de hoje, sem cair abaixo das 5-6 que uma conversa de 10 pede.
+export const LOG_MAX_LINES = 6;
+
 // ---------- Fila de ações do convidado ----------
 // Teto de segurança do pacote de input. Antes eram 12 fixas e as mais antigas
 // sumiam em silêncio — perder magia por perder pacote. Agora o teto é largo e,

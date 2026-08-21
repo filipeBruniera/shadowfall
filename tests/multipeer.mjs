@@ -35,6 +35,7 @@ import puppeteer from 'puppeteer';
 import { SNAP_HZ } from '../js/net.js';
 import {
   VIEWPORT_MOBILE, VIEWPORT_SMALL, VIEWPORT_DESKTOP, ALTURAS_UI03, ALVO_MIN,
+  BARRA_LARGURA, SEL_CHAT_ABRIR,
   alturaMobile, installHelpers,
 } from './mobile-helpers.mjs';
 import { createServer } from 'node:http';
@@ -270,6 +271,58 @@ async function medirToqueFila(tab) {
   }
   await tab.page.setViewport(VIEWPORT_ABA);
   await sleep(300);
+}
+
+// UI-01 dentro de sala real: com o alvo de chat, o #actionBar passa a ter 8
+// alvos de 48x48 sem crescer em nenhum dos dois eixos e sem encostar no
+// #hudRight. Aqui só entra GEOMETRIA — nenhuma abertura de chat, porque o
+// roteiro de toque real de RF-03 e RF-05 vive inteiro em tests/browser.mjs
+// (CT-02 AC 5) —, e nenhum `.click()`, pela mesma proibição de CT-02 AC 1.
+//
+// Roda em qualquer CASE com aba de toque: a barra depende só de haver partida
+// em curso, não da composição da sala, e é justamente a não regressão que a
+// corrida curta (`npm run test:multipeer:quick`) precisa enxergar. Medir nas
+// duas viewports na mesma aba não recarrega a página — VIEWPORT_MOBILE e
+// VIEWPORT_SMALL compartilham isMobile/hasTouch —, então a sessão P2P sobrevive.
+const ALVOS_BARRA = 8;      // os 7 de hoje mais o alvo de chat de UI-01
+const BARRA_ALTURA = 212;   // 4 linhas de 48 + 3 gaps de 8, medido no HEAD 2285154
+async function medirBarraChatSala(tab) {
+  for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
+    const ctx = `${viewport.width}x${viewport.height}`;
+    await tab.page.setViewport(viewport);
+    await sleep(500);
+    const barra = await tab.page.evaluate((selAbrir, alvoMin) => {
+      const M = window.__M;
+      const alvos = M.targets('#actionBar');
+      return {
+        total: alvos.length,
+        pequenos: alvos.filter((t) => t.w < alvoMin || t.h < alvoMin).map((t) => `${t.alvo} ${t.w}x${t.h}`),
+        caixa: M.rect('#actionBar'),
+        cruzaHudRight: M.intersects(M.rect('#actionBar'), M.rect('#hudRight')),
+        abrir: M.rect(selAbrir),
+      };
+    }, SEL_CHAT_ABRIR, ALVO_MIN);
+    check(`CHAT: ${ctx} o #actionBar tem ${ALVOS_BARRA} alvos de toque em sala`,
+      barra.total === ALVOS_BARRA, `${barra.total} alvos, esperado ${ALVOS_BARRA}`);
+    check(`CHAT: ${ctx} nenhum alvo do #actionBar fica abaixo de ${ALVO_MIN}x${ALVO_MIN}`,
+      barra.total > 0 && barra.pequenos.length === 0,
+      barra.pequenos.join(' · ') || `${barra.total} alvo(s)`);
+    check(`CHAT: ${ctx} o #actionBar mantém ${BARRA_LARGURA}px de largura com o alvo novo`,
+      !!barra.caixa && Math.abs(barra.caixa.width - BARRA_LARGURA) < 0.5,
+      barra.caixa ? `${barra.caixa.width.toFixed(1)}px` : 'ausente ou invisível');
+    check(`CHAT: ${ctx} o #actionBar mantém ${BARRA_ALTURA}px de altura com o alvo novo`,
+      !!barra.caixa && Math.abs(barra.caixa.height - BARRA_ALTURA) < 0.5,
+      barra.caixa ? `${barra.caixa.height.toFixed(1)}px` : 'ausente ou invisível');
+    check(`CHAT: ${ctx} o #actionBar não cruza o #hudRight`,
+      barra.cruzaHudRight === false,
+      barra.caixa ? `barra em ${barra.caixa.top.toFixed(1)}–${barra.caixa.bottom.toFixed(1)}` : 'barra ausente');
+    check(`CHAT: ${ctx} o alvo de abrir conversa (${SEL_CHAT_ABRIR}) está visível em sala com ${ALVO_MIN}x${ALVO_MIN}`,
+      !!barra.abrir && barra.abrir.width >= ALVO_MIN && barra.abrir.height >= ALVO_MIN,
+      barra.abrir ? `${barra.abrir.width.toFixed(1)}x${barra.abrir.height.toFixed(1)}` : 'ausente ou invisível');
+  }
+  // Devolve a aba à viewport em que os demais casos do roteiro medem.
+  await tab.page.setViewport(VIEW_HOST);
+  await sleep(400);
 }
 
 // UI-01 dentro de sala: o #roster só tem linha com ação de moderação, e o
@@ -681,6 +734,10 @@ try {
   const andares = await Promise.all(tabs.slice(0, PEERS).map((t) => text(t, 'floorChip')));
   check('multi-peer: todas as abas concordam sobre o andar',
     new Set(andares).size === 1, andares.join(' | '));
+
+  // VIEW=desktop fica de fora: trocar isMobile/hasTouch recarrega a aba e
+  // derrubaria a sessão P2P que os casos seguintes usam.
+  if (VIEW !== 'desktop') await medirBarraChatSala(host);
 
   if (MEDE_TOQUE) {
     // O #roster é medido mais adiante, na janela do caso `late`; aqui só o

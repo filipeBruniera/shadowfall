@@ -20,11 +20,18 @@ import * as balance from '../js/balance.js';
 
 export const TOUCH_STICK_ZONE = balance.TOUCH_STICK_ZONE;
 export const TOUCH_STICK_RADIUS = balance.TOUCH_STICK_RADIUS;
+export const LOG_MAX_LINES = balance.LOG_MAX_LINES;
+export const CHAT_MAX_LEN = balance.CHAT_MAX_LEN;
 
 // Valores RIGID de RF-01, escritos aqui só como asserção sobre a fonte — a
 // medição continua lendo js/balance.js, nunca estes dois.
 const ZONA_RIGID = 0.5;
 const RAIO_RIGID = 64;
+// Valores RIGID de UI-04 (LOG_MAX_LINES) e de RNF-03 AC 2 (CHAT_MAX_LEN), pelo
+// mesmo motivo: sem o export a contagem de linhas e o maxLength do campo viram
+// comparação contra undefined, que reprova calada em vez de acusar a fonte.
+const LOG_LINHAS_RIGID = 6;
+const CHAT_LEN_RIGID = 140;
 
 // Sem as constantes a zona do joystick vira NaN e toda asserção de zona passaria
 // calada, porque NaN reprova qualquer comparação. Então a ausência (ou o valor
@@ -39,8 +46,22 @@ export function errosDeConstante(prefixo) {
     erros.push(`${prefixo}: js/balance.js exporta TOUCH_STICK_RADIUS = ${TOUCH_STICK_RADIUS},`
       + ` esperado ${RAIO_RIGID} — sem a fonte única a zona do joystick não é medível (RF-01)`);
   }
+  if (LOG_MAX_LINES !== LOG_LINHAS_RIGID) {
+    erros.push(`${prefixo}: js/balance.js exporta LOG_MAX_LINES = ${LOG_MAX_LINES},`
+      + ` esperado ${LOG_LINHAS_RIGID} — sem a primitiva o teto do #log vira NaN (UI-04)`);
+  }
+  if (CHAT_MAX_LEN !== CHAT_LEN_RIGID) {
+    erros.push(`${prefixo}: js/balance.js exporta CHAT_MAX_LEN = ${CHAT_MAX_LEN},`
+      + ` esperado ${CHAT_LEN_RIGID} — o maxLength do #chatInput sai daqui (RNF-03 AC 2)`);
+  }
   return erros;
 }
+
+// Seletores congelados dos dois alvos novos (CT-01 AC 2). Os dois harnesses
+// usam estas constantes e nunca nth-child nem busca por texto: posição e rótulo
+// mudam numa refatoração de layout sem que o alvo tenha deixado de existir.
+export const SEL_CHAT_ABRIR = '#btnChat';
+export const SEL_CHAT_FECHAR = '#btnChatClose';
 
 // deviceScaleFactor 2, isMobile e hasTouch são o que liga `pointer: coarse` no
 // Chromium; sem os três a medição cairia no CSS de desktop.
@@ -89,6 +110,34 @@ export async function installHelpers(page) {
         if (!a || !b) return false;
         return Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0
           && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0;
+      },
+      // Centro do retângulo, para o toque real de CT-02 AC 1: page.touchscreen
+      // pede coordenada, e mirar no centro é o que faz o elementFromPoint da
+      // mesma coordenada provar que o alvo recebe o dedo. Null quando o alvo
+      // não existe ou está invisível — hoje o #btnChat não existe e o caso tem
+      // de emitir erro medido em vez de estourar TypeError.
+      centro(alvo) {
+        const r = this.rect(alvo);
+        if (!r) return null;
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      },
+      // Régua de UI-04 AC 1: linha visível é a que cabe INTEIRA na caixa do pai
+      // (top >= pai.top && bottom <= pai.bottom). Contar a linha cortada no topo
+      // inflava a medida do #log em uma unidade — foi o que levou o baseline de
+      // 9/7 a ser lido como 10/8. O mask-image de styles.css:253 não participa:
+      // linha esmaecida pelo gradiente segue contando, porque o gradiente é
+      // pintura e a régua é geometria.
+      linhasContidas(sel, filhoSel) {
+        const pai = document.querySelector(sel);
+        if (!pai || !this.visible(pai)) return 0;
+        const caixa = pai.getBoundingClientRect();
+        let contidas = 0;
+        for (const filho of pai.querySelectorAll(filhoSel)) {
+          if (!this.visible(filho)) continue;
+          const r = filho.getBoundingClientRect();
+          if (r.top >= caixa.top && r.bottom <= caixa.bottom) contidas++;
+        }
+        return contidas;
       },
       // Zona reservada do joystick: metade esquerda mais o raio do #stick.
       joystickZone() {
