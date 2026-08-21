@@ -1,10 +1,13 @@
 import puppeteer from 'puppeteer';
 // A AC 2 de UI-03 proíbe repetir o 0.5 aqui: a fração da zona do joystick e o
 // raio do #stick vêm de js/balance.js, a mesma fonte que js/main.js consulta
-// para decidir a origem do toque. INV_SIZE fecha a mochila cheia de UI-04.
-import { TOUCH_STICK_ZONE, TOUCH_STICK_RADIUS, INV_SIZE } from '../js/balance.js';
+// para decidir a origem do toque — reexportados por mobile-helpers.mjs, que os
+// lê por namespace para o portão de RF-03 não morrer no link do módulo.
+// INV_SIZE fecha a mochila cheia de UI-04.
+import { INV_SIZE } from '../js/balance.js';
 import {
   VIEWPORT_MOBILE, VIEWPORT_SMALL, ALTURAS_UI03, ALVO_MIN, SLOT_LADO, BARRA_LARGURA,
+  TOUCH_STICK_ZONE, TOUCH_STICK_RADIUS, errosDeConstante,
   alturaMobile, installHelpers,
 } from './mobile-helpers.mjs';
 
@@ -167,6 +170,11 @@ if (VIEWPORT_SMALL.width !== ALVO_PEQUENO.width || VIEWPORT_SMALL.height !== ALV
   errors.push(`TOQUE: o contexto pequeno virou ${VIEWPORT_SMALL.width}x${VIEWPORT_SMALL.height},`
     + ` esperado ${ALVO_PEQUENO.width}x${ALVO_PEQUENO.height}`);
 }
+
+// RF-01: a zona de UI-03 só é medível se js/balance.js for mesmo a fonte única.
+// Contra o código anterior à feature a constante nem existe, a zona vira NaN e
+// as asserções de zona passariam caladas — por isso a falta vira erro medido.
+errors.push(...errosDeConstante('BARRA'));
 
 // UI-03 AC 3: a borda direita da zona reservada, medida em cada largura, sai no
 // relatório final — 259 em 390 e 244 em 360.

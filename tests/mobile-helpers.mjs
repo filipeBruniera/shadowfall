@@ -9,8 +9,38 @@
 // A fração da zona do joystick vem de js/balance.js, nunca do literal 0.5 —
 // o mesmo número que js/main.js:608 usa para decidir a origem do toque tem de
 // governar a medição, senão o teste e o jogo discordam sem ninguém perceber.
+//
+// O import é de namespace, não nomeado, por causa do portão de RF-03: ele roda
+// estes casos contra o código anterior à feature, quando js/balance.js ainda
+// não exporta as constantes de toque. Um `import { TOUCH_STICK_ZONE }` quebraria
+// a ligação do módulo com SyntaxError e os dois harnesses sairiam 1 sem emitir
+// uma única mensagem medida — o oposto do que CT-02 exige daquela corrida.
 // ============================================================
-import { TOUCH_STICK_ZONE, TOUCH_STICK_RADIUS } from '../js/balance.js';
+import * as balance from '../js/balance.js';
+
+export const TOUCH_STICK_ZONE = balance.TOUCH_STICK_ZONE;
+export const TOUCH_STICK_RADIUS = balance.TOUCH_STICK_RADIUS;
+
+// Valores RIGID de RF-01, escritos aqui só como asserção sobre a fonte — a
+// medição continua lendo js/balance.js, nunca estes dois.
+const ZONA_RIGID = 0.5;
+const RAIO_RIGID = 64;
+
+// Sem as constantes a zona do joystick vira NaN e toda asserção de zona passaria
+// calada, porque NaN reprova qualquer comparação. Então a ausência (ou o valor
+// errado) precisa virar erro medido, com o prefixo do harness que chamou.
+export function errosDeConstante(prefixo) {
+  const erros = [];
+  if (TOUCH_STICK_ZONE !== ZONA_RIGID) {
+    erros.push(`${prefixo}: js/balance.js exporta TOUCH_STICK_ZONE = ${TOUCH_STICK_ZONE},`
+      + ` esperado ${ZONA_RIGID} — sem a fonte única a zona do joystick não é medível (RF-01)`);
+  }
+  if (TOUCH_STICK_RADIUS !== RAIO_RIGID) {
+    erros.push(`${prefixo}: js/balance.js exporta TOUCH_STICK_RADIUS = ${TOUCH_STICK_RADIUS},`
+      + ` esperado ${RAIO_RIGID} — sem a fonte única a zona do joystick não é medível (RF-01)`);
+  }
+  return erros;
+}
 
 // deviceScaleFactor 2, isMobile e hasTouch são o que liga `pointer: coarse` no
 // Chromium; sem os três a medição cairia no CSS de desktop.
