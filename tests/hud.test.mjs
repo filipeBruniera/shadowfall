@@ -1,6 +1,7 @@
 // Trilho de aliados: quem aparece no HUD com grupo grande, e por quê.
 import { AllyRail, directionArrow } from '../js/allyrail.js';
-import { HUD_ALLY_LIMIT, HUD_ALLY_HYSTERESIS, HUD_ALLY_REORDER_DELAY } from '../js/balance.js';
+import { HUD_ALLY_LIMIT, HUD_ALLY_HYSTERESIS, HUD_ALLY_REORDER_DELAY, KEYBOARD_MAX_FRACTION } from '../js/balance.js';
+import { alturaTeclado } from '../js/ui.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
@@ -76,6 +77,43 @@ console.log('\n== direção ==');
   check('HUD: seta aponta para baixo', directionArrow({ x: 0, y: 0 }, { x: 0, y: 5 }) === '↓');
   check('HUD: seta aponta para a esquerda', directionArrow({ x: 0, y: 0 }, { x: -5, y: 0 }) === '←');
   check('HUD: seta cobre as diagonais', directionArrow({ x: 0, y: 0 }, { x: 5, y: 5 }) === '↘');
+}
+
+console.log('\n== altura do teclado virtual (--kb) ==');
+{
+  // Sem teclado: visual viewport do tamanho da de layout.
+  check('TECLADO: sem teclado o deslocamento é zero',
+    alturaTeclado({ height: 844, scale: 1, offsetTop: 0 }, 844) === 0);
+
+  // Android/Chrome: a visual viewport encolhe e a de layout fica.
+  check('TECLADO: teclado de 260px vira deslocamento de 260px',
+    alturaTeclado({ height: 584, scale: 1, offsetTop: 0 }, 844) === 260);
+
+  // iOS: rola a visual viewport em vez de encolhê-la por inteiro.
+  check('TECLADO: a rolagem da visual viewport entra na conta',
+    alturaTeclado({ height: 584, scale: 1, offsetTop: 100 }, 844) === 160);
+
+  // Pinça: `height` já vem dividido pela escala. Sem multiplicar de volta, isto
+  // devolveria 422 — meia tela de teclado fantasma — e jogaria a faixa de chat
+  // para fora do visor de quem usa "forçar zoom" na acessibilidade.
+  check('TECLADO: zoom de pinça não vira teclado fantasma',
+    alturaTeclado({ height: 422, scale: 2, offsetTop: 0 }, 844) === 0,
+    `${alturaTeclado({ height: 422, scale: 2, offsetTop: 0 }, 844)}`);
+  check('TECLADO: zoom com teclado junto ainda mede só o teclado',
+    alturaTeclado({ height: 292, scale: 2, offsetTop: 0 }, 844) === 260,
+    `${alturaTeclado({ height: 292, scale: 2, offsetTop: 0 }, 844)}`);
+
+  // Teto: nada pode empurrar a faixa para fora da tela.
+  const teto = Math.round(844 * KEYBOARD_MAX_FRACTION);
+  check('TECLADO: o deslocamento para no teto de sanidade',
+    alturaTeclado({ height: 10, scale: 1, offsetTop: 0 }, 844) === teto,
+    `${alturaTeclado({ height: 10, scale: 1, offsetTop: 0 }, 844)} contra ${teto}`);
+  check('TECLADO: valor negativo nunca vira deslocamento',
+    alturaTeclado({ height: 900, scale: 1, offsetTop: 0 }, 844) === 0);
+
+  // Ausência de visualViewport (engine antiga) não pode virar NaN no CSS.
+  check('TECLADO: sem visualViewport o deslocamento é zero',
+    alturaTeclado(null, 844) === 0);
 }
 
 console.log(failures ? `\n${failures} FALHA(S)\n` : '\nTudo verde.\n');

@@ -1096,12 +1096,8 @@ async function medirChat(page, ctx) {
     const depois = await page.evaluate((kb) => {
       document.documentElement.style.setProperty('--kb', kb + 'px');
       const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return +b.bottom.toFixed(1); };
-      return { campo: r('#chatInput'), fechar: r('#btnChatClose'), log: r('#log'),
-               kbInline: document.documentElement.style.getPropertyValue('--kb'),
-               csCampo: (document.querySelector('#chatInput') ? getComputedStyle(document.querySelector('#chatInput')).bottom : null),
-               visCampo: window.__M.visible(document.querySelector('#chatInput')) };
+      return { campo: r('#chatInput'), fechar: r('#btnChatClose'), log: r('#log') };
     }, KB);
-    console.log(`  DEBUG-KB ${ctx} antes=${JSON.stringify(antes)} depois=${JSON.stringify(depois)}`);
     for (const [nome, sel] of [['#chatInput', 'campo'], ['#btnChatClose', 'fechar'], ['#log', 'log']]) {
       if (antes[sel] === null || depois[sel] === null) continue;
       const subiu = antes[sel] - depois[sel];

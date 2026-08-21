@@ -689,11 +689,13 @@ let chatCloseEl = null;
 // esconde o #log (styles.css:489) bem na hora de digitar.
 // offsetTop entra na conta porque o iOS rola a visual viewport em vez de
 // encolhê-la quando o campo focado ficaria atrás do teclado.
+// A conta vive em UI.alturaTeclado (js/ui.js) porque precisa ser chamável sem
+// navegador: o harness não abre teclado virtual nem emula pinça, e sem função
+// pura o zoom fantasma e o teto ficariam sem nenhum teste.
 function medirTeclado() {
   const vv = window.visualViewport;
   if (!vv) return;
-  const altura = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop));
-  document.documentElement.style.setProperty('--kb', altura + 'px');
+  document.documentElement.style.setProperty('--kb', UI.alturaTeclado(vv, innerHeight) + 'px');
 }
 if (window.visualViewport) {
   addEventListener('resize', medirTeclado);

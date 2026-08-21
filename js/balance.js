@@ -230,6 +230,16 @@ export const LOG_MAX_LINES = 6;
 // que Safari < 16.4 e Firefox < 120 não têm. Com o número aqui, `1em` basta.
 export const LOG_LINE_HEIGHT = 1.45;
 
+// Teto de sanidade do deslocamento de teclado (--kb de js/main.js). O
+// visualViewport também encolhe com zoom de pinça, e o `user-scalable=no` do
+// meta viewport não vale quando a pessoa liga "forçar zoom" nas opções de
+// acessibilidade do navegador: sem teto, meia tela de zoom viraria meia tela de
+// "teclado" e jogaria a faixa de chat para fora do visor. A escala é
+// neutralizada na própria conta; este teto é o cinto de segurança para qualquer
+// sobra — nenhum teclado de celular passa de 60% da altura, e errar para baixo
+// (faixa um pouco baixa) é muito melhor que errar para cima (faixa invisível).
+export const KEYBOARD_MAX_FRACTION = 0.6;
+
 // ---------- Fila de ações do convidado ----------
 // Teto de segurança do pacote de input. Antes eram 12 fixas e as mais antigas
 // sumiam em silêncio — perder magia por perder pacote. Agora o teto é largo e,

@@ -1,7 +1,7 @@
 import { VOCATIONS, VOC_LIST, RARITY, EQUIP_SLOTS, SLOT_LABEL, ITEM_BASES, xpForLevel } from './data.js';
 import { drawGlyph } from './render.js';
 import { AllyRail, directionArrow } from './allyrail.js';
-import { EMBER_LINK_FAR, PORTAL_HOLD, CHAT_LOG_LINES, LOG_MAX_LINES, LOG_LINE_HEIGHT } from './balance.js';
+import { EMBER_LINK_FAR, PORTAL_HOLD, CHAT_LOG_LINES, LOG_MAX_LINES, LOG_LINE_HEIGHT, KEYBOARD_MAX_FRACTION } from './balance.js';
 
 export const el = (id) => document.getElementById(id);
 
@@ -120,6 +120,28 @@ if (typeof document !== 'undefined') {
   // O line-height vai junto: com os dois em custom property o CSS calcula a
   // altura com `1em`, que toda engine tem, em vez de depender da unidade `lh`.
   document.documentElement.style.setProperty('--log-lh', LOG_LINE_HEIGHT);
+}
+
+// Quanto da viewport de layout o teclado virtual está cobrindo, em px CSS.
+// Função pura de propósito: o harness de navegador não consegue abrir teclado
+// nem emular pinça (Emulation.setPageScaleFactor não mexe em
+// visualViewport.scale sob device metrics), então a única forma de provar a
+// conta é chamá-la com números — tests/hud.test.mjs faz isso.
+//
+//  - `height` do visualViewport vem em px CSS JÁ divididos pela escala, então
+//    multiplicar de volta por `scale` neutraliza o zoom. Sem isso, pinçar a
+//    tela viria como teclado fantasma do tamanho do zoom — medido: 422px de
+//    "teclado" numa tela de 844 com escala 2.
+//  - `offsetTop` entra porque o iOS ROLA a visual viewport em vez de encolhê-la
+//    quando o campo focado ficaria atrás do teclado.
+//  - O teto de KEYBOARD_MAX_FRACTION impede que qualquer sobra de arredondamento
+//    ou surpresa de engine empurre a faixa de chat para fora do visor.
+export function alturaTeclado(vv, alturaLayout) {
+  if (!vv || !alturaLayout) return 0;
+  const escala = vv.scale || 1;
+  const ocupado = alturaLayout - vv.height * escala - vv.offsetTop;
+  const teto = alturaLayout * KEYBOARD_MAX_FRACTION;
+  return Math.max(0, Math.min(Math.round(ocupado), Math.round(teto)));
 }
 
 export function buildSkillBar(voc, onCast) {
