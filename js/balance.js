@@ -205,6 +205,13 @@ export const HUD_ALLY_LIMIT = 3;        // barras de aliado no HUD
 export const HUD_ALLY_HYSTERESIS = 1.5; // tiles de margem para trocar quem aparece
 export const HUD_ALLY_REORDER_DELAY = 0.5;
 
+// ---------- Toque ----------
+// A metade esquerda inteira da tela é do joystick (hud-grupo-mobile.md:35): o
+// polegar esquerdo nunca deveria virar ordem de movimento por 5% de largura.
+export const TOUCH_STICK_ZONE = 0.5;    // fração da largura que pertence ao joystick
+export const TOUCH_STICK_RADIUS = 64;   // metade do #stick de 128px: centra o anel no dedo
+export const TOUCH_STICK_TRAVEL = 54;   // curso máximo do polegar dentro do anel
+
 // ---------- Chat ----------
 export const CHAT_MAX_LEN = 140;
 export const CHAT_LOG_LINES = 40;

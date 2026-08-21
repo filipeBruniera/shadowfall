@@ -12,7 +12,7 @@ import { Net, NetMode, buildSnapshot, applySnapshot, interpolate, drainEvents } 
 import * as Save from './save.js';
 import { validateSave, describeReport } from './validate.js';
 import { ActionQueue } from './actqueue.js';
-import { MAX_PLAYERS, RECONNECT_WINDOW, RECONNECT_RETRY, CHAT_MAX_LEN } from './balance.js';
+import { MAX_PLAYERS, RECONNECT_WINDOW, RECONNECT_RETRY, CHAT_MAX_LEN, TOUCH_STICK_ZONE, TOUCH_STICK_RADIUS, TOUCH_STICK_TRAVEL } from './balance.js';
 import { ChatGate } from './chatgate.js';
 import { Room } from './room.js';
 import { SessionGuard } from './session.js';
@@ -605,14 +605,14 @@ canvas.addEventListener('pointerdown', (e) => {
   const dpr = canvas.width / innerWidth;
   const px = e.clientX * dpr, py = e.clientY * dpr;
 
-  if (e.pointerType === 'touch' && e.clientX < innerWidth * 0.45) {
+  if (e.pointerType === 'touch' && e.clientX < innerWidth * TOUCH_STICK_ZONE) {
     S.stick.active = true; S.stick.id = e.pointerId;
     S.stick.ox = e.clientX; S.stick.oy = e.clientY;
     S.stick.dx = 0; S.stick.dy = 0;
     const st = UI.el('stick');
     st.classList.remove('hidden');
-    st.style.left = (e.clientX - 64) + 'px';
-    st.style.top = (e.clientY - 64) + 'px';
+    st.style.left = (e.clientX - TOUCH_STICK_RADIUS) + 'px';
+    st.style.top = (e.clientY - TOUCH_STICK_RADIUS) + 'px';
     st.querySelector('i').style.transform = 'translate(0,0)';
     return;
   }
@@ -633,7 +633,7 @@ addEventListener('pointermove', (e) => {
   if (!S.stick.active || e.pointerId !== S.stick.id) return;
   const dx = e.clientX - S.stick.ox, dy = e.clientY - S.stick.oy;
   const len = Math.hypot(dx, dy);
-  const max = 54;
+  const max = TOUCH_STICK_TRAVEL;
   const cl = len > max ? max / len : 1;
   S.stick.dx = (dx * cl) / max;
   S.stick.dy = (dy * cl) / max;
