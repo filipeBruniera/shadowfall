@@ -680,6 +680,28 @@ let chatEl = null;
 // não tem Escape e enviar vazio é descartado em silêncio por chatGate.clean('') —
 // quem abrisse a conversa no toque ficava preso no campo.
 let chatCloseEl = null;
+// Altura do teclado virtual, publicada como --kb para o CSS subir a faixa de
+// chat. visualViewport é o único caminho que cobre iOS e Android: a
+// VirtualKeyboard API por trás de env(keyboard-inset-height) exige
+// `navigator.virtualKeyboard.overlaysContent = true` e não existe no Safari, e
+// `interactive-widget=resizes-content` no meta resolveria só no Chrome — ao
+// custo de encolher a viewport de layout e disparar o corte de altura que
+// esconde o #log (styles.css:489) bem na hora de digitar.
+// offsetTop entra na conta porque o iOS rola a visual viewport em vez de
+// encolhê-la quando o campo focado ficaria atrás do teclado.
+function medirTeclado() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const altura = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop));
+  document.documentElement.style.setProperty('--kb', altura + 'px');
+}
+if (window.visualViewport) {
+  addEventListener('resize', medirTeclado);
+  window.visualViewport.addEventListener('resize', medirTeclado);
+  window.visualViewport.addEventListener('scroll', medirTeclado);
+  medirTeclado();
+}
+
 function openChat() {
   // O #btnChat fica no canto inferior direito e o campo no esquerdo, então o
   // botão continua visível e tocável com a conversa aberta. Sem esta guarda o

@@ -1081,6 +1081,38 @@ async function medirChat(page, ctx) {
     await page.evaluate(() => { const c = document.getElementById('chatInput'); if (c) c.value = ''; });
   }
 
+  // ---------- 6c. Encanamento do --kb (teclado virtual) ----------
+  // Emulação não tem teclado virtual, então a medida real de visualViewport nunca
+  // dispara aqui. O que dá para testar é o encanamento: empurrar a property na mão
+  // e conferir que campo, ✕ e #log sobem juntos. Sem isto, uma regressão que
+  // desligasse o --kb do CSS passaria despercebida, e o defeito só apareceria em
+  // aparelho de verdade, com o teclado cobrindo a faixa de chat.
+  if (rea.existeCampo) {
+    const KB = 260;
+    const antes = await page.evaluate(() => {
+      const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return +b.bottom.toFixed(1); };
+      return { campo: r('#chatInput'), fechar: r('#btnChatClose'), log: r('#log') };
+    });
+    const depois = await page.evaluate((kb) => {
+      document.documentElement.style.setProperty('--kb', kb + 'px');
+      const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return +b.bottom.toFixed(1); };
+      return { campo: r('#chatInput'), fechar: r('#btnChatClose'), log: r('#log'),
+               kbInline: document.documentElement.style.getPropertyValue('--kb'),
+               csCampo: (document.querySelector('#chatInput') ? getComputedStyle(document.querySelector('#chatInput')).bottom : null),
+               visCampo: window.__M.visible(document.querySelector('#chatInput')) };
+    }, KB);
+    console.log(`  DEBUG-KB ${ctx} antes=${JSON.stringify(antes)} depois=${JSON.stringify(depois)}`);
+    for (const [nome, sel] of [['#chatInput', 'campo'], ['#btnChatClose', 'fechar'], ['#log', 'log']]) {
+      if (antes[sel] === null || depois[sel] === null) continue;
+      const subiu = antes[sel] - depois[sel];
+      if (Math.abs(subiu - KB) > 1) {
+        errors.push(`CHAT: ${ctx} com --kb de ${KB}px o ${nome} subiu ${subiu.toFixed(1)}px,`
+          + ` esperado ${KB} — o deslocamento do teclado virtual não chega nesse elemento`);
+      }
+    }
+    await page.evaluate(() => { document.documentElement.style.removeProperty('--kb'); });
+  }
+
   // ---------- 7. UI-02 AC 6: o bloqueio da zona do joystick é temporário ----------
   // touchStart/touchEnd SEPARADOS, obrigatoriamente: endStick está pendurado em
   // pointerup no window (js/main.js:644-649), então um tap() completo devolveria

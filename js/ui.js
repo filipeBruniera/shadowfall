@@ -1,7 +1,7 @@
 import { VOCATIONS, VOC_LIST, RARITY, EQUIP_SLOTS, SLOT_LABEL, ITEM_BASES, xpForLevel } from './data.js';
 import { drawGlyph } from './render.js';
 import { AllyRail, directionArrow } from './allyrail.js';
-import { EMBER_LINK_FAR, PORTAL_HOLD, CHAT_LOG_LINES, LOG_MAX_LINES } from './balance.js';
+import { EMBER_LINK_FAR, PORTAL_HOLD, CHAT_LOG_LINES, LOG_MAX_LINES, LOG_LINE_HEIGHT } from './balance.js';
 
 export const el = (id) => document.getElementById(id);
 
@@ -117,6 +117,9 @@ export function banner(title, sub = '', ms = 2600) {
 // um efeito de módulo tocando document quebraria a suíte antes do primeiro check.
 if (typeof document !== 'undefined') {
   document.documentElement.style.setProperty('--log-linhas', LOG_MAX_LINES);
+  // O line-height vai junto: com os dois em custom property o CSS calcula a
+  // altura com `1em`, que toda engine tem, em vez de depender da unidade `lh`.
+  document.documentElement.style.setProperty('--log-lh', LOG_LINE_HEIGHT);
 }
 
 export function buildSkillBar(voc, onCast) {

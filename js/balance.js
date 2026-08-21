@@ -223,6 +223,13 @@ export const CHAT_BURST_WINDOW = 5;     // ...por esta janela em segundos
 // em 390x844 que as 9 de hoje, sem cair abaixo das 5-6 que uma conversa de 10 pede.
 export const LOG_MAX_LINES = 6;
 
+// O line-height do #log mora aqui junto do teto de linhas porque os dois só
+// significam alguma coisa multiplicados: a altura do log é `linhas x line-height`.
+// Deixar o 1.45 solto no CSS deixava a altura derivar de dois lugares que podiam
+// divergir — e obrigava o CSS a usar a unidade `lh` para reencontrá-lo, unidade
+// que Safari < 16.4 e Firefox < 120 não têm. Com o número aqui, `1em` basta.
+export const LOG_LINE_HEIGHT = 1.45;
+
 // ---------- Fila de ações do convidado ----------
 // Teto de segurança do pacote de input. Antes eram 12 fixas e as mais antigas
 // sumiam em silêncio — perder magia por perder pacote. Agora o teto é largo e,

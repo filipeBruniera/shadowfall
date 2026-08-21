@@ -249,7 +249,7 @@ input::placeholder { color: var(--placeholder); }
 #log {
   position: absolute; left: 12px; bottom: 12px; width: min(340px, 42vw);
   max-height: 26vh; overflow: hidden; display: flex; flex-direction: column-reverse;
-  pointer-events: none; font-size: 12.5px; line-height: 1.45;
+  pointer-events: none; font-size: 12.5px; line-height: var(--log-lh, 1.45);
   mask-image: linear-gradient(0deg, #000 60%, transparent);
 }
 #log p { text-shadow: 0 1px 3px #000; opacity: .92; }
@@ -446,19 +446,16 @@ input::placeholder { color: var(--placeholder); }
      var(): se a propriedade faltar a regra cai inteira e o caso LOG acusa, em vez
      de repor o literal aqui. A regra de max-height: 460px logo abaixo continua
      apagando o log em tela baixa. */
+  /* `1em` e não `1lh`: as duas primitivas vêm de js/balance.js por custom
+     property (js/ui.js:120-123), então a altura é `linhas x line-height x
+     font-size` sem depender de unidade que Safari < 16.4 e Firefox < 120 não
+     têm. A tentativa anterior com `1lh` era pior que o que ela substituía: como
+     o valor tem var(), ele parseia sempre e só é rejeitado no valor computado,
+     o que deixa a propriedade `unset` — max-height: none — em vez de cair na
+     regra base, e o log crescia sem teto nessas engines. */
   #log {
-    width: 50vw; max-height: 18vh; font-size: 11px;
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + env(keyboard-inset-height, 0px) + 52px);
-  }
-  /* O teto em linhas depende da unidade `lh`, que Safari < 16.4 e Firefox < 120
-     não têm. `calc(var(--log-linhas) * 1lh)` contém var(), então parseia sempre e
-     só é rejeitado no valor computado — o que deixa a propriedade `unset`, ou
-     seja `max-height: none`, e NÃO cai na regra base. Nessas engines o log
-     cresceria sem teto sobre a área de jogo, pior que os 18vh que ele substitui.
-     Os 18vh acima são piso de degradação, não a primitiva: onde `lh` existe, o
-     @supports abaixo vence e a altura volta a ser consequência de LOG_MAX_LINES. */
-  @supports (height: 1lh) {
-    #log { max-height: calc(var(--log-linhas) * 1lh); }
+    width: 50vw; max-height: calc(var(--log-linhas) * var(--log-lh) * 1em); font-size: 11px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--kb, 0px) + 52px);
   }
   /* Uma ação por linha no dedo: em 360 as três do #lobby sob flex: 1 empurravam o
      #btnStart até x = 363,4 e estouravam a viewport (UI-06 AC 1). min-width: 0
@@ -514,18 +511,20 @@ input::placeholder { color: var(--placeholder); }
      tokens-componentes.md:146 — a emulação do harness reporta env() como 0,
      então o piso de 12px é o que os testes medem e a área segura só aparece em
      aparelho real. */
-  /* env(keyboard-inset-height) some com a faixa por baixo do teclado virtual,
-     que é o que chat-grupo.md §6 pede. Sozinho não basta: o termo só tem valor
-     onde a engine expõe a VirtualKeyboard API, e por isso o meta viewport de
-     index.html ganhou `interactive-widget=resizes-content`, que encolhe a
-     viewport de layout no Chrome/Android e sobe o `bottom` sem CSS nenhum.
-     Nada disso é verificável aqui: emulação não tem teclado virtual e env()
-     resolve 0, então todo caso de toque fica verde de qualquer jeito. Precisa
-     de aparelho de verdade. */
+  /* --kb é a altura do teclado virtual, medida por visualViewport em js/main.js
+     e publicada como custom property. Substitui duas tentativas que não
+     funcionavam: `env(keyboard-inset-height)` só é diferente de zero atrás da
+     VirtualKeyboard API, que exige `navigator.virtualKeyboard.overlaysContent =
+     true` em JS e nunca foi ligada; e `interactive-widget=resizes-content` no
+     meta encolhia a viewport de layout, o que fazia o corte de
+     `max-height: 460px` disparar com o teclado aberto e sumir com o #log
+     justamente enquanto a pessoa digita. visualViewport cobre iOS e Android,
+     não mexe em breakpoint nenhum, e o harness empurra a property na mão para
+     testar o encanamento. */
   #chatInput {
     left: 12px; right: calc(126px + 52px); width: auto;
     min-block-size: 44px; box-sizing: border-box;
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + env(keyboard-inset-height, 0px));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--kb, 0px));
   }
   /* Alinhado com a borda esquerda do #actionBar, na mesma linha do campo e com
      a moldura dele. O piso de 44x44 vem da regra .x deste mesmo bloco de toque
@@ -535,7 +534,7 @@ input::placeholder { color: var(--placeholder); }
      junto, senão fica soterrado enquanto o campo aparece. */
   #btnChatClose {
     position: absolute; right: 126px;
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + env(keyboard-inset-height, 0px));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--kb, 0px));
     z-index: 25; display: inline-flex;
     background: rgba(9, 7, 13, .96); border: 1px solid var(--ember);
   }

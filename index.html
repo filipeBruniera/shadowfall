@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<!-- interactive-widget=resizes-content: sem ele o teclado virtual nao encolhe a viewport de layout (o padrao e resizes-visual) e a faixa de chat, ancorada em #game { position: fixed; inset: 0 } com body overflow hidden, fica soterrada sem jeito de rolar ate ela. -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<!-- Sem interactive-widget de proposito: resizes-content encolhe a viewport de layout com o teclado aberto, o que faz o breakpoint de max-height 460px (styles.css:489) disparar e sumir com o #log justamente enquanto a pessoa digita. O deslocamento do chat vem de --kb, medido por visualViewport em js/main.js. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0b0910">
 <meta name="description" content="Shadowfall: Ashen Realms — RPG de ação isométrico co-op para até 10, direto no navegador.">
 <title>Shadowfall — Ashen Realms</title>
