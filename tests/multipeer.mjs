@@ -7,11 +7,27 @@
 //   PEERS=10 node tests/multipeer.mjs   # sala cheia
 //   CASE=all PEERS=4 node tests/multipeer.mjs
 //
-// CASE=mobile mede os alvos de toque que só existem dentro de sala (#roster,
-// os botões Expulsar, a confirmação inline e o #crewChip) e o trilho de aliados
-// sob os cortes por altura (prefixos CORTE e CAIDO). Nesse caso — e em `all` —
-// a aba do host abre em viewport de toque, porque `pointer: coarse` é a
-// condição de UI-01 e dos cortes de UI-07.
+// Variáveis de ambiente:
+//   PEERS  número de abas na sala (padrão 2)
+//   CASE   basic (padrão) | full | lock | kick | late | drop | measure | shot
+//          | probe | mobile | all
+//   VIEW   viewport das abas: mobile (padrão, 390x844) | small (360x640)
+//          | desktop (1280x760, escape para depurar no layout antigo)
+//
+// As abas abrem em viewport de toque por padrão: `pointer: coarse` é a condição
+// de UI-01 e dos cortes de UI-07, e uma aba de 1280x760 mediria outro CSS.
+// Trocar isMobile/hasTouch depois da carga recarregaria a aba e derrubaria a
+// sessão P2P, então a decisão é do primeiro quadro. VIEW=desktop devolve o
+// 1280x760 de antes da feature mobile.
+//
+// CASE=mobile mede os alvos de toque que só existem dentro de sala e o trilho
+// de aliados sob os cortes por altura — prefixos TOQUE, MENU, CORTE e CAIDO.
+// Cada medida mora na janela do roteiro em que o seu estado existe:
+//   #lobby de 10 trancado   caso de tranca, com PEERS=10
+//   trilho e aliado caído   partida em curso, com PEERS>=5
+//   #roster 9+1 e #queue    caso `late`, antes do btnQueueLeave, com PEERS=10 —
+//                           os 9 em partida vêm da expulsão do caso `kick`, por
+//                           isso essa janela só existe em CASE=all
 //
 //   PEERS=5 CASE=mobile node tests/multipeer.mjs   # cenário cravado de UI-07
 // ============================================================
@@ -29,6 +45,11 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 5199);
 const PEERS = Number(process.env.PEERS || 2);
 const CASE = process.env.CASE || 'basic';
+// Viewport das abas: mobile por padrão, porque `pointer: coarse` é a condição
+// medida por UI-01 e pelos cortes de UI-07. `desktop` é o escape de depuração.
+const VIEWS = { mobile: VIEWPORT_MOBILE, small: VIEWPORT_SMALL, desktop: VIEWPORT_DESKTOP };
+const VIEW = process.env.VIEW || 'mobile';
+const VIEWPORT_ABA = VIEWS[VIEW] || VIEWPORT_MOBILE;
 const CHROME = process.env.CHROME || '/usr/bin/google-chrome';
 // BASE aponta o harness para uma URL já publicada em vez do servidor local.
 const BASE = process.env.BASE || '';
@@ -56,13 +77,18 @@ function serve() {
   }).listen(PORT);
 }
 
-// O caso mobile precisa de `pointer: coarse` desde o primeiro quadro: trocar
-// isMobile/hasTouch depois recarregaria a aba e derrubaria a sessão P2P.
 const MEDE_TOQUE = CASE === 'mobile' || CASE === 'all';
-const VIEW_HOST = MEDE_TOQUE ? VIEWPORT_MOBILE : VIEWPORT_DESKTOP;
+// A AC 1 de UI-06 só existe com a sala trancada e 10 jogadores no #lobby, e a
+// AC 1 de UI-01 só com 9 em partida e 1 na fila. O caso mobile alcança a
+// primeira janela reaproveitando a tranca; a segunda depende da expulsão do
+// caso `kick`, então mora dentro de `all`.
+const RODA_LOCK = CASE === 'lock' || CASE === 'all' || (MEDE_TOQUE && PEERS === 10);
+// Para onde as medições de UI-07 e UI-08 devolvem a aba do host depois de
+// percorrer as sete alturas: a viewport em que o resto do roteiro mede.
+const VIEW_HOST = VIEWPORT_ABA;
 
 // ---------- aba ----------
-async function openTab(browser, name, viewport = VIEWPORT_DESKTOP) {
+async function openTab(browser, name, viewport = VIEWPORT_ABA) {
   const page = await browser.newPage();
   await page.setViewport(viewport);
   await installHelpers(page);
@@ -81,7 +107,10 @@ async function openTab(browser, name, viewport = VIEWPORT_DESKTOP) {
     i.value = n;
     i.dispatchEvent(new Event('input', { bubbles: true }));
   }, name);
-  return { page, name, errors };
+  // RF-02b exige `pointer: coarse` em toda aba de toque; a leitura fica guardada
+  // na aba porque o caso `drop` fecha a do host antes da conferência final.
+  const coarse = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+  return { page, name, errors, viewport, coarse };
 }
 
 const pickVoc = (tab, voc) => tab.page.evaluate((v) => document.querySelector(`.voc-card[data-voc="${v}"]`)?.click(), voc);
@@ -122,10 +151,119 @@ async function joinRoom(tab, code, voc = 'druid') {
   await click(tab, 'btnJoin');
 }
 
+// Rótulos declarados em index.html:76-78. A AC 2 de UI-06 compara o texto
+// renderizado com eles: encolher o flex item de .menu-actions não pode virar
+// corte de rótulo, e um `min-width: 0` passaria na AC 1 cortando a palavra.
+const ROTULOS_LOBBY = {
+  btnCopyLink: 'Copiar link do convite',
+  btnLock: 'Trancar sala',
+  btnStart: 'Descer para a masmorra',
+};
+
+// UI-06 e a parte de UI-01 que mora no #lobby. A janela é a do caso de tranca:
+// é o único momento do roteiro com 10 jogadores na lista, o host presente e
+// #lobbyLock e #btnLock visíveis ao mesmo tempo. Medimos nas duas viewports de
+// toque na mesma aba — trocar só largura e altura não recarrega a página.
+async function medirLobbyTrancado(tab) {
+  for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
+    const ctx = `${viewport.width}x${viewport.height}`;
+    await tab.page.setViewport(viewport);
+    await sleep(500);
+
+    const m = await tab.page.evaluate((alvoMin, rotulos) => {
+      const M = window.__M;
+      const tela = document.getElementById('lobby');
+      const fora = [];
+      for (const el of tela.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0) continue;
+        if (r.left < -0.5 || r.right > innerWidth + 0.5) {
+          fora.push(`${M.label(el)} ocupa ${r.left.toFixed(1)}–${r.right.toFixed(1)}`);
+        }
+      }
+      const truncados = [];
+      for (const el of tela.querySelectorAll('.menu-actions .btn')) {
+        if (!M.visible(el)) continue;
+        if (el.scrollWidth > el.clientWidth + 0.5) {
+          truncados.push(`${M.label(el)} pede ${el.scrollWidth}px numa caixa de ${el.clientWidth}px`);
+        }
+        if (getComputedStyle(el).textOverflow === 'ellipsis') {
+          truncados.push(`${M.label(el)} com text-overflow: ellipsis`);
+        }
+        const esperado = rotulos[el.id];
+        if (esperado && el.textContent.trim() !== esperado) {
+          truncados.push(`#${el.id} diz "${el.textContent.trim()}" e não "${esperado}"`);
+        }
+      }
+      return {
+        coarse: matchMedia('(pointer: coarse)').matches,
+        visivel: M.visible(tela),
+        trancada: M.visible(document.getElementById('lobbyLock')),
+        botaoTranca: M.visible(document.getElementById('btnLock')),
+        contador: document.getElementById('lobbyCount').textContent.trim(),
+        linhas: tela.querySelectorAll('#lobbyList .lobby-row.roster-row').length,
+        innerWidth, scrollWidth: tela.scrollWidth, clientWidth: tela.clientWidth,
+        fora, truncados, acoes: tela.querySelectorAll('.menu-actions .btn').length,
+        pequenos: M.targets('#lobby')
+          .filter((t) => t.w < alvoMin || t.h < alvoMin)
+          .map((t) => `${t.alvo} ${t.w}x${t.h}`),
+      };
+    }, ALVO_MIN, ROTULOS_LOBBY);
+
+    // Sem o estado certo a varredura passaria vazia e o caso viraria decoração.
+    check(`MENU: ${ctx} o #lobby está trancado, visível e com 10 jogadores`,
+      m.visivel && m.coarse && m.trancada && m.botaoTranca && m.linhas === 10,
+      `${m.contador} · ${m.linhas} linha(s) · #lobbyLock ${m.trancada} · #btnLock ${m.botaoTranca}`);
+    check(`MENU: ${ctx} o #lobby não rola na horizontal`,
+      m.scrollWidth === m.clientWidth, `scrollWidth ${m.scrollWidth} contra clientWidth ${m.clientWidth}`);
+    check(`MENU: ${ctx} nenhum descendente do #lobby passa dos ${m.innerWidth}px da viewport`,
+      m.fora.length === 0, m.fora.join(' · '));
+    check(`MENU: ${ctx} os ${m.acoes} rótulos de .menu-actions .btn saem inteiros`,
+      m.acoes > 0 && m.truncados.length === 0, m.truncados.join(' · '));
+    check(`TOQUE: ${ctx} não deixa alvo do #lobby abaixo de ${ALVO_MIN}x${ALVO_MIN}`,
+      m.pequenos.length === 0, m.pequenos.join(' · '));
+
+    // Sem screenshot aqui de propósito: no lobby a aba do host não desenha
+    // quadro novo, e Page.captureScreenshot numa aba de fundo parada trava o
+    // harness. A prova visual do toque sai do #roster e do caso `shot`.
+  }
+  await tab.page.setViewport(VIEW_HOST);
+  await sleep(400);
+}
+
+// A tela de espera é a única superfície de toque de quem está na fila, e só
+// existe enquanto o retardatário não desiste (o btnQueueLeave vem logo depois).
+async function medirToqueFila(tab) {
+  for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
+    const ctx = `${viewport.width}x${viewport.height}`;
+    await tab.page.setViewport(viewport);
+    await sleep(400);
+    const q = await tab.page.evaluate((alvoMin) => {
+      const M = window.__M;
+      const alvos = M.targets('#queue');
+      return {
+        coarse: matchMedia('(pointer: coarse)').matches,
+        visivel: M.visible(document.getElementById('queue')),
+        total: alvos.length,
+        pequenos: alvos.filter((t) => t.w < alvoMin || t.h < alvoMin).map((t) => `${t.alvo} ${t.w}x${t.h}`),
+      };
+    }, ALVO_MIN);
+    check(`TOQUE: ${ctx} a #queue da aba em espera está visível em "pointer: coarse"`,
+      q.visivel && q.coarse, `visível ${q.visivel} · coarse ${q.coarse}`);
+    check(`TOQUE: ${ctx} os ${q.total} alvos da #queue têm caixa de ${ALVO_MIN}x${ALVO_MIN}`,
+      q.total > 0 && q.pequenos.length === 0, q.pequenos.join(' · ') || `${q.total} alvo(s)`);
+  }
+  await tab.page.setViewport(VIEWPORT_ABA);
+  await sleep(300);
+}
+
 // UI-01 dentro de sala: o #roster só tem linha com ação de moderação, e o
 // #crewChip só perde a classe `hidden`, quando há partida com outros jogadores.
-// Medimos nas duas viewports de toque na mesma aba — trocar só largura e altura
-// não recarrega a página, então a sessão P2P sobrevive à segunda medida.
+// A janela é a do caso `late`, antes do btnQueueLeave: 9 jogadores em partida e
+// 1 na fila é exatamente o estado da AC 1 de UI-01, e é o único momento em que
+// o #roster mostra as duas listas ao mesmo tempo. Medimos nas duas viewports de
+// toque na mesma aba — trocar só largura e altura não recarrega a página, então
+// a sessão P2P sobrevive à segunda medida.
 async function medirToqueSala(tab) {
   for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
     const ctx = `${viewport.width}x${viewport.height}`;
@@ -172,7 +310,9 @@ async function medirToqueSala(tab) {
       // A AC 1 de UI-01 nomeia estes dois; sem eles a varredura passaria vazia.
       const nomeados = ['#btnCloseRoster', '#btnRosterLock']
         .map((sel) => ({ sel, r: M.rect(sel) }));
-      const expulsar = [...document.querySelectorAll('#rosterList .roster-row .rr-actions .btn')]
+      // #roster e não #rosterList: nesta janela a linha da fila também traz
+      // Expulsar (js/ui.js:461-467) e é alvo de toque como as demais.
+      const expulsar = [...document.querySelectorAll('#roster .roster-row .rr-actions .btn')]
         .filter((b) => b.textContent.includes('Expulsar') && M.visible(b))
         .map((b) => { const r = b.getBoundingClientRect(); return { w: r.width, h: r.height }; });
       return { pequenos, nomeados, expulsar, aberto: M.visible(document.getElementById('roster')) };
@@ -195,7 +335,7 @@ async function medirToqueSala(tab) {
     // sozinha em 5s: medir e cancelar na mesma volta, sem expulsar ninguém —
     // o caso `kick` mede a expulsão de verdade mais adiante.
     const confirma = await tab.page.evaluate(() => {
-      const linha = [...document.querySelectorAll('#rosterList .roster-row')]
+      const linha = [...document.querySelectorAll('#roster .roster-row')]
         .find((r) => [...r.querySelectorAll('.rr-actions .btn')].some((b) => b.textContent.includes('Expulsar')));
       if (!linha) return { erro: 'nenhuma linha com Expulsar' };
       [...linha.querySelectorAll('.rr-actions .btn')].find((b) => b.textContent.includes('Expulsar')).click();
@@ -311,7 +451,9 @@ async function medirTrilho(tab) {
   check('CORTE: o host derruba um aliado e a placa de caído entra no trilho', montou, `alvo ${nome}`);
   if (!montou) { await erguerAliado(tab); return; }
   const temMore = await tab.page.evaluate(() => !!document.querySelector('#partyList .ally-more'));
-  console.log(`      ramo da AC 5 de UI-07: .ally-more ${temMore ? 'presente (extra > 0)' : 'ausente (cenário cravado)'}`);
+  console.log(`      ramo da AC 5 de UI-07: .ally-more ${temMore
+    ? 'presente — extra > 0, o trilho declara o excedente'
+    : 'ausente — extra === 0, cenário cravado'}`);
 
   try {
     for (let i = 0; i < ALTURAS_UI03.length; i++) {
@@ -412,7 +554,7 @@ try {
   console.log(`\n== harness multi-peer: ${PEERS} abas, caso "${CASE}" ==`);
 
   for (let i = 0; i < PEERS; i++) {
-    tabs.push(await openTab(browser, i === 0 ? 'Host' : 'P' + i, i === 0 ? VIEW_HOST : VIEWPORT_DESKTOP));
+    tabs.push(await openTab(browser, i === 0 ? 'Host' : 'P' + i));
   }
   const [host, ...guests] = tabs;
 
@@ -439,19 +581,34 @@ try {
     check('multi-peer: peer além do teto é recusado por lotação', barrado, await text(extra, 'menuStatus'));
   }
 
-  if (CASE === 'lock' || CASE === 'all') {
+  // O caso mobile depende do tamanho da sala: sem os 10 não existe o #lobby da
+  // AC 1 de UI-06, e sem a expulsão do caso `kick` não existem os 9 em partida
+  // mais 1 na fila da AC 1 de UI-01. Registrar o pulo, como o caso de lotação
+  // já faz, é melhor que reprovar uma corrida que nunca teve o estado.
+  if (MEDE_TOQUE && PEERS !== 10) {
+    console.log(`      (pulando #lobby, #roster e #queue: precisam de PEERS=10, rodando com ${PEERS})`);
+  } else if (MEDE_TOQUE && CASE !== 'all') {
+    console.log(`      (pulando #roster e #queue: a janela de 9 em partida e 1 na fila só existe em CASE=all, rodando "${CASE}")`);
+  }
+
+  if (RODA_LOCK) {
     await click(host, 'btnLock');
     const trancada = await waitFor(() => visible(host, 'lobbyLock'));
     check('multi-peer: a tranca fica visível para o host', trancada);
 
-    const tarde = await openTab(browser, 'Tarde');
-    tabs.push(tarde);
-    await joinRoom(tarde, code, 'sorcerer');
-    const recusado = await waitFor(async () => {
-      const s = await text(tarde, 'menuStatus');
-      return s && /trancada/i.test(s);
-    }, 20000);
-    check('multi-peer: tranca recusa mesmo com vaga', recusado, await text(tarde, 'menuStatus'));
+    // Única janela do roteiro com o estado que a AC 1 de UI-06 descreve.
+    if (MEDE_TOQUE && PEERS === 10 && trancada) await medirLobbyTrancado(host);
+
+    if (CASE === 'lock' || CASE === 'all') {
+      const tarde = await openTab(browser, 'Tarde');
+      tabs.push(tarde);
+      await joinRoom(tarde, code, 'sorcerer');
+      const recusado = await waitFor(async () => {
+        const s = await text(tarde, 'menuStatus');
+        return s && /trancada/i.test(s);
+      }, 20000);
+      check('multi-peer: tranca recusa mesmo com vaga', recusado, await text(tarde, 'menuStatus'));
+    }
     await click(host, 'btnLock');
   }
 
@@ -466,8 +623,8 @@ try {
     new Set(andares).size === 1, andares.join(' | '));
 
   if (MEDE_TOQUE) {
-    // Antes do `kick`: com a sala ainda cheia, há um botão Expulsar por aliado.
-    await medirToqueSala(host);
+    // O #roster é medido mais adiante, na janela do caso `late`; aqui só o
+    // trilho, que depende da partida em curso e não da composição da sala.
     if (PEERS < PEERS_TRILHO) {
       console.log(`      (pulando o trilho de aliados: precisa de PEERS>=${PEERS_TRILHO}, rodando com ${PEERS})`);
     } else {
@@ -536,6 +693,12 @@ try {
       check('multi-peer: a fila informa o andar do grupo e a posição',
         /Andar \d+/.test(andar || '') && /1º/.test(pos || ''), `${andar} · ${pos}`);
       check('multi-peer: quem espera não entra no andar em curso', !(await visible(tarde, 'game')));
+
+      // Antes do btnQueueLeave: 9 em partida e 1 na fila (AC 1 de UI-01).
+      if (MEDE_TOQUE && PEERS === 10) {
+        await medirToqueSala(host);
+        await medirToqueFila(tarde);
+      }
 
       const antes = await text(host, 'crewChip');
       await click(tarde, 'btnQueueLeave');
@@ -617,6 +780,14 @@ try {
     }, 20000);
     check('multi-peer: queda do host avisa quem ficou', avisado, await text(sobrevivente, 'dropTitle'));
   }
+
+  // Toda aba aberta em viewport de toque precisa ter entrado em `pointer:
+  // coarse` (RF-02b) — inclusive as que entram tarde no roteiro (`Extra`,
+  // `Tarde`), que passam pelo mesmo openTab.
+  const erradas = tabs.filter((t) => t.coarse !== !!t.viewport.hasTouch);
+  check(`multi-peer: as ${tabs.length} abas casam com o "pointer: coarse" da sua viewport (VIEW=${VIEW})`,
+    erradas.length === 0,
+    erradas.map((t) => `${t.name} coarse=${t.coarse}`).join(' | '));
 
   // Nenhuma aba pode registrar erro de página ou de console.
   const comErro = tabs.filter((t) => t.errors.length);
