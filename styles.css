@@ -299,7 +299,15 @@ input::placeholder { color: var(--placeholder); }
 /* ============ PAINÉIS ============ */
 .panel {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: min(680px, 94vw); max-height: 86vh; overflow-y: auto;
+  width: min(680px, 94vw); overflow-y: auto;
+  /* Centrado por translate(-50%, -50%): um teto de innerHeight - 24 já entrega os
+     12px de gutter em cima e embaixo (UI-04). O 86vh de antes cortava 48px da
+     mochila em 390x844 e 201px em 360x640. O dvh vem depois como progressive
+     enhancement: é ele que acompanha a barra de URL retrátil do navegador móvel. */
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  /* A rolagem morre no painel; sem isto o gesto no fim da lista encadeia na página (UI-05). */
+  overscroll-behavior: contain;
   background: linear-gradient(180deg, rgba(24, 20, 32, .985), rgba(11, 9, 16, .985));
   border: 1px solid var(--edge); border-radius: 3px; z-index: 20;
   box-shadow: 0 24px 80px rgba(0, 0, 0, .8);
@@ -368,6 +376,12 @@ input::placeholder { color: var(--placeholder); }
 /* ============ TOQUE / TELAS PEQUENAS ============ */
 @media (pointer: coarse) {
   #log { width: 50vw; max-height: 18vh; font-size: 11px; }
+  /* Uma ação por linha no dedo: em 360 as três do #lobby sob flex: 1 empurravam o
+     #btnStart até x = 363,4 e estouravam a viewport (UI-06 AC 1). min-width: 0
+     sozinho resolveria o estouro cortando o rótulo — com ~69px de conteúdo por
+     coluna a palavra MASMORRA não cabe —, e corte de texto reprova a AC 2. */
+  .menu-actions { flex-wrap: wrap; }
+  .menu-actions .btn { flex: 1 1 100%; }
   /* 48x48 em qualquer largura de toque: em 360 sobram 104px úteis entre a zona
      do joystick (244) e o gutter de 12, e 2 x 48 + gap 6 = 102px de barra. */
   .slot { width: 48px; height: 48px; }
