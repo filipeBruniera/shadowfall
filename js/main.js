@@ -681,6 +681,12 @@ let chatEl = null;
 // quem abrisse a conversa no toque ficava preso no campo.
 let chatCloseEl = null;
 function openChat() {
+  // O #btnChat fica no canto inferior direito e o campo no esquerdo, então o
+  // botão continua visível e tocável com a conversa aberta. Sem esta guarda o
+  // segundo toque cairia no `chatEl.value = ''` lá embaixo e apagaria o que a
+  // pessoa já tinha digitado. O caminho de teclado nunca sofreu disso porque o
+  // keydown global (js/main.js:571) retorna cedo quando S.chatting é true.
+  if (S.chatting && chatEl) { chatEl.focus(); return; }
   S.chatting = true;
   if (!chatEl) {
     chatEl = document.createElement('input');

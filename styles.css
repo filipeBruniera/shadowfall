@@ -447,8 +447,18 @@ input::placeholder { color: var(--placeholder); }
      de repor o literal aqui. A regra de max-height: 460px logo abaixo continua
      apagando o log em tela baixa. */
   #log {
-    width: 50vw; max-height: calc(var(--log-linhas) * 1lh); font-size: 11px;
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
+    width: 50vw; max-height: 18vh; font-size: 11px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + env(keyboard-inset-height, 0px) + 52px);
+  }
+  /* O teto em linhas depende da unidade `lh`, que Safari < 16.4 e Firefox < 120
+     não têm. `calc(var(--log-linhas) * 1lh)` contém var(), então parseia sempre e
+     só é rejeitado no valor computado — o que deixa a propriedade `unset`, ou
+     seja `max-height: none`, e NÃO cai na regra base. Nessas engines o log
+     cresceria sem teto sobre a área de jogo, pior que os 18vh que ele substitui.
+     Os 18vh acima são piso de degradação, não a primitiva: onde `lh` existe, o
+     @supports abaixo vence e a altura volta a ser consequência de LOG_MAX_LINES. */
+  @supports (height: 1lh) {
+    #log { max-height: calc(var(--log-linhas) * 1lh); }
   }
   /* Uma ação por linha no dedo: em 360 as três do #lobby sob flex: 1 empurravam o
      #btnStart até x = 363,4 e estouravam a viewport (UI-06 AC 1). min-width: 0
@@ -504,17 +514,28 @@ input::placeholder { color: var(--placeholder); }
      tokens-componentes.md:146 — a emulação do harness reporta env() como 0,
      então o piso de 12px é o que os testes medem e a área segura só aparece em
      aparelho real. */
+  /* env(keyboard-inset-height) some com a faixa por baixo do teclado virtual,
+     que é o que chat-grupo.md §6 pede. Sozinho não basta: o termo só tem valor
+     onde a engine expõe a VirtualKeyboard API, e por isso o meta viewport de
+     index.html ganhou `interactive-widget=resizes-content`, que encolhe a
+     viewport de layout no Chrome/Android e sobe o `bottom` sem CSS nenhum.
+     Nada disso é verificável aqui: emulação não tem teclado virtual e env()
+     resolve 0, então todo caso de toque fica verde de qualquer jeito. Precisa
+     de aparelho de verdade. */
   #chatInput {
     left: 12px; right: calc(126px + 52px); width: auto;
     min-block-size: 44px; box-sizing: border-box;
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + env(keyboard-inset-height, 0px));
   }
   /* Alinhado com a borda esquerda do #actionBar, na mesma linha do campo e com
      a moldura dele. O piso de 44x44 vem da regra .x deste mesmo bloco de toque
      (styles.css:559-562); o z-index acompanha o do campo para o ✕ ficar acima
      do #canvas — sem ele o elementFromPoint do dedo cai no canvas. */
+  /* Mesmo termo de teclado do #chatInput: o ✕ está na mesma linha e tem de subir
+     junto, senão fica soterrado enquanto o campo aparece. */
   #btnChatClose {
-    position: absolute; right: 126px; bottom: max(12px, env(safe-area-inset-bottom));
+    position: absolute; right: 126px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + env(keyboard-inset-height, 0px));
     z-index: 25; display: inline-flex;
     background: rgba(9, 7, 13, .96); border: 1px solid var(--ember);
   }

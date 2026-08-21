@@ -1051,6 +1051,36 @@ async function medirChat(page, ctx) {
       + ` hidden ${rea.campoHidden}, visível ${rea.campoVisivel}, foco "${rea.ativo}" (RF-03 AC 5)`);
   }
 
+  // ---------- 6b. Toque repetido no alvo de abrir não pode apagar o rascunho ----------
+  // O #btnChat mora no canto inferior direito e o campo no esquerdo: o botão
+  // continua visível e tocável com a conversa já aberta. Sem guarda de
+  // reentrância, o segundo toque caía no `chatEl.value = ''` de openChat() e
+  // levava junto o que a pessoa tinha digitado. O caminho de teclado nunca
+  // sofreu disso — o keydown global retorna cedo quando S.chatting é true —,
+  // então isto é regressão exclusiva do caminho de toque.
+  if (rea.existeCampo) {
+    const RASCUNHO = 'mensagem em rascunho';
+    await page.type('#chatInput', RASCUNHO);
+    await page.touchscreen.tap(abrir.ponto.x, abrir.ponto.y);
+    await new Promise((r) => setTimeout(r, 350));
+    const depoisDoSegundoToque = await lerChat(page);
+    if (depoisDoSegundoToque.valor !== RASCUNHO) {
+      errors.push(`CHAT: ${ctx} o segundo toque no alvo de abrir com a conversa já aberta`
+        + ` apagou o rascunho — campo virou "${depoisDoSegundoToque.valor}",`
+        + ` esperado "${RASCUNHO}"`);
+    }
+    if (depoisDoSegundoToque.chatting !== true) {
+      errors.push(`CHAT: ${ctx} o segundo toque no alvo de abrir fechou a conversa em vez`
+        + ' de mantê-la aberta');
+    }
+    if (depoisDoSegundoToque.existeCampo && !depoisDoSegundoToque.campoFocado) {
+      errors.push(`CHAT: ${ctx} o segundo toque no alvo de abrir tirou o foco do campo —`
+        + ` foco em "${depoisDoSegundoToque.ativo}"`);
+    }
+    // Devolve o campo limpo para os casos seguintes não herdarem o rascunho.
+    await page.evaluate(() => { const c = document.getElementById('chatInput'); if (c) c.value = ''; });
+  }
+
   // ---------- 7. UI-02 AC 6: o bloqueio da zona do joystick é temporário ----------
   // touchStart/touchEnd SEPARADOS, obrigatoriamente: endStick está pendurado em
   // pointerup no window (js/main.js:644-649), então um tap() completo devolveria

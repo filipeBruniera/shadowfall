@@ -285,7 +285,7 @@ async function medirToqueFila(tab) {
 // duas viewports na mesma aba não recarrega a página — VIEWPORT_MOBILE e
 // VIEWPORT_SMALL compartilham isMobile/hasTouch —, então a sessão P2P sobrevive.
 const ALVOS_BARRA = 8;      // os 7 de hoje mais o alvo de chat de UI-01
-const BARRA_ALTURA = 212;   // 4 linhas de 48 + 3 gaps de 8, medido no HEAD 2285154
+const BARRA_ALTURA = 212;   // duas grades .slots de 2 linhas (2 x 48 + gap 6) mais o gap de 8 do #actionBar, medido no HEAD 2285154
 async function medirBarraChatSala(tab) {
   for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
     const ctx = `${viewport.width}x${viewport.height}`;
