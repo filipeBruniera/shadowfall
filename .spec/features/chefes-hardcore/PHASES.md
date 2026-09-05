@@ -1,5 +1,7 @@
 # Phases: chefes-hardcore
 
+> **Status: implementado e coberto pelas suítes headless/browser.** As caixas abaixo preservam o plano histórico; o código e os testes são a fonte do estado atual.
+
 Gerado por /plan a partir de PLAN.md — view executável para `./ralph.sh .spec/features/chefes-hardcore/PHASES.md`.
 
 Regras que valem para toda fase: `js/sim.js` continua sem `document`/`window`/`canvas`; nenhum número de tuning fora de `js/balance.js`; comentário, log, UI e rótulo de teste em pt-BR, identificador em inglês; teste sem framework, com `check()` local e `process.exit(failures ? 1 : 0)`; rode `npm test` antes de dar a fase por concluída.
@@ -7,6 +9,7 @@ Regras que valem para toda fase: `js/sim.js` continua sem `document`/`window`/`c
 ## Phase 1: Fundação de números e conteúdo
 
 Antes de implementar, leia:
+
 1. `.spec/features/chefes-hardcore/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/chefes-hardcore/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -34,6 +37,7 @@ Antes de implementar, leia:
 ## Phase 2: Nascimento do chefe em sim.js
 
 Antes de implementar, leia:
+
 1. `.spec/features/chefes-hardcore/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/chefes-hardcore/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -61,6 +65,7 @@ Antes de implementar, leia:
 ## Phase 3: Combate do chefe em sim.js
 
 Antes de implementar, leia:
+
 1. `.spec/features/chefes-hardcore/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/chefes-hardcore/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -95,6 +100,7 @@ Antes de implementar, leia:
 ## Phase 4: Transporte e apresentação
 
 Antes de implementar, leia:
+
 1. `.spec/features/chefes-hardcore/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/chefes-hardcore/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -129,6 +135,7 @@ Antes de implementar, leia:
 ## Phase 5: Suítes de comportamento
 
 Antes de implementar, leia:
+
 1. `.spec/features/chefes-hardcore/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/chefes-hardcore/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -156,6 +163,7 @@ Antes de implementar, leia:
 ## Phase 6: Calibração medida e regressão
 
 Antes de implementar, leia:
+
 1. `.spec/features/chefes-hardcore/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/chefes-hardcore/PLAN.md` — decomposição completa, dependências e riscos
 

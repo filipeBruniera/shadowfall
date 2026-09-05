@@ -1,6 +1,7 @@
 # SPEC: chefes-hardcore
 
 ## Metadata
+
 - Source: developer description via /plan
 - Service: shadowfall (repositório único, front-end sem build)
 - Tier: standard
@@ -9,15 +10,15 @@
 
 ### Regras de camada que esta SPEC obedece
 
-| Regra | Fonte | Efeito nesta feature |
-|---|---|---|
-| Todo número de tuning vive em `js/balance.js`; nenhum literal numérico solto na lógica | `AGENTS.md:38`, `AGENTS.md:57` | RF-05 e RF-06: a curva de dificuldade do chefe e os fatores HARDCORE nascem exportados de `js/balance.js` |
-| `js/sim.js` é estado puro, zero DOM | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` (tabela de camadas) | RNF-02: telegrafia e HARDCORE são estado + evento em `sim.js`; o desenho fica em `render.js`/`ui.js` |
-| Apresentação não muta estado de simulação; composição (`main.js`) não contém regra de jogo | `docs/agents/architecture.md` (tabela de camadas) | UI-01/UI-02/UI-03 consomem snapshot e eventos; não decidem se o chefe é HARDCORE |
-| `groupScale` é aplicada em três pontos e a fórmula não é repetida em outro arquivo | `docs/agents/domain_rules.md` (Escala por tamanho de grupo), `js/balance.js:49-54` | RF-06: o fator HARDCORE compõe com `groupScale`, sem duplicar a curva |
-| Chefe = `BOSSES[(floor - 1) % 4]` no `bossRoom`, nível `floor + 3` | `docs/agents/domain_rules.md` (Chefe por andar), `js/sim.js:100-104` | RF-03 preserva a identidade do chefe por andar e só acrescenta a variante HARDCORE |
-| Campo opcional só entra no pacote quando tem valor; eventos com `boss` são críticos e escapam do teto de 120 | `docs/agents/api_contracts.md` (formato do snapshot e controle de descarte), `js/net.js:227-233`, `js/net.js:327-331` | CT-01, CT-02 e CT-03 |
-| Idioma: pt-BR em comentário, log e UI; identificadores em inglês | `AGENTS.md:45`, `AGENTS.md:51` | Rótulos e mensagens desta feature em pt-BR |
+| Regra                                                                                                        | Fonte                                                                                                                 | Efeito nesta feature                                                                                      |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Todo número de tuning vive em `js/balance.js`; nenhum literal numérico solto na lógica                       | `AGENTS.md:38`, `AGENTS.md:57`                                                                                        | RF-05 e RF-06: a curva de dificuldade do chefe e os fatores HARDCORE nascem exportados de `js/balance.js` |
+| `js/sim.js` é estado puro, zero DOM                                                                          | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` (tabela de camadas)                                     | RNF-02: telegrafia e HARDCORE são estado + evento em `sim.js`; o desenho fica em `render.js`/`ui.js`      |
+| Apresentação não muta estado de simulação; composição (`main.js`) não contém regra de jogo                   | `docs/agents/architecture.md` (tabela de camadas)                                                                     | UI-01/UI-02/UI-03 consomem snapshot e eventos; não decidem se o chefe é HARDCORE                          |
+| `groupScale` é aplicada em três pontos e a fórmula não é repetida em outro arquivo                           | `docs/agents/domain_rules.md` (Escala por tamanho de grupo), `js/balance.js:49-54`                                    | RF-06: o fator HARDCORE compõe com `groupScale`, sem duplicar a curva                                     |
+| Chefe = `BOSSES[(floor - 1) % 4]` no `bossRoom`, nível `floor + 3`                                           | `docs/agents/domain_rules.md` (Chefe por andar), `js/sim.js:100-104`                                                  | RF-03 preserva a identidade do chefe por andar e só acrescenta a variante HARDCORE                        |
+| Campo opcional só entra no pacote quando tem valor; eventos com `boss` são críticos e escapam do teto de 120 | `docs/agents/api_contracts.md` (formato do snapshot e controle de descarte), `js/net.js:227-233`, `js/net.js:327-331` | CT-01, CT-02 e CT-03                                                                                      |
+| Idioma: pt-BR em comentário, log e UI; identificadores em inglês                                             | `AGENTS.md:45`, `AGENTS.md:51`                                                                                        | Rótulos e mensagens desta feature em pt-BR                                                                |
 
 ## Context
 
@@ -74,6 +75,7 @@ flowchart LR
 `js/balance.js` passa a ser a única fonte da dificuldade do chefe por andar e dos fatores HARDCORE (RF-05, RF-06), e `populate()` marca a variante por `floor % 3 === 0` (RF-03, RF-04) emitindo o evento de spawn que uma futura camada de áudio vai assinar (RF-08, CT-03). O ramo `ai === 'boss'` deixa de sortear um pool único: cada chefe usa o kit declarado em `js/data.js` (RF-01) e aplica o status do próprio elemento no acerto (RF-02), com uma fase de telegrafia nova que precede qualquer dano (RF-07, RF-09, CT-02). Na apresentação, o campo opcional `hc` do snapshot (CT-01, RNF-03) alimenta a marca textual na barra do chefe (UI-02), o aviso de andar no log (UI-01) e o anel de carga que passa a ler a duração real da janela (UI-03).
 
 ## Scope
+
 - **In**: kit de ataques por chefe; status por elemento do chefe, incluindo o status novo `wither` para `E.DEATH` (RF-10); variante HARDCORE em `floor % 3 === 0`; curva única de dificuldade de chefe por andar exportada de `js/balance.js`; composição com `groupScale`; calibração dos fatores HARDCORE pela razão de duração de luta (RF-11) e o ajuste da janela de tempo de `tests/party10.test.mjs:66-74` que essa calibração exigir; telegrafia do ataque perigoso; sinalização do HARDCORE no snapshot, no log e no HUD; evento de simulação de spawn HARDCORE.
 - **Out**: transmissão de status de jogador no snapshot — hoje a entrada do jogador só carrega `b: p.buffs.length ? 1 : 0` (`js/net.js:202`) e nenhum status de jogador trafega na rede; tornar `wither` visível ao convidado como ícone no próprio HUD seria trabalho novo de rede sobre uma **lacuna preexistente, não criada por esta feature**, e fica explicitamente fora do escopo desta SPEC. O feedback de `wither` permanece como hoje é para os demais status: número de dano e FX; áudio e música do chefe HARDCORE (decisão do desenvolvedor; o projeto não tem subsistema de áudio — verificado: nenhuma ocorrência de `Audio`, `sound` ou `música` em `js/`; será um `/plan` separado. Esta SPEC só entrega o evento de simulação CT-03 ao qual essa camada futura vai se inscrever); novos chefes além dos 4 existentes; mudança na regra do portal (`docs/agents/domain_rules.md`, Portal coletivo); mudança no schema de save (chefe não é persistido, `.spec/init/database-schema.md:388`); rebalanceamento de monstros comuns; mudança no cálculo de loot ou XP do chefe (`js/sim.js:687-693`).
 
@@ -154,32 +156,32 @@ flowchart LR
 
 ## Acceptance Criteria Summary
 
-| ID | Criterion | Testable? |
-|----|-----------|-----------|
-| RF-01 | Interseção de identificadores de ataque especial vazia entre todo par de chefes; ≥ 3 especiais próprios por chefe | Sim — `tests/sim.test.mjs`, varredura de `BOSSES` |
-| RF-02 | Status do elemento do chefe > 0 no jogador após o acerto, para os 4 chefes (`E.DEATH` → `wither`) | Sim — `tests/sim.test.mjs`, um caso por chefe |
-| RF-10 | `wither` causa dano por tick e reduz a cura recebida; cura com `wither` < cura sem `wither` | Sim — comparação direta no mesmo teste |
-| RF-03 | Flag HARDCORE verdadeira em 3/6/9/12 e falsa em 1/2/4/5/7/8/10/11, com `typeId` preservado | Sim — determinístico por `floor` |
-| RF-04 | `maxHp` e `atk` estritamente maiores no HARDCORE, mesma `floor` e `groupSize`; ≥ 1 mecânica exclusiva | Sim — comparação binária determinística |
-| RF-11 | Razão `t_hc / t_comum` entre 1,8 e 2,4 em simulação headless, para os 4 chefes; multiplicadores derivados dessa medição | Sim — medição headless com seed fixa |
-| RF-05 | Zero literal numérico de dificuldade de chefe em `js/sim.js`; curva monotônica em `floor` 1..30 | Sim — importa a função de `js/balance.js` |
-| RF-06 | `maxHp` = curva × `groupScale` × fator HARDCORE; `tests/group.test.mjs:250-254` segue verde | Sim |
-| RF-07 | HP intocado e sem projétil durante a janela; janela > 0,5 s; 1 evento CT-02 por ataque | Sim — avanço de ticks |
-| RF-08 | 1 evento de spawn por andar HARDCORE, 0 nos demais; sobrevive a `drainEvents` com fila saturada | Sim |
-| RF-09 | Chefe morto, atordoado ou congelado na janela não resolve o ataque | Sim |
-| UI-01 | Linha de log com `HARDCORE` antes do primeiro dano do chefe, em andar múltiplo de 3 | Sim — inspeção da fila de eventos |
-| UI-02 | `#bossName` contém `HARDCORE`; distinção não depende só de cor | Sim — `tests/browser.mjs` |
-| UI-03 | Progresso do anel = `1 - restante / duracaoTotal`, erro ≤ 0,02; divisor fixo 0.5 removido | Sim |
-| RNF-01 | Tick médio < 4 ms com 10 jogadores e população máxima em andar HARDCORE | Sim — `tests/party10.test.mjs`, `tests/net.test.mjs` |
-| RNF-02 | Nenhum DOM em `js/sim.js`; `node tests/sim.test.mjs` verde | Sim |
-| RNF-03 | ≤ 8 bytes por chefe HARDCORE no pacote; 0 byte fora de andar HARDCORE | Sim — `tests/net.test.mjs:187-190` |
-| RNF-04 | ≥ 1 asserção `check()` por RF e por UI, em pt-BR | Sim — contagem nas suítes |
+| ID     | Criterion                                                                                                               | Testable?                                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| RF-01  | Interseção de identificadores de ataque especial vazia entre todo par de chefes; ≥ 3 especiais próprios por chefe       | Sim — `tests/sim.test.mjs`, varredura de `BOSSES`    |
+| RF-02  | Status do elemento do chefe > 0 no jogador após o acerto, para os 4 chefes (`E.DEATH` → `wither`)                       | Sim — `tests/sim.test.mjs`, um caso por chefe        |
+| RF-10  | `wither` causa dano por tick e reduz a cura recebida; cura com `wither` < cura sem `wither`                             | Sim — comparação direta no mesmo teste               |
+| RF-03  | Flag HARDCORE verdadeira em 3/6/9/12 e falsa em 1/2/4/5/7/8/10/11, com `typeId` preservado                              | Sim — determinístico por `floor`                     |
+| RF-04  | `maxHp` e `atk` estritamente maiores no HARDCORE, mesma `floor` e `groupSize`; ≥ 1 mecânica exclusiva                   | Sim — comparação binária determinística              |
+| RF-11  | Razão `t_hc / t_comum` entre 1,8 e 2,4 em simulação headless, para os 4 chefes; multiplicadores derivados dessa medição | Sim — medição headless com seed fixa                 |
+| RF-05  | Zero literal numérico de dificuldade de chefe em `js/sim.js`; curva monotônica em `floor` 1..30                         | Sim — importa a função de `js/balance.js`            |
+| RF-06  | `maxHp` = curva × `groupScale` × fator HARDCORE; `tests/group.test.mjs:250-254` segue verde                             | Sim                                                  |
+| RF-07  | HP intocado e sem projétil durante a janela; janela > 0,5 s; 1 evento CT-02 por ataque                                  | Sim — avanço de ticks                                |
+| RF-08  | 1 evento de spawn por andar HARDCORE, 0 nos demais; sobrevive a `drainEvents` com fila saturada                         | Sim                                                  |
+| RF-09  | Chefe morto, atordoado ou congelado na janela não resolve o ataque                                                      | Sim                                                  |
+| UI-01  | Linha de log com `HARDCORE` antes do primeiro dano do chefe, em andar múltiplo de 3                                     | Sim — inspeção da fila de eventos                    |
+| UI-02  | `#bossName` contém `HARDCORE`; distinção não depende só de cor                                                          | Sim — `tests/browser.mjs`                            |
+| UI-03  | Progresso do anel = `1 - restante / duracaoTotal`, erro ≤ 0,02; divisor fixo 0.5 removido                               | Sim                                                  |
+| RNF-01 | Tick médio < 4 ms com 10 jogadores e população máxima em andar HARDCORE                                                 | Sim — `tests/party10.test.mjs`, `tests/net.test.mjs` |
+| RNF-02 | Nenhum DOM em `js/sim.js`; `node tests/sim.test.mjs` verde                                                              | Sim                                                  |
+| RNF-03 | ≤ 8 bytes por chefe HARDCORE no pacote; 0 byte fora de andar HARDCORE                                                   | Sim — `tests/net.test.mjs:187-190`                   |
+| RNF-04 | ≥ 1 asserção `check()` por RF e por UI, em pt-BR                                                                        | Sim — contagem nas suítes                            |
 
 ## Open Questions
 
 Nenhuma pendente. As duas ambiguidades foram resolvidas pelo desenvolvedor na versão 1.1.
 
-| ID | Bloqueava | Resolução |
-|----|-----------|-----------|
-| M-01 | RF-02 | **Resolvido:** status novo `wither` para `E.DEATH` (dano por tempo + redução da cura recebida), formalizado em RF-10. `poison` não é reusado — permanece assinatura de `E.EARTH`. A premissa de quebra de contrato de rede registrada no marcador original estava **errada** e foi corrigida: o array de 4 posições de `js/net.js:238-239`/`js/net.js:291-293` é status de monstro; status de jogador não trafega no snapshot. Visibilidade de `wither` no HUD do convidado ficou fora de escopo (ver Scope/Out). |
-| M-02 | RF-04 | **Resolvido:** o degrau deixa de ser multiplicador arbitrário e passa a ser razão de duração de luta ≈ 2x (banda 1,8–2,4), formalizada em RF-11. `HARDCORE_HP_MULT` e `HARDCORE_ATK_MULT` seguem exportados de `js/balance.js`, agora derivados da medição. Ajustar a janela de 300 s de `tests/party10.test.mjs:66-74` entra no escopo. |
+| ID   | Bloqueava | Resolução                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M-01 | RF-02     | **Resolvido:** status novo `wither` para `E.DEATH` (dano por tempo + redução da cura recebida), formalizado em RF-10. `poison` não é reusado — permanece assinatura de `E.EARTH`. A premissa de quebra de contrato de rede registrada no marcador original estava **errada** e foi corrigida: o array de 4 posições de `js/net.js:238-239`/`js/net.js:291-293` é status de monstro; status de jogador não trafega no snapshot. Visibilidade de `wither` no HUD do convidado ficou fora de escopo (ver Scope/Out). |
+| M-02 | RF-04     | **Resolvido:** o degrau deixa de ser multiplicador arbitrário e passa a ser razão de duração de luta ≈ 2x (banda 1,8–2,4), formalizada em RF-11. `HARDCORE_HP_MULT` e `HARDCORE_ATK_MULT` seguem exportados de `js/balance.js`, agora derivados da medição. Ajustar a janela de 300 s de `tests/party10.test.mjs:66-74` entra no escopo.                                                                                                                                                                          |
