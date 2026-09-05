@@ -4,25 +4,25 @@
 
 ## Sections
 
-| # | Seção |
-|---|---|
-| 1 | [Build, Lint, Test and Coverage](#1-build-lint-test-and-coverage) |
-| 2 | [Code Style & Project Conventions](#2-code-style--project-conventions) |
-| 3 | [Agent Communication & Behavioral Guidelines](#3-agent-communication--behavioral-guidelines) |
-| 4 | [Setup, Troubleshooting and Tips](#4-setup-troubleshooting-and-tips) |
-| 5 | [References](#5-references) |
-| 6 | [Agent Documentation](#6-agent-documentation) |
+| #   | Seção                                                                                        |
+| --- | -------------------------------------------------------------------------------------------- |
+| 1   | [Build, Lint, Test and Coverage](#1-build-lint-test-and-coverage)                            |
+| 2   | [Code Style & Project Conventions](#2-code-style--project-conventions)                       |
+| 3   | [Agent Communication & Behavioral Guidelines](#3-agent-communication--behavioral-guidelines) |
+| 4   | [Setup, Troubleshooting and Tips](#4-setup-troubleshooting-and-tips)                         |
+| 5   | [References](#5-references)                                                                  |
+| 6   | [Agent Documentation](#6-agent-documentation)                                                |
 
 ## 1. Build, Lint, Test and Coverage
 
-| Comando | Objetivo |
-|---|---|
-| `npm run dev` | Servidor estático local: `npx --yes serve -l 5173 .` |
-| `npm test` | 10 suítes headless em Node, encadeadas com `&&`: `node tests/sim.test.mjs && node tests/save.test.mjs && node tests/net.test.mjs && node tests/room.test.mjs && node tests/session.test.mjs && node tests/validate.test.mjs && node tests/group.test.mjs && node tests/hud.test.mjs && node tests/chat.test.mjs && node tests/party10.test.mjs` |
-| `npm run test:browser` | Smoke test em Chromium via Puppeteer: `node tests/browser.mjs` |
-| `npm run test:multipeer` | Harness P2P real com N abas: `PEERS=10 CASE=all node tests/multipeer.mjs` |
-| `npm run test:multipeer:quick` | Versão curta: `PEERS=2 node tests/multipeer.mjs` |
-| `vercel --prod` | Deploy manual (README.md:36-37); push em `main` já dispara auto-deploy |
+| Comando                        | Objetivo                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                  | Servidor estático local: `npx --yes serve -l 5173 .`                                                                                                                                                                                                                                                                                            |
+| `npm test`                     | 10 suítes headless em Node, encadeadas com `&&`: `node tests/sim.test.mjs && node tests/save.test.mjs && node tests/net.test.mjs && node tests/room.test.mjs && node tests/session.test.mjs && node tests/validate.test.mjs && node tests/group.test.mjs && node tests/hud.test.mjs && node tests/chat.test.mjs && node tests/party10.test.mjs` |
+| `npm run test:browser`         | Smoke test em Chromium via Puppeteer: `node tests/browser.mjs`                                                                                                                                                                                                                                                                                  |
+| `npm run test:multipeer`       | Harness P2P real com N abas: `PEERS=10 CASE=all node tests/multipeer.mjs`                                                                                                                                                                                                                                                                       |
+| `npm run test:multipeer:quick` | Versão curta: `PEERS=2 node tests/multipeer.mjs`                                                                                                                                                                                                                                                                                                |
+| `vercel --prod`                | Deploy manual (README.md:36-37); push em `main` já dispara auto-deploy                                                                                                                                                                                                                                                                          |
 
 - Suíte única: rode o arquivo direto, ex. `node tests/sim.test.mjs`.
 - Build: inexistente. `vercel.json` define `"framework": null`, `buildCommand` `echo 'sem build'`, `installCommand` `echo 'sem dependencias de runtime'`, `outputDirectory` `"."`.
@@ -57,7 +57,7 @@
 - Nunca escrever número de tuning fora de `js/balance.js`.
 - Nunca aceitar save de guest sem passar por `js/validate.js` (clamp coberto por `tests/validate.test.mjs`).
 - Nunca serializar o mapa em mensagem de rede — ambos os lados geram por `seed`+`floor` (`js/world.js`).
-- Nunca adicionar dependência de runtime no npm: `package.json` não tem chave `"dependencies"` e `.vercelignore` remove `node_modules` e `package.json` do deploy; PeerJS 1.5.4 vem de CDN (`index.html:228`).
+- Nunca adicionar dependência de runtime no npm: `package.json` não tem chave `"dependencies"`; `web-vitals` fica em `devDependencies` para validação local, mas o navegador o carrega pelo import map CDN. PeerJS 1.5.4 também vem de CDN.
 - Nunca introduzir passo de build: `vercel.json` tem `"framework": null` e `buildCommand` `echo 'sem build'`.
 
 ## 4. Setup, Troubleshooting and Tips
@@ -72,40 +72,54 @@ npm test
 
 Variáveis lidas pelos harnesses (não existem `.env` nem `.env.example` no repo):
 
-| Harness | Env | Detalhe |
-|---|---|---|
-| `tests/browser.mjs` | `URL`, `CHROME`, `OUT` | Não sobe servidor; aponte `URL` para uma instância já rodando |
+| Harness               | Env                                                 | Detalhe                                                                                               |
+| --------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `tests/browser.mjs`   | `URL`, `CHROME`, `OUT`                              | Não sobe servidor; aponte `URL` para uma instância já rodando                                         |
 | `tests/multipeer.mjs` | `PORT`, `PEERS`, `CASE`, `CHROME`, `BASE`, `HEADED` | Sobe servidor `node:http` próprio; `CASE` = `basic\|full\|lock\|kick\|late\|drop\|measure\|shot\|all` |
 
-| Sintoma | Verificação |
-|---|---|
-| `npm run test:browser` falha ao conectar | `browser.mjs` não inicia servidor: rode `npm run dev` e exporte `URL=http://localhost:5173` |
-| Chromium não encontrado | Exporte `CHROME` com o caminho do binário (lido por `browser.mjs` e `multipeer.mjs`) |
-| Instalação do Puppeteer falha | Node abaixo de 22.12.0; atualize o runtime |
-| Jogo abre mas não conecta P2P | PeerJS 1.5.4 vem de CDN em `index.html:228`; sem rede não há sinalização |
-| Progresso estranho ou save quebrado | Limpe as chaves `sf-save-${voc}` e `sf-name` no `localStorage`; migrações v1->v2->v3 ficam em `js/save.js` |
-| Precisa inspecionar estado em runtime | `window.__SF` e `window.__VIEW_GET` sempre existem (`js/main.js:1051-1053`); `window.__sf.stats()` só com `?debug=1` (`js/main.js:1013-1035`) |
+| Sintoma                                  | Verificação                                                                                                                                   |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:browser` falha ao conectar | `browser.mjs` não inicia servidor: rode `npm run dev` e exporte `URL=http://localhost:5173`                                                   |
+| Chromium não encontrado                  | Exporte `CHROME` com o caminho do binário (lido por `browser.mjs` e `multipeer.mjs`)                                                          |
+| Instalação do Puppeteer falha            | Node abaixo de 22.12.0; atualize o runtime                                                                                                    |
+| Jogo abre mas não conecta P2P            | PeerJS 1.5.4 vem de CDN em `index.html:228`; sem rede não há sinalização                                                                      |
+| Progresso estranho ou save quebrado      | Limpe as chaves `sf-save-${voc}` e `sf-name` no `localStorage`; migrações v1->v2->v3 ficam em `js/save.js`                                    |
+| Precisa inspecionar estado em runtime    | `window.__SF` e `window.__VIEW_GET` sempre existem (`js/main.js:1051-1053`); `window.__sf.stats()` só com `?debug=1` (`js/main.js:1013-1035`) |
 
 ## 5. References
 
-| Doc | Objetivo |
-|---|---|
-| [README.md](README.md) | 181 linhas em pt-BR: como rodar, deploy, arquitetura, rede e testes |
-| [vercel.json](vercel.json) | Contrato de hosting: sem framework, sem build, `outputDirectory` `"."` |
+| Doc                            | Objetivo                                                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| [README.md](README.md)         | 181 linhas em pt-BR: como rodar, deploy, arquitetura, rede e testes                                   |
+| [vercel.json](vercel.json)     | Contrato de hosting: sem framework, sem build, `outputDirectory` `"."`                                |
 | [.vercelignore](.vercelignore) | O que fica fora do deploy (`node_modules`, `package-lock.json`, `tests`, `README.md`, `package.json`) |
-| [package.json](package.json) | Scripts canônicos e única devDependency |
+| [package.json](package.json)   | Scripts canônicos e única devDependency                                                               |
 
 ## 6. Agent Documentation
 
-| File | Content |
-|---|---|
-| docs/agents/coding_guidelines.md | Estilo ESM, pt-BR/inglês, regra de `balance.js`, padrão do `check()` nos testes |
-| docs/agents/architecture.md | Camadas `sim`/`net`/`render`/`ui`/`main`, host autoritativo, geração de mapa por seed |
-| docs/agents/testing.md | 10 suítes headless, harness Puppeteer, `CASE` do multipeer, convenção de exit code |
-| docs/agents/tooling.md | npm scripts, `serve` no dev, Vercel sem build, Puppeteer e Node >= 22.12.0 |
-| docs/agents/data_model.md | Tabelas de conteúdo em `data.js`, schema de save v3 e migrações, chaves de `localStorage` |
-| docs/agents/api_surface.md | Protocolo de mensagens P2P (`main.js:384-527`, `net.js:184-300`); não há HTTP API |
-| docs/agents/security.md | Save do guest como entrada hostil, `validate.js`, antiflood de chat, limites de sala |
-| docs/agents/troubleshooting.md | Falhas de harness, Chromium ausente, CDN do PeerJS, reset de save, hooks de debug |
+| File                             | Content                                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| docs/agents/coding_guidelines.md | Estilo ESM, pt-BR/inglês, regra de `balance.js`, padrão do `check()` nos testes           |
+| docs/agents/architecture.md      | Camadas `sim`/`net`/`render`/`ui`/`main`, host autoritativo, geração de mapa por seed     |
+| docs/agents/testing.md           | 10 suítes headless, harness Puppeteer, `CASE` do multipeer, convenção de exit code        |
+| docs/agents/tooling.md           | npm scripts, `serve` no dev, Vercel sem build, Puppeteer e Node >= 22.12.0                |
+| docs/agents/data_model.md        | Tabelas de conteúdo em `data.js`, schema de save v3 e migrações, chaves de `localStorage` |
+| docs/agents/api_surface.md       | Protocolo de mensagens P2P (`main.js:384-527`, `net.js:184-300`); não há HTTP API         |
+| docs/agents/security.md          | Save do guest como entrada hostil, `validate.js`, antiflood de chat, limites de sala      |
+| docs/agents/troubleshooting.md   | Falhas de harness, Chromium ausente, CDN do PeerJS, reset de save, hooks de debug         |
 
 _End of AGENTS.md_
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

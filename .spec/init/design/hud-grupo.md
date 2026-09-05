@@ -51,6 +51,7 @@ O problema real de "3 mais próximos": dois aliados oscilando em torno da mesma 
 as placas trocarem a cada quadro.
 
 Regras obrigatórias:
+
 - **Histerese de 1,5 tile.** Um aliado fora do trilho só entra se ficar 1,5 tile mais perto que
   o terceiro colocado. Um que está dentro só sai quando alguém cumpre essa margem.
 - **Reordenação com atraso mínimo de 0,5s.** A distância é reavaliada continuamente, mas a
@@ -73,20 +74,20 @@ erguê-lo).
 
 - Entra num **quarto lugar** no trilho, abaixo dos 3 — não desloca ninguém.
 - Com mais de um caído, o trilho aceita até 2 extras; acima disso vira uma linha:
-  *"3 aliados caídos"*, e o minimapa marca cada um.
+  _"3 aliados caídos"_, e o minimapa marca cada um.
 - O estado é comunicado por **borda `--blood` e pelo texto `caído`** — nunca só por cor.
 
 ## 4. Minimapa
 
 O `#minimap` (164px) passa a marcar aliados:
 
-| Marca | Aparência |
-|---|---|
-| Jogador local | Ponto `--bone`, 3px |
-| Aliado no trilho | Ponto na cor da vocação, 2,5px |
+| Marca                 | Aparência                                    |
+| --------------------- | -------------------------------------------- |
+| Jogador local         | Ponto `--bone`, 3px                          |
+| Aliado no trilho      | Ponto na cor da vocação, 2,5px               |
 | Aliado fora do trilho | Ponto na cor da vocação, 2px, opacidade `.7` |
-| Aliado caído | Anel `--blood`, 4px, pulsando 1×/s |
-| Portal aberto | Losango `--ember` |
+| Aliado caído          | Anel `--blood`, 4px, pulsando 1×/s           |
+| Portal aberto         | Losango `--ember`                            |
 
 Com 9 aliados, o minimapa continua legível porque os pontos são pequenos e o mapa é 72×72 —
 nenhum agrupamento é necessário.
@@ -114,12 +115,12 @@ topo. Espaço vazio reservado para um grupo que não existe é o erro a evitar.
 
 ## 8. Contagem de aliados — os quatro casos
 
-| Aliados | Trilho | Linha de excedente | Minimapa |
-|---|---|---|---|
-| 0 | não desenhado | não desenhada | só o jogador |
-| 1 | 1 placa | não desenhada | 1 ponto |
-| 3 | 3 placas | não desenhada | 3 pontos |
-| 9 | 3 placas | `+6 no minimapa` | 9 pontos |
+| Aliados | Trilho        | Linha de excedente | Minimapa     |
+| ------- | ------------- | ------------------ | ------------ |
+| 0       | não desenhado | não desenhada      | só o jogador |
+| 1       | 1 placa       | não desenhada      | 1 ponto      |
+| 3       | 3 placas      | não desenhada      | 3 pontos     |
+| 9       | 3 placas      | `+6 no minimapa`   | 9 pontos     |
 
 ## 9. Layout mobile
 
@@ -127,12 +128,12 @@ Detalhado em `hud-grupo-mobile.md`.
 
 ## 10. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** | Sem aliados: trilho inteiro ausente, sem placeholder |
+| Estado         | Tratamento                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| **Vazio**      | Sem aliados: trilho inteiro ausente, sem placeholder                                                  |
 | **Carregando** | Aliado recém-inserido entra com barras zeradas até o primeiro snapshot; sem esqueleto de carregamento |
-| **Erro** | Aliado que desconecta some do trilho na hora; `#log .warn` registra a saída |
-| **Cheio** | 9 aliados: 3 placas + linha de excedente; o trilho nunca passa de 3 (+2 caídos) |
+| **Erro**       | Aliado que desconecta some do trilho na hora; `#log .warn` registra a saída                           |
+| **Cheio**      | 9 aliados: 3 placas + linha de excedente; o trilho nunca passa de 3 (+2 caídos)                       |
 
 ## 11. Aponta para
 

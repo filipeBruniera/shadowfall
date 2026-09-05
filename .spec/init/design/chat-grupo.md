@@ -33,9 +33,9 @@ com máscara de desvanecimento. A estrutura fica; muda a densidade e a distinç�
 
 Com 10 pessoas, os dois tipos de linha precisam ser separáveis num relance:
 
-| Tipo | Tratamento |
-|---|---|
-| **Mensagem de jogador** (`.chat`) | Nome em `--verdigris` 700 seguido de `:`; texto em `#ffd9a8`. Recuo à esquerda de `0` |
+| Tipo                                                                                      | Tratamento                                                                               |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Mensagem de jogador** (`.chat`)                                                         | Nome em `--verdigris` 700 seguido de `:`; texto em `#ffd9a8`. Recuo à esquerda de `0`    |
 | **Evento de sistema** (`.system`, `.loot`, `.level`, `.heal`, `.boss`, `.death`, `.warn`) | Sem nome; recuo à esquerda de `8px` e opacidade `.9`. Cores já definidas em `styles.css` |
 
 O recuo é o sinal barato que separa os dois grupos sem inventar cor nova.
@@ -50,9 +50,10 @@ O recuo é o sinal barato que separa os dois grupos sem inventar cor nova.
 ## 4. Antiflood
 
 Com 10 pessoas, uma sozinha pode encher o log:
+
 - Máximo **3 mensagens por 5 segundos** por jogador, aplicado **no host**, que é a autoridade.
 - A quarta é descartada em silêncio para os outros; quem enviou vê em `#log .warn`:
-  *"Espera um pouco antes de mandar de novo."*
+  _"Espera um pouco antes de mandar de novo."_
 - O limite não vale para eventos de sistema.
 
 ## 5. Estado de foco
@@ -60,6 +61,7 @@ Com 10 pessoas, uma sozinha pode encher o log:
 `Enter` abre o `#chatInput`; `Enter` de novo envia; `Esc` fecha sem enviar.
 
 Com o chat aberto:
+
 - **Nenhuma tecla de jogo dispara** — nem WASD, nem 1–4, nem Q/E, nem Tab.
 - O joystick e os botões de toque continuam funcionando: no celular, escrever não pode significar
   parar de se mover.
@@ -101,7 +103,7 @@ Com o chat aberto:
   funcionando**: enviar mensagem é possível mesmo sem ver o histórico.
 - Botão de abrir chat no celular: um alvo de `44×44px` no `#actionBar`, **ao lado do botão de
   mochila**, na célula livre de 48x48 do grid `.slots.potions` — as poções, a mochila e o chat
-  fecham 2x2 e o `#actionBar` continua em 102x212. Pendurá-lo *abaixo* da mochila, como esta seção
+  fecham 2x2 e o `#actionBar` continua em 102x212. Pendurá-lo _abaixo_ da mochila, como esta seção
   pedia, abriria uma quinta célula e esticaria a barra, comendo altura que a faixa do `#chatInput`
   já reserva.
 - Fechar no dedo: um alvo de `44×44px` ao lado do campo, na mesma linha e rente à borda de baixo —
@@ -109,12 +111,12 @@ Com o chat aberto:
 
 ## 7. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** | Log sem nenhuma linha: nada é desenhado, sem placeholder. O log nasce com a linha de sistema de entrada no andar |
-| **Carregando** | Não se aplica — a mensagem aparece quando o host confirma; sem estado intermediário de "enviando" |
-| **Erro** | Mensagem não entregue (conexão caiu): `#log .warn` — *"Mensagem não enviada."*; o texto volta para o campo |
-| **Cheio** | Log no teto de 40 linhas: as antigas somem sem aviso. Antiflood ativo: `#log .warn` para quem estourou |
+| Estado         | Tratamento                                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Vazio**      | Log sem nenhuma linha: nada é desenhado, sem placeholder. O log nasce com a linha de sistema de entrada no andar |
+| **Carregando** | Não se aplica — a mensagem aparece quando o host confirma; sem estado intermediário de "enviando"                |
+| **Erro**       | Mensagem não entregue (conexão caiu): `#log .warn` — _"Mensagem não enviada."_; o texto volta para o campo       |
+| **Cheio**      | Log no teto de 40 linhas: as antigas somem sem aviso. Antiflood ativo: `#log .warn` para quem estourou           |
 
 ## 8. Regras
 

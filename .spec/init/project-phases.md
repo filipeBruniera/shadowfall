@@ -27,6 +27,7 @@ validado: as histórias em `user-stories.md` seguem todas `Pending` de propósit
 é o portão de validação de tudo, inclusive do que já está marcado `[x]`.
 
 **Conventions:**
+
 - `[ ]` pendente · `[x]` feito no código.
 - Fases e sub-fases são numeradas (`Phase 1`, `Phase 5.3`) para referência por agentes de IA.
 - Tarefas de regra de negócio listam os testes automatizados a gerar; tarefas só de tela listam condições validáveis e a referência de design.

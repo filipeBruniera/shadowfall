@@ -8,16 +8,16 @@
 
 Persistência é exclusivamente `localStorage` do navegador. Não existe banco, migração SQL nem ORM: sem diretório `migrations/`, sem arquivo `.sql`, sem driver de banco em `package.json` (que não tem chave `dependencies`), e `README.md:4` declara "Sem servidor, sem banco, sem conta".
 
-| Item | Valor | Fonte |
-|---|---|---|
-| Engine | `window.localStorage`, acessado por um único ponto (`store()`) | `js/save.js:42-45` |
-| Chave de personagem | `saveKey(voc) = 'sf-save-' + voc` — uma por vocação, 4 no máximo | `js/save.js:37` |
-| Chave de nome | `NAME_KEY = 'sf-name'` | `js/save.js:27` |
-| Serialização | `JSON.stringify` / `JSON.parse` | `js/save.js:295`, `js/save.js:275` |
-| Versão do formato | `SAVE_VERSION = 3` | `js/save.js:9` |
-| Ferramenta de migração | Funções no próprio módulo: `migrateV1`, `migrateV2` | `js/save.js:180-198` |
-| Storage injetável | `setStorage(s)` / `memoryStorage(initial)` para teste e para navegador que bloqueia storage | `js/save.js:39-47`, `js/save.js:311-319` |
-| Falha de escrita | Cota cheia ou modo privado: avisa uma vez por motivo, a partida segue | `js/save.js:294-302`, `js/save.js:49-62` |
+| Item                   | Valor                                                                                       | Fonte                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Engine                 | `window.localStorage`, acessado por um único ponto (`store()`)                              | `js/save.js:63-70`                         |
+| Chave de personagem    | `saveKey(voc) = 'sf-save-' + voc` — uma por vocação, 4 no máximo                            | `js/save.js:44-46`                         |
+| Chave de nome          | `NAME_KEY = 'sf-name'`                                                                      | `js/save.js:40-42`                         |
+| Serialização           | `JSON.stringify` / `JSON.parse`                                                             | `js/save.js:479-484`, `js/save.js:500-524` |
+| Versão do formato      | `SAVE_VERSION = 4`                                                                          | `js/save.js:9`                             |
+| Ferramenta de migração | Funções no próprio módulo: `migrateV1`, `migrateV2`, `migrateV3ToV4`                        | `js/save.js:339-395`                       |
+| Storage injetável      | `setStorage(s)` / `memoryStorage(initial)` para teste e para navegador que bloqueia storage | `js/save.js:59-61`, `js/save.js:538-550`   |
+| Falha de escrita       | Falha de leitura preserva o último save; cota cheia avisa uma vez e a partida segue         | `js/save.js:72-94`, `js/save.js:500-524`   |
 
 > Os cabeçalhos de seção em `js/save.js` usam nomes com cara de tabela — `character_saves`, `character_consumables`, `item_instances`, `item_instance_affixes`, `storage_locations`, `equipment_slots`, `browser_profiles` (`js/save.js:69`, `js/save.js:94`, `js/save.js:149`). São **apenas convenção de comentário**: não existe SQL nem banco no repositório.
 
@@ -25,38 +25,42 @@ Persistência é exclusivamente `localStorage` do navegador. Não existe banco, 
 
 #### `Save` — valor da chave `sf-save-<voc>`
 
-| Atributo | Tipo | Regra |
-|---|---|---|
-| `v` | int | Sempre gravado como `SAVE_VERSION` (3). Valor **acima** de 3 na leitura descarta o save inteiro com aviso (`js/save.js:204-209`) |
-| `voc` | `'knight' \| 'paladin' \| 'sorcerer' \| 'druid'` | Vocação desconhecida → `normalizeSave` devolve `null` (`js/save.js:214-215`) |
-| `name` | string ≤ 14 | `normalizeName`: `trim`, corte em `NAME_MAX = 14`, vazio vira `'Herói'` (`js/save.js:71-75`) |
-| `totalXp` | int ≥ 0 | **Única fonte da verdade** da progressão |
-| `level` | int 1..500 | Sempre **derivado** de `totalXp` por `levelFromTotalXp`; o valor enviado é ignorado de propósito (`js/save.js:243-249`) |
-| `xp` | int | XP residual dentro do nível atual |
-| `gold` | int ≥ 0 | `Math.max(0, int(...))` |
-| `floor` | int ≥ 1 | Andar alcançado |
-| `potions.hp` / `potions.mp` | int 0..20 | `clamp(…, 0, POTION_STACK)` (`js/balance.js:13`) |
-| `items[]` | array plano | Equipados e mochila na mesma lista desde a v3 |
+| Atributo                    | Tipo                                             | Regra                                                                                                                            |
+| --------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `v`                         | int                                              | Sempre gravado como `SAVE_VERSION` (4). Valor **acima** de 4 na leitura descarta o save inteiro com aviso (`js/save.js:376-395`) |
+| `voc`                       | `'knight' \| 'paladin' \| 'sorcerer' \| 'druid'` | Vocação desconhecida → `normalizeSave` devolve `null` (`js/save.js:397-398`)                                                     |
+| `name`                      | string ≤ 14                                      | `normalizeName`: `trim`, corte em `NAME_MAX = 14`, vazio vira `'Herói'` (`js/save.js:179-183`)                                   |
+| `totalXp`                   | int ≥ 0                                          | **Única fonte da verdade** da progressão                                                                                         |
+| `level`                     | int 1..500                                       | Sempre **derivado** de `totalXp` por `levelFromTotalXp`; o valor enviado é ignorado de propósito (`js/save.js:438-444`)          |
+| `xp`                        | int                                              | XP residual dentro do nível atual                                                                                                |
+| `gold`                      | int ≥ 0                                          | `Math.max(0, int(...))`                                                                                                          |
+| `floor`                     | int ≥ 1                                          | Andar alcançado                                                                                                                  |
+| `potions.hp` / `potions.mp` | int 0..20                                        | `clamp(…, 0, POTION_STACK)` (`js/balance.js:13`)                                                                                 |
+| `items[]`                   | array plano                                      | Equipados e mochila na mesma lista desde a v2                                                                                    |
+| `bestiary.kills`            | mapa `id → int`                                  | Progresso permanente limitado a 64 ids e 1.000.000 derrotas por id (`js/save.js:104-173`)                                        |
+| `contracts`                 | `{day, progress, claimed}`                       | Estado diário mínimo; até 3 ids/progressos e chave `YYYY-MM-DD` (`js/save.js:133-173`)                                           |
 
 Invariantes:
 
-- `totalXpFor(level, residual)` soma `xpForLevel(n)` de 1 até `level-1`, com teto `MAX_LEVEL = 500` (`js/save.js:10`, `js/save.js:15-19`).
-- `loadSave(voc)` descarta o save quando `save.voc !== voc` — nenhuma vocação carrega o save de outra (`js/save.js:282-288`).
-- JSON inválido devolve `null` e avisa `'O save desta vocação estava corrompido e foi descartado.'`, sem lançar (`js/save.js:274-279`).
+- `totalXpFor(level, residual)` soma `xpForLevel(n)` de 1 até `level-1`, com teto `MAX_LEVEL = 500` (`js/save.js:10`, `js/save.js:25-38`).
+- `loadSave(voc)` descarta o save quando `save.voc !== voc` — nenhuma vocação carrega o save de outra (`js/save.js:492-498`).
+- JSON inválido devolve `null` e avisa `'O save desta vocação estava corrompido e foi descartado.'`, sem lançar (`js/save.js:469-485`).
+- `bestiary.kills` nunca armazena nome, tier ou revelação: `BESTIARY_CATALOG` deriva o catálogo de `MONSTERS`/`BOSSES`, e os marcos 1/25/100 vêm de `BESTIARY_TIER_THRESHOLDS` (`js/bestiary.js`, `js/balance.js`).
+- `contracts` não armazena objetivo, meta ou recompensa. `normalizePersistedDailyContracts()` refaz a lista pela chave UTC e `DAILY_CONTRACT_SEED`, limita progresso ao objetivo e mantém `claimed` somente quando o objetivo está completo (`js/contracts.js`).
 
 #### `SaveItem` — elemento de `items[]`
 
-| Atributo | Tipo | Regra |
-|---|---|---|
-| `loc` | `'equipped' \| 'inventory'` | Determina o destino na desserialização |
-| `slot` | slug de `EQUIP_SLOTS` ou `null` | Preenchido só quando `loc === 'equipped'` |
-| `idx` | 0..19 ou `null` | Índice pedido na mochila; `INV_SIZE = 20` (`js/balance.js:12`) |
-| `base` | id de `ITEM_BASES` | Base desconhecida → item descartado inteiro (`js/save.js:120-121`) |
-| `rarity` | `common \| rare \| epic \| legendary` | Raridade desconhecida cai para `common` (`js/save.js:122`) |
-| `ilvl` | int | Escala dos stats |
-| `name`, `glyph` | string | `glyph` é sempre re-derivado da base na leitura (`js/save.js:137`) |
-| `atk`, `def`, `ml`, `hp`, `mp`, `speed`, `atkSpeed`, `crit`, `leech` | number | Campo com tipo errado vira o default, sem invalidar o item (`js/save.js:63-66`) |
-| `affixes[]` | `{id, value, pct}` | Afixo com id fora de `AFFIXES` é filtrado; repetido no mesmo item é ignorado (`js/save.js:111-113`, `js/save.js:125-133`) |
+| Atributo                                                             | Tipo                                  | Regra                                                                                                                     |
+| -------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `loc`                                                                | `'equipped' \| 'inventory'`           | Determina o destino na desserialização                                                                                    |
+| `slot`                                                               | slug de `EQUIP_SLOTS` ou `null`       | Preenchido só quando `loc === 'equipped'`                                                                                 |
+| `idx`                                                                | 0..19 ou `null`                       | Índice pedido na mochila; `INV_SIZE = 20` (`js/balance.js:12`)                                                            |
+| `base`                                                               | id de `ITEM_BASES`                    | Base desconhecida → item descartado inteiro (`js/save.js:120-121`)                                                        |
+| `rarity`                                                             | `common \| rare \| epic \| legendary` | Raridade desconhecida cai para `common` (`js/save.js:122`)                                                                |
+| `ilvl`                                                               | int                                   | Escala dos stats                                                                                                          |
+| `name`, `glyph`                                                      | string                                | `glyph` é sempre re-derivado da base na leitura (`js/save.js:137`)                                                        |
+| `atk`, `def`, `ml`, `hp`, `mp`, `speed`, `atkSpeed`, `crit`, `leech` | number                                | Campo com tipo errado vira o default, sem invalidar o item (`js/save.js:63-66`)                                           |
+| `affixes[]`                                                          | `{id, value, pct}`                    | Afixo com id fora de `AFFIXES` é filtrado; repetido no mesmo item é ignorado (`js/save.js:111-113`, `js/save.js:125-133`) |
 
 Relacionamentos e regras de colocação (`js/save.js:224-241`):
 
@@ -71,30 +75,31 @@ Uma string, normalizada por `normalizeName` na leitura e na escrita; default `'H
 
 ### Migrations
 
-| De | Para | O que muda | Fonte |
-|---|---|---|---|
-| ausente/v1 | v2 | `equip{}` e `inv[]` aninhados são achatados numa lista `items[]` com `loc`/`slot`/`idx` | `js/save.js:185-198` |
-| v2 | v3 | Acrescenta `totalXp`, derivado do par (`level`, `xp` residual) | `js/save.js:180-182` |
-| > 3 | — | Descarte total com aviso `'Save mais novo que este jogo…'`; aplicar campo a campo formato desconhecido é considerado pior que começar do zero | `js/save.js:204-209` |
+| De         | Para | O que muda                                                                                                                                    | Fonte                                      |
+| ---------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| ausente/v1 | v2   | `equip{}` e `inv[]` aninhados são achatados numa lista `items[]` com `loc`/`slot`/`idx`                                                       | `js/save.js:359-373`                       |
+| v2         | v3   | Acrescenta `totalXp`, derivado do par (`level`, `xp` residual)                                                                                | `js/save.js:339-346`                       |
+| v3         | v4   | Acrescenta somente `bestiary.kills` e `contracts.{day,progress,claimed}` normalizados; é pura e idempotente                                   | `js/save.js:104-173`, `js/save.js:348-356` |
+| > 4        | —    | Descarte total com aviso `'Save mais novo que este jogo…'`; aplicar campo a campo formato desconhecido é considerado pior que começar do zero | `js/save.js:376-395`                       |
 
-Cobertura: `tests/save.test.mjs:64-66` verifica que a migração v1 recalcula `totalXp` a partir de nível e residual.
+Cobertura: `tests/save.test.mjs:423-665` prova a migração v3→v4, idempotência e fixtures v1/v2/v3 no mesmo formato canônico; `tests/save.test.mjs:669-768` prova round-trip e preservação do último save válido perante falha de storage.
 
 ### Validação de save vindo pela rede
 
 `js/validate.js` reprocessa qualquer save que chega de outro navegador. É puro e idempotente — aplicar sobre um save já saneado não muda nada (`js/validate.js:1-4`, `js/validate.js:59-61`).
 
-| Regra | Efeito | Fonte |
-|---|---|---|
-| Integridade referencial, tipos e capacidade | Delegado a `normalizeSave` | `js/validate.js:67-68` |
-| `totalXp` acima de `maxTotalXp(floor) = totalXpFor(min(500, 6 + floor*4), 0)` | Truncado; `report.xpCapped = true` | `js/validate.js:20-24`, `js/validate.js:82-87` |
-| `level` | Sempre recalculado de `totalXp` | `js/validate.js:85-90` |
-| `gold`, `potions.hp`, `potions.mp` | `Math.max(0, floor(...))` e `clamp(0, 20)`; cada correção entra em `report.clamped[]` | `js/validate.js:92-99` |
-| `floor` | `clamp(1, floor do host)` | `js/validate.js:108` |
-| `ilvl` acima de `floor + ILVL_SLACK(6)` | **Rebaixado e recalculado**, não apagado — progresso legítimo não some por causa do teto | `js/validate.js:15-16`, `js/validate.js:103-116` |
-| Stats do item | Recalculados pela mesma fórmula da rolagem original: `base × (1 + ilvl×0.16) × rarity.mult` | `js/validate.js:29-59` |
-| Afixo fora da faixa do tipo | `clamp(type.min, ceiling)`; `ceiling` = 0.35 para percentual, `type.max × (1 + ilvl×0.05)` para o resto | `js/validate.js:49-55` |
-| Slot equipado que não bate com a base | Vai para a mochila; sem vaga, `report.itemsDropped++` | `js/validate.js:117-129` |
-| Relato | `describeReport(name, report)` gera uma linha para o `console.info` do host — nunca para o chat da sala | `js/validate.js:137-151` |
+| Regra                                                                         | Efeito                                                                                                  | Fonte                                            |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Integridade referencial, tipos, capacidade e versão v4                        | Delegado a `normalizeSave`; versão futura ou malformada descarta o save inteiro                         | `js/validate.js:68-81`                           |
+| `totalXp` acima de `maxTotalXp(floor) = totalXpFor(min(500, 6 + floor*4), 0)` | Truncado; `report.xpCapped = true`                                                                      | `js/validate.js:20-24`, `js/validate.js:82-87`   |
+| `level`                                                                       | Sempre recalculado de `totalXp`                                                                         | `js/validate.js:85-90`                           |
+| `gold`, `potions.hp`, `potions.mp`                                            | `Math.max(0, floor(...))` e `clamp(0, 20)`; cada correção entra em `report.clamped[]`                   | `js/validate.js:92-99`                           |
+| `floor`                                                                       | `clamp(1, floor do host)`                                                                               | `js/validate.js:108`                             |
+| `ilvl` acima de `floor + ILVL_SLACK(6)`                                       | **Rebaixado e recalculado**, não apagado — progresso legítimo não some por causa do teto                | `js/validate.js:15-16`, `js/validate.js:103-116` |
+| Stats do item                                                                 | Recalculados pela mesma fórmula da rolagem original: `base × (1 + ilvl×0.16) × rarity.mult`             | `js/validate.js:29-59`                           |
+| Afixo fora da faixa do tipo                                                   | `clamp(type.min, ceiling)`; `ceiling` = 0.35 para percentual, `type.max × (1 + ilvl×0.05)` para o resto | `js/validate.js:49-55`                           |
+| Slot equipado que não bate com a base                                         | Vai para a mochila; sem vaga, `report.itemsDropped++`                                                   | `js/validate.js:117-129`                         |
+| Relato                                                                        | `describeReport(name, report)` gera uma linha para o `console.info` do host — nunca para o chat da sala | `js/validate.js:137-151`                         |
 
 Campos do `report`: `levelAdjusted`, `xpCapped`, `itemsDowngraded`, `itemsDropped`, `affixesDropped`, `movedToBag`, `clamped[]`, e `discarded` quando o save é irrecuperável (`js/validate.js:62-65`, `js/validate.js:69`).
 
@@ -107,7 +112,7 @@ Criado por `createGame(seed, floor, groupSize)` (`js/sim.js:20-46`). Campos: `se
 - `nextId` é o contador único de ids de monstro, item, projétil e zona.
 - `map` é regerado do par `(seed, floor)` a cada andar — nunca serializado (`js/world.js:7-9`).
 - `flow` é o campo de fluxo BFS, reconstruído a cada 0,2 s (`js/sim.js:284-288`).
-- Do estado do jogador, só `name`, `voc`, `level`, `xp`, `gold`, `equip`, `inv` e `potions` chegam ao save; o resto (cooldowns, buffs, status, animação, `invVer`, `kills`, `deaths`, `dmgDone`) é volátil (`js/sim.js:171-207`, `js/save.js:151-178`).
+- Do estado do jogador, `name`, `voc`, progressão, ouro, equipamento, mochila, poções, `bestiary` e `contracts` chegam ao save. Cooldowns, buffs, status, animação, `invVer`, `kills`, `deaths`, `dmgDone` e a guarda de replay dos contratos são voláteis (`js/sim.js`, `js/save.js`, `js/contracts.js`).
 
 #### `S.view` — visão do convidado
 
@@ -118,24 +123,24 @@ Criado por `createGame(seed, floor, groupSize)` (`js/sim.js:20-46`). Campos: `se
 
 ### Cache
 
-| Cache | Conteúdo | Invalidação |
-|---|---|---|
-| `S.lastInvVer: Map<peerId, invVer>` | Última versão de inventário enviada a cada peer | Envia `{t:'inv'}` só quando `gp.invVer` muda (`js/main.js:930-934`) |
-| `p.invVer` | Contador incremental por jogador | Incrementado em toda mutação de inventário/ouro (`js/sim.js:1085`, `js/sim.js:1130`, `js/sim.js:1170`) |
-| `G.flow` + `G.flowTimer` | Campo de fluxo BFS até os vivos | Recalculado a cada 0,2 s ou quando `G.flow` é nulo (`js/sim.js:284-288`) |
+| Cache                                 | Conteúdo                                         | Invalidação                                                                                                             |
+| ------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `S.lastInvVer: Map<peerId, invVer>`   | Última versão de inventário enviada a cada peer  | Envia `{t:'inv'}` só quando `gp.invVer` muda (`js/main.js:930-934`)                                                     |
+| `p.invVer`                            | Contador incremental por jogador                 | Incrementado em toda mutação de inventário/ouro (`js/sim.js:1085`, `js/sim.js:1130`, `js/sim.js:1170`)                  |
+| `G.flow` + `G.flowTimer`              | Campo de fluxo BFS até os vivos                  | Recalculado a cada 0,2 s ou quando `G.flow` é nulo (`js/sim.js:284-288`)                                                |
 | `ChatGate.history: Map<id, number[]>` | Timestamps de chat por peer, medidos em `G.time` | Entradas fora da janela de 5 s são filtradas a cada `allow()`; `forget(id)` / `reset()` limpam (`js/chatgate.js:19-36`) |
-| `Net.strikes: Map<peerId, number>` | Envios pulados consecutivos por peer lento | Zerada em envio bem-sucedido; 40 strikes derrubam o peer (`js/net.js:118-137`) |
-| `AllyRail.current: string[]` | Ids de aliados exibidos no HUD | Reordenação só a cada 0,5 s e com vantagem de 1,5 tile (`js/allyrail.js:40-66`) |
-| `warned: Set<string>` (`save.js`) | Motivos de aviso já mostrados | Um aviso por motivo por sessão; `resetWarnings()` limpa nos testes (`js/save.js:49-62`) |
-| `MONSTER_BY_ID` | Índice `id → tipo`, montado no carregamento | Estático, derivado de `MONSTERS` + `BOSSES` (`js/data.js:105`) |
-| `BASE_BY_ID`, `AFFIX_BY_ID` | Índices das tabelas de conteúdo | Estáticos (`js/save.js:33-34`, `js/validate.js:10-11`) |
+| `Net.strikes: Map<peerId, number>`    | Envios pulados consecutivos por peer lento       | Zerada em envio bem-sucedido; 40 strikes derrubam o peer (`js/net.js:118-137`)                                          |
+| `AllyRail.current: string[]`          | Ids de aliados exibidos no HUD                   | Reordenação só a cada 0,5 s e com vantagem de 1,5 tile (`js/allyrail.js:40-66`)                                         |
+| `warned: Set<string>` (`save.js`)     | Motivos de aviso já mostrados                    | Um aviso por motivo por sessão; `resetWarnings()` limpa nos testes (`js/save.js:49-62`)                                 |
+| `MONSTER_BY_ID`                       | Índice `id → tipo`, montado no carregamento      | Estático, derivado de `MONSTERS` + `BOSSES` (`js/data.js:105`)                                                          |
+| `BASE_BY_ID`, `AFFIX_BY_ID`           | Índices das tabelas de conteúdo                  | Estáticos (`js/save.js:33-34`, `js/validate.js:10-11`)                                                                  |
 
 ### Cadência de gravação
 
-| Papel | Intervalo | Gatilho extra |
-|---|---|---|
-| Host / solo | 8 s | `saveProgress()` também na virada de andar e em `beforeunload` (`js/main.js:938`, `js/main.js:977`, `js/main.js:1044-1047`) |
-| Convidado | 5 s | `saveGuestProgress()` monta o personagem a partir da visão + `S.guest.inv`/`equip` (`js/main.js:908`, `js/main.js:995-1003`) |
+| Papel       | Intervalo | Gatilho extra                                                                                                                |
+| ----------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Host / solo | 8 s       | `saveProgress()` também na virada de andar e em `beforeunload` (`js/main.js:938`, `js/main.js:977`, `js/main.js:1044-1047`)  |
+| Convidado   | 5 s       | `saveGuestProgress()` monta o personagem a partir da visão + `S.guest.inv`/`equip` (`js/main.js:908`, `js/main.js:995-1003`) |
 
 ## Related documents
 

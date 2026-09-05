@@ -22,16 +22,16 @@
 
 ### Regras de arquitetura que governam cada task
 
-| Regra | Fonte | Como aparece nas tasks |
-|---|---|---|
-| `js/sim.js` é estado puro, zero DOM | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` "Layer responsibilities" | Nenhuma task toca `js/sim.js`; T19 reconfere `grep -cE "document\|window\|navigator" js/sim.js` = 0 |
-| Todo número de tuning vive em `js/balance.js` | `AGENTS.md:38`, `AGENTS.md:57` | T01 cria as constantes, T02 remove os literais de `js/main.js`; T14 importa a mesma constante em vez de repetir `0.5` |
-| Apresentação não muta estado do simulador nem envia pacote | `docs/agents/architecture.md`, tabela de camadas | T10 é a única mudança em `js/ui.js` e é reordenação de leitura; nenhuma task cria mensagem de rede |
-| Composição delega regra de jogo a `sim.js` e política de sala a `room.js` | `docs/agents/architecture.md` | T02 mexe só em input de toque em `js/main.js`; RF-02c proíbe costura de teste nesse arquivo |
-| Testes sem framework, `process.exit(failures ? 1 : 0)` | `AGENTS.md:32`, `AGENTS.md:43` | T13-T18 mantêm `errors[]` (`tests/browser.mjs:160-161`) e `check()`/`failures` (`tests/multipeer.mjs:26-30`, `:332`) |
-| pt-BR em comentário, log, texto de UI e label de teste; identificador em inglês | `AGENTS.md:45`, `AGENTS.md:51` | Todas as tasks; os seis prefixos de CT-02 são pt-BR |
-| Sem dependência de runtime, sem passo de build | `AGENTS.md:60-61` | Nenhuma task adiciona pacote; T19 confere `package.json` e `vercel.json` |
-| Trilho limitado por `HUD_ALLY_LIMIT` | `docs/agents/domain_rules.md`, `js/balance.js:204` | T11 corta por CSS; `js/allyrail.js` fica intocado (ver A-05) |
+| Regra                                                                           | Fonte                                                                                  | Como aparece nas tasks                                                                                                |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `js/sim.js` é estado puro, zero DOM                                             | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` "Layer responsibilities" | Nenhuma task toca `js/sim.js`; T19 reconfere `grep -cE "document\|window\|navigator" js/sim.js` = 0                   |
+| Todo número de tuning vive em `js/balance.js`                                   | `AGENTS.md:38`, `AGENTS.md:57`                                                         | T01 cria as constantes, T02 remove os literais de `js/main.js`; T14 importa a mesma constante em vez de repetir `0.5` |
+| Apresentação não muta estado do simulador nem envia pacote                      | `docs/agents/architecture.md`, tabela de camadas                                       | T10 é a única mudança em `js/ui.js` e é reordenação de leitura; nenhuma task cria mensagem de rede                    |
+| Composição delega regra de jogo a `sim.js` e política de sala a `room.js`       | `docs/agents/architecture.md`                                                          | T02 mexe só em input de toque em `js/main.js`; RF-02c proíbe costura de teste nesse arquivo                           |
+| Testes sem framework, `process.exit(failures ? 1 : 0)`                          | `AGENTS.md:32`, `AGENTS.md:43`                                                         | T13-T18 mantêm `errors[]` (`tests/browser.mjs:160-161`) e `check()`/`failures` (`tests/multipeer.mjs:26-30`, `:332`)  |
+| pt-BR em comentário, log, texto de UI e label de teste; identificador em inglês | `AGENTS.md:45`, `AGENTS.md:51`                                                         | Todas as tasks; os seis prefixos de CT-02 são pt-BR                                                                   |
+| Sem dependência de runtime, sem passo de build                                  | `AGENTS.md:60-61`                                                                      | Nenhuma task adiciona pacote; T19 confere `package.json` e `vercel.json`                                              |
+| Trilho limitado por `HUD_ALLY_LIMIT`                                            | `docs/agents/domain_rules.md`, `js/balance.js:204`                                     | T11 corta por CSS; `js/allyrail.js` fica intocado (ver A-05)                                                          |
 
 ## AS IS — Componentes impactados
 
@@ -103,6 +103,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 ## Tasks
 
 ### T01 — Constantes da zona de toque em `js/balance.js`
+
 - **Files**: `js/balance.js`
 - **Change**: acrescentar uma seção `// ---------- Toque ----------` no mesmo padrão de
   `js/balance.js:198-204` (constante em inglês, comentário pt-BR na mesma linha), com três
@@ -117,6 +118,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: none
 
 ### T02 — `js/main.js` lê as constantes e perde os literais
+
 - **Files**: `js/main.js`
 - **Change**: acrescentar `TOUCH_STICK_ZONE`, `TOUCH_STICK_RADIUS` e `TOUCH_STICK_TRAVEL` à lista
   de import de `./balance.js` (`js/main.js:15`); em `js/main.js:608` escrever exatamente
@@ -135,6 +137,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T01
 
 ### T03 — Piso de 44x44 nos alvos de `pointer: coarse`
+
 - **Files**: `styles.css`
 - **Change**: dentro do bloco `@media (pointer: coarse)` de `styles.css:491`, dar caixa mínima de
   44px a `.x` (hoje sem caixa própria, `styles.css:312`, medida 15,1 x 23) — `min-inline-size` e
@@ -154,6 +157,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: none
 
 ### T04 — `#crewChip` com caixa de 44px e pintura de 21px
+
 - **Files**: `styles.css`
 - **Change**: no bloco `@media (pointer: coarse)`, dar ao `#crewChip` `padding-block` suficiente
   para a caixa chegar a 44px, `background-clip: content-box` (exigido literalmente pela AC 3) e
@@ -174,6 +178,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: none
 
 ### T05 — `.slot` de 48x48 e `#actionBar` de 102px
+
 - **Files**: `styles.css`
 - **Change**: trocar `.slot { width: 62px; height: 62px }` (`styles.css:371`) por 48x48 dentro do
   bloco `pointer: coarse`. A barra é derivada: `.slots` é grid de duas colunas
@@ -188,6 +193,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: none
 
 ### T06 — `#portalHold` sem interseção com o `#actionBar` em nenhuma altura
+
 - **Files**: `styles.css`
 - **Change**: `#portalHold` no bloco coarse (`styles.css:497`) tem hoje
   `left: 12px; width: min(280px, 80vw)`, ou seja borda direita em 292px tanto em 390 quanto em
@@ -204,6 +210,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T05 (o `126px` deriva da barra de 102px)
 
 ### T07 — Atualizar as specs de design para o slot de toque de 48px
+
 - **Files**: `.spec/init/design/tokens-componentes.md`, `.spec/init/design/hud-grupo-mobile.md`
 - **Change**: em `tokens-componentes.md:142`, trocar `slot 62px` por `slot 48px` na linha de
   `pointer: coarse`; em `hud-grupo-mobile.md:92`, trocar `62×62px` por `48×48px` na linha "Botão
@@ -218,6 +225,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T05 (mesma decisão; entregar junto evita a terceira deriva)
 
 ### T08 — `.panel` com altura útil e rolagem contida
+
 - **Files**: `styles.css`
 - **Change**: trocar `max-height: 86vh` de `.panel` (`styles.css:300-303`) por
   `max-height: calc(100vh - 24px)` seguido de `max-height: calc(100dvh - 24px)` (o segundo é o
@@ -235,6 +243,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T03 (a `.x` de 44px muda a altura do `.panel-head` e portanto do conteúdo)
 
 ### T09 — `.menu-actions` sem estouro e sem truncar rótulo
+
 - **Files**: `styles.css`
 - **Change**: no bloco `@media (pointer: coarse)`, empilhar as ações:
   `.menu-actions { flex-wrap: wrap }` e `.menu-actions .btn { flex: 1 1 100% }`. Em 360x640 o
@@ -252,6 +261,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: none
 
 ### T10 — `js/ui.js:173` renderiza o caído primeiro
+
 - **Files**: `js/ui.js`
 - **Change**: **uma única linha**. `const visible = [...shown, ...downed];` (`js/ui.js:173`) vira
   `const visible = [...downed, ...shown];`, pondo o caído como primeiro filho de `#partyList` e
@@ -266,6 +276,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: none
 
 ### T11 — Especificidade e cortes do trilho de aliados
+
 - **Files**: `styles.css`
 - **Change**: trocar `#hudLeft .plaque { width: 190px }` (`styles.css:374`) por
   `.plaque { width: 190px }` dentro do bloco `pointer: coarse` — a especificidade cai de 1,0,1 para
@@ -284,6 +295,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T10
 
 ### T12 — Exceção do aliado caído no bloco `max-height: 380px`
+
 - **Files**: `styles.css`
 - **Change**: em `@media (max-height: 380px)` (`styles.css:506-508`), depois da regra geral
   `#partyList .plaque.mate { display: none }`, acrescentar
@@ -299,6 +311,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T10, T11
 
 ### T13 — `tests/browser.mjs`: contextos mobile e helpers de medição
+
 - **Files**: `tests/browser.mjs`
 - **Change**: importar `TOUCH_STICK_ZONE` e `TOUCH_STICK_RADIUS` de `../js/balance.js` (a AC 2 de
   UI-03 proíbe repetir `0.5` no arquivo de teste; `tests/multipeer.mjs:11` já tem o precedente de
@@ -322,12 +335,13 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T01
 
 ### T14 — `tests/browser.mjs`: casos `BARRA` e a parte solo de `TOQUE` e `MENU`
+
 - **Files**: `tests/browser.mjs`
 - **Change**: nos dois contextos, medir e reportar em pt-BR com o valor medido:
   (a) `BARRA:` `intersects(#actionBar, #portalHold) === false`,
   `intersects(#actionBar, #log) === false`, `intersects(#actionBar, zonaJoystick) === false` e,
   para todo slot, `rect.left >= innerWidth / 2 && rect.right <= innerWidth && rect.top >= 0 &&
-  rect.bottom <= innerHeight`, nas alturas 700, 620, 600, 460, 440, 380 e 360 com largura 390 além
+rect.bottom <= innerHeight`, nas alturas 700, 620, 600, 460, 440, 380 e 360 com largura 390 além
   das duas viewports base; `zonaJoystick = TOUCH_STICK_ZONE * innerWidth + TOUCH_STICK_RADIUS`,
   conferindo `259` em 390 e `244` em 360; `.slot` com `Math.abs(w - 48) <= 0.5` e
   `Math.abs(h - 48) <= 0.5` e interseção zero entre todo par de slots;
@@ -344,6 +358,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T13
 
 ### T15 — `tests/browser.mjs`: casos `MOCHILA`
+
 - **Files**: `tests/browser.mjs`
 - **Change**: encher o inventário até os 20 itens (`INV_SIZE`, `js/balance.js:12`) pelo estado já
   exposto em `window.__SF` (`js/main.js:1077`) — o mesmo recurso que `tests/browser.mjs:82-94` usa
@@ -353,7 +368,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
   descendente visível com `rect.bottom <= bag.rect.bottom + 0.5`; em 360x640, depois de
   `bag.scrollTop = bag.scrollHeight`, conferir
   `document.documentElement.scrollTop === 0 && document.body.scrollTop === 0 &&
-  document.documentElement.scrollHeight === document.documentElement.clientHeight` e
+document.documentElement.scrollHeight === document.documentElement.clientHeight` e
   `getComputedStyle(bag).overscrollBehaviorY !== 'auto'`. Varrer também `interactiveTargets()`
   dentro do `#bag` com o prefixo `TOQUE` (`#btnCloseBag`, `#btnSell`, `.inv-slot` com item,
   `.equip-slot` equipado).
@@ -365,6 +380,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T13
 
 ### T16 — `tests/multipeer.mjs`: abas em viewport mobile e helpers
+
 - **Files**: `tests/multipeer.mjs`
 - **Change**: `openTab` (`tests/multipeer.mjs:48-67`) passa a receber a viewport em vez do
   `1280x760` fixo de `:50`; padrão **mobile** 390x844 com
@@ -389,6 +405,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: none
 
 ### T17 — `tests/multipeer.mjs`: casos `TOQUE` e `MENU` de sala
+
 - **Files**: `tests/multipeer.mjs`
 - **Change**: duas janelas do roteiro, porque só nelas o estado exigido pelas ACs existe:
   (a) dentro do caso de tranca (`tests/multipeer.mjs:155-169`), com `#lobbyLock` e `#btnLock`
@@ -411,6 +428,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T16
 
 ### T18 — `tests/multipeer.mjs`: casos `CORTE` e `CAIDO`
+
 - **Files**: `tests/multipeer.mjs`
 - **Change**: com a partida em curso, derrubar um aliado pelo estado autoritativo do host
   (`window.__SF`, mesmo recurso de `tests/browser.mjs:82-94`), esperar o trilho se redesenhar
@@ -437,6 +455,7 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 - **Dependencies**: T16, T10, T11, T12
 
 ### T19 — Portão de regressão RF-03 e suíte completa
+
 - **Files**: nenhum arquivo do produto — execução, com registro do resultado na entrega
 - **Change**: executar o protocolo de RF-03 com os casos novos preservados na árvore:
   `git stash push -- js/ styles.css index.html`; então `npm run test:browser; echo $?` imprime `1`
@@ -459,15 +478,15 @@ UI-02) e `CSS_PH` é T06 (UI-03 AC1); `DOCS` é T07 (consequência aceita de UI-
 
 ## Execution Phases
 
-| Phase | Tasks | Parallel-safe? |
-|-------|-------|----------------|
-| 1 — Fonte única dos números de toque | T01, T02 | Não — T02 depende do export de T01 |
+| Phase                                               | Tasks                   | Parallel-safe?                                                                           |
+| --------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
+| 1 — Fonte única dos números de toque                | T01, T02                | Não — T02 depende do export de T01                                                       |
 | 2 — Alvos de toque, barra de ação e specs de design | T03, T04, T05, T06, T07 | Não — T03 a T06 são o mesmo `styles.css`; T07 é doc e só sai junto por coerência com T05 |
-| 3 — Painéis e menus | T08, T09 | Não — mesmo `styles.css`; T08 depende da `.x` de T03 |
-| 4 — Trilho de aliados e aliado caído | T10, T11, T12 | Não — T11 e T12 são o mesmo `styles.css` e as contagens só fecham com T10 |
-| 5 — Harness de solo (`tests/browser.mjs`) | T13, T14, T15 | Não — mesmo arquivo; T14 e T15 dependem dos helpers de T13 |
-| 6 — Harness de sala (`tests/multipeer.mjs`) | T16, T17, T18 | Não — mesmo arquivo; T17 e T18 dependem da viewport de T16 |
-| 7 — Portão de regressão | T19 | Não — task única, exige tudo pronto |
+| 3 — Painéis e menus                                 | T08, T09                | Não — mesmo `styles.css`; T08 depende da `.x` de T03                                     |
+| 4 — Trilho de aliados e aliado caído                | T10, T11, T12           | Não — T11 e T12 são o mesmo `styles.css` e as contagens só fecham com T10                |
+| 5 — Harness de solo (`tests/browser.mjs`)           | T13, T14, T15           | Não — mesmo arquivo; T14 e T15 dependem dos helpers de T13                               |
+| 6 — Harness de sala (`tests/multipeer.mjs`)         | T16, T17, T18           | Não — mesmo arquivo; T17 e T18 dependem da viewport de T16                               |
+| 7 — Portão de regressão                             | T19                     | Não — task única, exige tudo pronto                                                      |
 
 As fases 5 e 6 não dependem uma da outra (arquivos distintos) e poderiam rodar em paralelo por dois
 executores; `ralph.sh` executa fase a fase, então a ordem acima é a que vale. As fases 2, 3 e 4
@@ -475,15 +494,15 @@ tocam o mesmo `styles.css` e por isso nunca são paralelas entre si.
 
 ## Risks
 
-| Risk | Blast radius | Mitigation | Rollback |
-|------|-------------|------------|----------|
-| A viewport mobile de T16 vale para as 10 abas e para todos os casos já existentes do multi-peer | `npm run test:multipeer` inteiro: `full`, `lock`, `kick`, `shot`, `late`, `measure`, `drop` | Rodar `npm run test:multipeer:quick` logo após T16 e antes de T17; manter `VIEW=desktop` como escape | `VIEW=desktop npm run test:multipeer` reproduz o comportamento de hoje; reverter o default de `openTab` é uma linha |
-| A zona do joystick sobe de 45% para 50% da largura (T02) | Todo toque de jogo em `pointer: coarse`: a faixa entre 45% e 50% deixa de virar ordem de movimento | É a decisão Q-03, medida em UI-03 nas duas larguras; T14 confere as bordas 244 e 259 | `TOUCH_STICK_ZONE = 0.45` em `js/balance.js`, um valor, um arquivo |
-| `.panel` alterado em T08 atinge também o `#roster` e o desktop | `#bag` e `#roster` em toda largura, inclusive o `npm run test:browser` de desktop e o caso `kick` | Medir o `#roster` em T17 junto do `#bag` em T15; manter o `overflow-y: auto` que já existe | Voltar `max-height: 86vh` em `styles.css:300` |
-| A varredura de UI-01 é mais ampla que as seis violações medidas | Qualquer alvo interativo visível de `#menu`, `#lobby`, `#queue`, `#game`, `#bag`, `#roster` | `.inv-slot` (~62px em 390, ~56px em 360) e `.equip-slot` (~46px) já passam (A-03); `#chatInput` (~37px) é criado sob demanda e não está visível nos estados das ACs (A-04) | Se um alvo novo aparecer, ele é violação legítima de UI-01 e entra no mesmo bloco de T03 |
-| Implementação antes dos testes pode enviesar os casos para o que foi implementado | Toda a verificação de RF-02 e CT-02 | O portão de T19 é exatamente o antídoto: os casos precisam sair 1 contra o código anterior, com os seis prefixos | Se um prefixo não falhar contra o código velho, o caso correspondente está fraco e volta para T14/T15/T17/T18 |
-| `git stash push` em T19 sobre árvore com trabalho não commitado | `js/`, `styles.css` e `index.html` inteiros | Commitar a feature antes do portão; conferir `git stash list` vazio depois do `pop` | `git stash pop` / `git stash apply` recupera; nunca usar `git stash` puro, que levaria `tests/` junto e anularia a AC |
-| Tempo dos dois harnesses cresce (segundo contexto solo em T13, sete alturas em T14 e T18) | RNF-05: `tests/browser.mjs` no `protocolTimeout` de 240000 (`tests/browser.mjs:9`) e `tests/multipeer.mjs` no padrão do Puppeteer | Reaproveitar a mesma partida entre as alturas em vez de reiniciar; não abrir aba nova no multi-peer | Reduzir o conjunto de alturas ao mínimo das ACs (as sete são exigidas, não há margem) |
+| Risk                                                                                            | Blast radius                                                                                                                      | Mitigation                                                                                                                                                                 | Rollback                                                                                                              |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| A viewport mobile de T16 vale para as 10 abas e para todos os casos já existentes do multi-peer | `npm run test:multipeer` inteiro: `full`, `lock`, `kick`, `shot`, `late`, `measure`, `drop`                                       | Rodar `npm run test:multipeer:quick` logo após T16 e antes de T17; manter `VIEW=desktop` como escape                                                                       | `VIEW=desktop npm run test:multipeer` reproduz o comportamento de hoje; reverter o default de `openTab` é uma linha   |
+| A zona do joystick sobe de 45% para 50% da largura (T02)                                        | Todo toque de jogo em `pointer: coarse`: a faixa entre 45% e 50% deixa de virar ordem de movimento                                | É a decisão Q-03, medida em UI-03 nas duas larguras; T14 confere as bordas 244 e 259                                                                                       | `TOUCH_STICK_ZONE = 0.45` em `js/balance.js`, um valor, um arquivo                                                    |
+| `.panel` alterado em T08 atinge também o `#roster` e o desktop                                  | `#bag` e `#roster` em toda largura, inclusive o `npm run test:browser` de desktop e o caso `kick`                                 | Medir o `#roster` em T17 junto do `#bag` em T15; manter o `overflow-y: auto` que já existe                                                                                 | Voltar `max-height: 86vh` em `styles.css:300`                                                                         |
+| A varredura de UI-01 é mais ampla que as seis violações medidas                                 | Qualquer alvo interativo visível de `#menu`, `#lobby`, `#queue`, `#game`, `#bag`, `#roster`                                       | `.inv-slot` (~62px em 390, ~56px em 360) e `.equip-slot` (~46px) já passam (A-03); `#chatInput` (~37px) é criado sob demanda e não está visível nos estados das ACs (A-04) | Se um alvo novo aparecer, ele é violação legítima de UI-01 e entra no mesmo bloco de T03                              |
+| Implementação antes dos testes pode enviesar os casos para o que foi implementado               | Toda a verificação de RF-02 e CT-02                                                                                               | O portão de T19 é exatamente o antídoto: os casos precisam sair 1 contra o código anterior, com os seis prefixos                                                           | Se um prefixo não falhar contra o código velho, o caso correspondente está fraco e volta para T14/T15/T17/T18         |
+| `git stash push` em T19 sobre árvore com trabalho não commitado                                 | `js/`, `styles.css` e `index.html` inteiros                                                                                       | Commitar a feature antes do portão; conferir `git stash list` vazio depois do `pop`                                                                                        | `git stash pop` / `git stash apply` recupera; nunca usar `git stash` puro, que levaria `tests/` junto e anularia a AC |
+| Tempo dos dois harnesses cresce (segundo contexto solo em T13, sete alturas em T14 e T18)       | RNF-05: `tests/browser.mjs` no `protocolTimeout` de 240000 (`tests/browser.mjs:9`) e `tests/multipeer.mjs` no padrão do Puppeteer | Reaproveitar a mesma partida entre as alturas em vez de reiniciar; não abrir aba nova no multi-peer                                                                        | Reduzir o conjunto de alturas ao mínimo das ACs (as sete são exigidas, não há margem)                                 |
 
 ## Open Questions
 

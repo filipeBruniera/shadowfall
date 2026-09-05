@@ -19,12 +19,12 @@ Abra `http://localhost:5173`.
 Testes da simulação (headless, sem navegador):
 
 ```bash
-npm test                     # 10 suítes, ~260 asserções, roda em segundos
+npm test                     # suítes headless, roda em segundos
 npm run test:browser         # smoke test em Chromium, inclui viewport de celular
 npm run test:multipeer       # 10 abas numa sessão P2P real (precisa de rede)
 ```
 
-O harness multi-peer aceita `PEERS=n` e `CASE=basic|full|lock|kick|late|drop|measure|shot|all`.
+O harness multi-peer aceita `PEERS=n` e `CASE=basic|full|lock|kick|late|queue|drop|measure|shot|all`.
 Ele sobe abas de verdade e conecta pelo broker público do PeerJS, então cobre o que a suíte
 headless não alcança: handshake, teto de sala, tranca, expulsão, fila e queda do host.
 
@@ -61,15 +61,15 @@ aba, a partida acaba. Prefira criar a sala na conexão mais estável dos dois.
 
 ## Controles
 
-| | |
-|---|---|
+|                    |                                        |
+| ------------------ | -------------------------------------- |
 | **WASD** ou clique | mover (clique usa A*, contorna parede) |
-| **1–4** | magias |
-| **Botão direito** | magia 1 na direção do mouse |
-| **Q / E** | poção de vida / mana |
-| **Tab** ou **I** | mochila |
-| **Enter** | chat |
-| **Esc** | fecha painéis |
+| **1–4**            | magias                                 |
+| **Botão direito**  | magia 1 na direção do mouse            |
+| **Q / E**          | poção de vida / mana                   |
+| **Tab** ou **I**   | mochila                                |
+| **Enter**          | chat                                   |
+| **Esc**            | fecha painéis                          |
 
 No celular: joystick na metade esquerda da tela, botões na direita.
 
@@ -100,6 +100,20 @@ arrasta o resto. Monstros, chefe e loot escalam com o andar **e com o tamanho do
 Loot tem 4 raridades e afixos aleatórios. Item cai em slot vazio automaticamente.
 O progresso de cada vocação é salvo no `localStorage` do próprio navegador
 (`sf-save-{vocação}`), e o convidado leva o save dele para a sala do host.
+Cada bloco HARDCORE concluído libera checkpoints 1, 4, 7, 10…; no lobby, o host escolhe
+qualquer checkpoint desbloqueado por todos e o padrão é o maior ponto comum.
+
+### Refúgio, bestiário e contratos
+
+Entre expedições, o **Refúgio** reúne a escolha de checkpoint da próxima run, o bestiário e
+os contratos diários. Ele não abre durante uma partida, na fila nem depois de um encerramento
+que ainda precisa ser explicado ao jogador.
+
+O bestiário guarda somente a contagem de derrotas por tipo no save; nome, afinidades, atributos
+e especiais continuam derivados de `js/data.js`. As camadas aparecem em 1, 25 e 100 derrotas.
+Os contratos usam a data UTC e uma seed fixa: a lista de até três objetivos é reconstituída,
+enquanto o save guarda apenas dia, progresso e resgates. Um resgate concluído concede ouro e
+uma poção de vida uma única vez, inclusive após recarregar a página.
 
 ## Arquitetura
 
@@ -113,8 +127,13 @@ js/world.js       mapa procedural, flow field (IA), A* (clique)
 js/sim.js         simulação autoritativa — sem DOM, testável em Node
 js/save.js        formato do save, versão e migração (localStorage)
 js/validate.js    saneamento do save que chega pela rede
+js/bestiary.js    catálogo derivado e tiers de revelação por derrotas
+js/contracts.js   contratos UTC determinísticos, progresso e resgate
+js/refuge.js      view-model puro do Refúgio
 js/room.js        lotação, tranca e fila de entrada
 js/session.js     reconexão e fim de partida
+js/progression.js checkpoints comuns e andar inicial da run
+js/telemetry.js   métricas anônimas de run
 js/actqueue.js    fila de ações com reenvio até confirmar
 js/chatgate.js    antiflood e truncagem de chat
 js/allyrail.js    quais aliados o HUD mostra
@@ -122,7 +141,7 @@ js/render.js      isométrico, sprites vetoriais, iluminação dinâmica
 js/net.js         P2P: snapshots por destinatário, interpolação, predição
 js/ui.js          telas e componentes
 js/main.js        loop, input, cola entre rede e render
-tests/*.test.mjs     10 suítes headless
+tests/*.test.mjs     suítes headless
 tests/browser.mjs    smoke test em Chromium (Puppeteer)
 tests/multipeer.mjs  N abas numa sessão P2P real
 ```

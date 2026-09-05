@@ -18,15 +18,15 @@ Shadowfall — Ashen Realms entrega um MMORPG isométrico de masmorra infinita, 
 
 ### Consumers and integrations
 
-| System | Role |
-|---|---|
-| Navegador do jogador (Canvas 2D + WebRTC) | Runtime único: renderiza, captura input e, no host, roda a simulação (`js/render.js`, `js/main.js`) |
-| Broker público do PeerJS | Aperto de mão inicial da sala; carregado de `https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js` (`index.html:228`) |
-| `localStorage` do navegador | Persistência de personagem e nome (`js/save.js:37`, `js/save.js:26` — `NAME_KEY = 'sf-name'`) |
-| Google Fonts | Grenze Gotisch + Alegreya Sans (`index.html:11`) |
-| Vercel | Hospedagem estática; `cleanUrls`, `Cache-Control` sem cache em `/js/*`, `X-Content-Type-Options`, `Referrer-Policy` (`vercel.json`) |
-| Node v22.23.2 | Executa as 10 suítes headless via `npm test` (`package.json` scripts) |
-| Chromium via Puppeteer 25.8.0 | Harnesses `tests/browser.mjs` e `tests/multipeer.mjs` |
+| System                                    | Role                                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Navegador do jogador (Canvas 2D + WebRTC) | Runtime único: renderiza, captura input e, no host, roda a simulação (`js/render.js`, `js/main.js`)                                 |
+| Broker público do PeerJS                  | Aperto de mão inicial da sala; carregado de `https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js` (`index.html:228`)                  |
+| `localStorage` do navegador               | Persistência de personagem e nome (`js/save.js:37`, `js/save.js:26` — `NAME_KEY = 'sf-name'`)                                       |
+| Google Fonts                              | Grenze Gotisch + Alegreya Sans (`index.html:11`)                                                                                    |
+| Vercel                                    | Hospedagem estática; `cleanUrls`, `Cache-Control` sem cache em `/js/*`, `X-Content-Type-Options`, `Referrer-Policy` (`vercel.json`) |
+| Node v22.23.2                             | Executa as 10 suítes headless via `npm test` (`package.json` scripts)                                                               |
+| Chromium via Puppeteer 25.8.0             | Harnesses `tests/browser.mjs` e `tests/multipeer.mjs`                                                                               |
 
 ### Macro flow
 

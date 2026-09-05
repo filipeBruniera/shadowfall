@@ -92,7 +92,7 @@ Nunca uma tela de erro nem a mensagem genérica de conexão perdida. O progresso
 - Trancada: `lock-badge` aparece no `#hudRight` para **todos**, e o `capacity-counter` continua
   mostrando a lotação real — tranca e lotação são coisas distintas.
 - O código de sala **não muda** ao trancar nem ao destrancar.
-- Uma linha de log em `#log .system` registra a mudança para todos: *"O host trancou a sala."*
+- Uma linha de log em `#log .system` registra a mudança para todos: _"O host trancou a sala."_
 
 ## 7. Layout mobile
 
@@ -118,12 +118,12 @@ Nunca uma tela de erro nem a mensagem genérica de conexão perdida. O progresso
 
 ## 8. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** | Só o host na sala: `.lobby-row.empty` — *"Você está sozinho na masmorra."* Sem seção de fila |
-| **Carregando** | Não se aplica: a lista vem do estado local do host, sem busca |
-| **Erro** | Falha ao expulsar (peer já desconectou): a linha some e `#log .warn` registra *"Marina já tinha saído."* |
-| **Cheio** | `capacity-counter` em `--ember`; o texto abaixo do botão de tranca acrescenta *"A sala já está cheia."* |
+| Estado         | Tratamento                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| **Vazio**      | Só o host na sala: `.lobby-row.empty` — _"Você está sozinho na masmorra."_ Sem seção de fila             |
+| **Carregando** | Não se aplica: a lista vem do estado local do host, sem busca                                            |
+| **Erro**       | Falha ao expulsar (peer já desconectou): a linha some e `#log .warn` registra _"Marina já tinha saído."_ |
+| **Cheio**      | `capacity-counter` em `--ember`; o texto abaixo do botão de tranca acrescenta _"A sala já está cheia."_  |
 
 ## 9. Aponta para
 

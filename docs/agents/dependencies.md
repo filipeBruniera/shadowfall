@@ -6,30 +6,30 @@
 
 ### Resumo do manifesto
 
-| Categoria | Quantidade | Evidência |
-|---|---|---|
-| `dependencies` (npm, runtime) | 0 — a chave nem existe | `package.json` |
-| `devDependencies` | 1 — `puppeteer: ^25.8.0` | `package.json`; travado em `25.8.0` (`package-lock.json:196-198`) |
-| Dependências de runtime fora do npm | 2 — PeerJS e Google Fonts, ambas via `<script>`/`<link>` | `index.html:228`, `index.html:11` |
-| Lockfile | `lockfileVersion: 3` | `package-lock.json:4` |
+| Categoria                           | Quantidade                                               | Evidência                                                         |
+| ----------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `dependencies` (npm, runtime)       | 0 — a chave nem existe                                   | `package.json`                                                    |
+| `devDependencies`                   | 1 — `puppeteer: ^25.8.0`                                 | `package.json`; travado em `25.8.0` (`package-lock.json:196-198`) |
+| Dependências de runtime fora do npm | 2 — PeerJS e Google Fonts, ambas via `<script>`/`<link>` | `index.html:228`, `index.html:11`                                 |
+| Lockfile                            | `lockfileVersion: 3`                                     | `package-lock.json:4`                                             |
 
 ### External services
 
-| Service | Purpose |
-|---|---|
-| Broker público do PeerJS | Único serviço de terceiros no caminho da partida. Faz o aperto de mão inicial entre host e convidado; depois o tráfego é P2P direto. Instanciado como `new Peer(PREFIX + code, { debug: 0 })` no host e `new Peer({ debug: 0 })` no convidado (`js/net.js:48`, `js/net.js:82`), com `PREFIX = 'shadowfall-ashen-'` (`js/net.js:9`) |
-| unpkg (CDN) | Entrega `peerjs@1.5.4` como `<script>` global antes de `js/main.js` (`index.html:228`). Falha de carga vira erro em pt-BR: `'PeerJS não carregou. Verifique sua conexão.'` (`js/net.js:48`, `js/net.js:79`) |
-| Google Fonts | Grenze Gotisch (400/700/900) e Alegreya Sans (400/500/700/900), com `preconnect` para `fonts.googleapis.com` e `fonts.gstatic.com` (`index.html:9-11`) |
-| Vercel | Hospedagem estática. `framework: null`, `installCommand: "echo 'sem dependencias de runtime'"`, `buildCommand: "echo 'sem build'"`, `outputDirectory: "."`, `cleanUrls: true`; headers `Cache-Control: public, max-age=0, must-revalidate` em `/js/(.*)`, `X-Content-Type-Options: nosniff` e `Referrer-Policy: strict-origin-when-cross-origin` em `/(.*)` (`vercel.json`) |
-| Chromium local (só teste) | `executablePath: process.env.CHROME || '/usr/bin/google-chrome'`, via Puppeteer (`tests/browser.mjs:4-13`, `tests/multipeer.mjs:20`) |
+| Service                   | Purpose                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Broker público do PeerJS  | Único serviço de terceiros no caminho da partida. Faz o aperto de mão inicial entre host e convidado; depois o tráfego é P2P direto. Instanciado como `new Peer(PREFIX + code, { debug: 0 })` no host e `new Peer({ debug: 0 })` no convidado (`js/net.js:48`, `js/net.js:82`), com `PREFIX = 'shadowfall-ashen-'` (`js/net.js:9`)                                          |
+| unpkg (CDN)               | Entrega `peerjs@1.5.4` como `<script>` global antes de `js/main.js` (`index.html:228`). Falha de carga vira erro em pt-BR: `'PeerJS não carregou. Verifique sua conexão.'` (`js/net.js:48`, `js/net.js:79`)                                                                                                                                                                 |
+| Google Fonts              | Grenze Gotisch (400/700/900) e Alegreya Sans (400/500/700/900), com `preconnect` para `fonts.googleapis.com` e `fonts.gstatic.com` (`index.html:9-11`)                                                                                                                                                                                                                      |
+| Vercel                    | Hospedagem estática. `framework: null`, `installCommand: "echo 'sem dependencias de runtime'"`, `buildCommand: "echo 'sem build'"`, `outputDirectory: "."`, `cleanUrls: true`; headers `Cache-Control: public, max-age=0, must-revalidate` em `/js/(.*)`, `X-Content-Type-Options: nosniff` e `Referrer-Policy: strict-origin-when-cross-origin` em `/(.*)` (`vercel.json`) |
+| Chromium local (só teste) | `executablePath: process.env.CHROME                                                                                                                                                                                                                                                                                                                                         |     | '/usr/bin/google-chrome'`, via Puppeteer (`tests/browser.mjs:4-13`, `tests/multipeer.mjs:20`) |
 
 Os harnesses de navegador toleram falha de rede nessas duas origens: `page.on('requestfailed')` ignora URLs que contenham `fonts.g` ou `peerjs` (`tests/browser.mjs:21-26`).
 
 ### Dev dependencies
 
-| Package | Versão declarada | Versão travada | Uso |
-|---|---|---|---|
-| `puppeteer` | `^25.8.0` | `25.8.0` (`package-lock.json:197`) | Só os dois harnesses: `tests/browser.mjs` (smoke em Chromium, inclui viewport de celular) e `tests/multipeer.mjs` (N abas numa sessão P2P real). As 10 suítes de `npm test` rodam sem ele |
+| Package     | Versão declarada | Versão travada                     | Uso                                                                                                                                                                                       |
+| ----------- | ---------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `puppeteer` | `^25.8.0`        | `25.8.0` (`package-lock.json:197`) | Só os dois harnesses: `tests/browser.mjs` (smoke em Chromium, inclui viewport de celular) e `tests/multipeer.mjs` (N abas numa sessão P2P real). As 10 suítes de `npm test` rodam sem ele |
 
 Scripts que consomem a dependência (`package.json`):
 
@@ -41,40 +41,40 @@ Scripts que consomem a dependência (`package.json`):
 
 ### Shared infrastructure
 
-| Recurso | Papel | Configuração |
-|---|---|---|
+| Recurso                         | Papel                                                                                | Configuração                                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | WebRTC DataChannel (via PeerJS) | Único transporte de jogo. Estrela: host no centro, `reliable: true` (`js/net.js:86`) | Backpressure em `dataChannel.bufferedAmount > SLOW_PEER_BUFFER` 512 KB; `SLOW_PEER_STRIKES` 40 pulos consecutivos derrubam o peer (`js/balance.js:99-100`, `js/net.js:118-137`) |
-| `localStorage` | Toda a persistência: `sf-save-<voc>` e `sf-name` (`js/save.js:31`, `js/save.js:27`) | Acesso único por `store()`, com `try/catch` e fallback para `null`; injetável por `setStorage()` (`js/save.js:39-47`) |
-| Canvas 2D | Renderização do mundo e do minimapa | `canvas.getContext('2d', { alpha: false })`, DPR limitado a 2, zoom entre 0.6 e 1.15 (`js/main.js:21`, `js/main.js:59-67`) |
-| `requestAnimationFrame` | Relógio do loop | `dt` limitado a 0,08 s; no máximo 6 ticks de catch-up por quadro (`js/main.js:889`, `js/main.js:912`) |
-| `performance.now()` | Medição de ping do convidado, a cada 3 s | `{t:'ping', ts}` → `{t:'pong', ts}` (`js/main.js:1013-1016`, `js/main.js:522-527`) |
+| `localStorage`                  | Toda a persistência: `sf-save-<voc>` e `sf-name` (`js/save.js:31`, `js/save.js:27`)  | Acesso único por `store()`, com `try/catch` e fallback para `null`; injetável por `setStorage()` (`js/save.js:39-47`)                                                           |
+| Canvas 2D                       | Renderização do mundo e do minimapa                                                  | `canvas.getContext('2d', { alpha: false })`, DPR limitado a 2, zoom entre 0.6 e 1.15 (`js/main.js:21`, `js/main.js:59-67`)                                                      |
+| `requestAnimationFrame`         | Relógio do loop                                                                      | `dt` limitado a 0,08 s; no máximo 6 ticks de catch-up por quadro (`js/main.js:889`, `js/main.js:912`)                                                                           |
+| `performance.now()`             | Medição de ping do convidado, a cada 3 s                                             | `{t:'ping', ts}` → `{t:'pong', ts}` (`js/main.js:1013-1016`, `js/main.js:522-527`)                                                                                              |
 
 ### Observabilidade
 
 Não há SDK de telemetria, APM ou log remoto — nenhuma dependência desse tipo em `package.json` e nenhuma chamada de rede fora do PeerJS/CDN/fonts. O que existe é local:
 
-| Sinal | Onde |
-|---|---|
-| Contadores de banda: `bytesOut`, `bytesIn`, `packetsOut`, `rejected` | `js/net.js:28-33`, `approxBytes()` em `js/net.js:177-180` |
-| Sonda `window.__sf.stats()` — frames, papel, andar, jogadores, peers, ping, bytes, monstros | Só com `?debug=1` na URL (`js/main.js:1020-1041`) |
-| Ponte de teste `window.__SF` / `window.__VIEW_GET` | `js/main.js:1052-1053` |
-| Relatório de saneamento de save | `console.info('[sala]', …)` no host (`js/main.js:390`, `js/main.js:208`) |
-| Log da sala visível ao jogador | `UI.pushLog(...)` com classes `system`, `warn`, `chat`, `death`, `loot`, `boss`, `level` (`js/ui.js`) |
+| Sinal                                                                                       | Onde                                                                                                  |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Contadores de banda: `bytesOut`, `bytesIn`, `packetsOut`, `rejected`                        | `js/net.js:28-33`, `approxBytes()` em `js/net.js:177-180`                                             |
+| Sonda `window.__sf.stats()` — frames, papel, andar, jogadores, peers, ping, bytes, monstros | Só com `?debug=1` na URL (`js/main.js:1020-1041`)                                                     |
+| Ponte de teste `window.__SF` / `window.__VIEW_GET`                                          | `js/main.js:1052-1053`                                                                                |
+| Relatório de saneamento de save                                                             | `console.info('[sala]', …)` no host (`js/main.js:390`, `js/main.js:208`)                              |
+| Log da sala visível ao jogador                                                              | `UI.pushLog(...)` com classes `system`, `warn`, `chat`, `death`, `loot`, `boss`, `level` (`js/ui.js`) |
 
 ### Variáveis de ambiente
 
 Nenhuma no código de produção — não existe `.env.example` e nenhum módulo em `js/` lê `process.env`. As únicas leituras estão nos harnesses de teste:
 
-| Variável | Default | Onde |
-|---|---|---|
-| `URL` | `http://localhost:8099/index.html` | `tests/browser.mjs:3` |
-| `CHROME` | `/usr/bin/google-chrome` | `tests/browser.mjs:4`, `tests/multipeer.mjs:20` |
-| `OUT` | `/tmp/shadowfall-shots` | `tests/browser.mjs:5`, `tests/multipeer.mjs:210` |
-| `PORT` | `5199` | `tests/multipeer.mjs:17` |
-| `PEERS` | `2` | `tests/multipeer.mjs:18` |
-| `CASE` | `basic` (aceita `basic\|full\|lock\|kick\|late\|drop\|measure\|shot\|all`) | `tests/multipeer.mjs:19`, `README.md` |
-| `BASE` | `''` | `tests/multipeer.mjs:22` |
-| `HEADED` | vazio → `headless: 'new'` | `tests/multipeer.mjs:23` |
+| Variável | Default                                                                    | Onde                                             |
+| -------- | -------------------------------------------------------------------------- | ------------------------------------------------ |
+| `URL`    | `http://localhost:8099/index.html`                                         | `tests/browser.mjs:3`                            |
+| `CHROME` | `/usr/bin/google-chrome`                                                   | `tests/browser.mjs:4`, `tests/multipeer.mjs:20`  |
+| `OUT`    | `/tmp/shadowfall-shots`                                                    | `tests/browser.mjs:5`, `tests/multipeer.mjs:210` |
+| `PORT`   | `5199`                                                                     | `tests/multipeer.mjs:17`                         |
+| `PEERS`  | `2`                                                                        | `tests/multipeer.mjs:18`                         |
+| `CASE`   | `basic` (aceita `basic\|full\|lock\|kick\|late\|drop\|measure\|shot\|all`) | `tests/multipeer.mjs:19`, `README.md`            |
+| `BASE`   | `''`                                                                       | `tests/multipeer.mjs:22`                         |
+| `HEADED` | vazio → `headless: 'new'`                                                  | `tests/multipeer.mjs:23`                         |
 
 ### Ausências verificadas
 

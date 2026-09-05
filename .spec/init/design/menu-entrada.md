@@ -39,6 +39,7 @@ Sem mudança estrutural. `.screen` > `.menu-inner` > `.brand` + `.menu-body` + `
 ## 2. Layout mobile
 
 Já resolvido pelo CSS atual: abaixo de `520px` a `.voc-grid` vira 2 colunas. Ajustes:
+
 - `.menu-actions` e `.join-row` empilham em coluna abaixo de `420px`.
 - O campo de código mantém `130px` e continua centralizado, em `--display` com `letter-spacing: .3em`.
 - Alvo de toque dos `.voc-card` já passa de `44px` pela altura natural do card.
@@ -59,14 +60,15 @@ URL: `?sala=CÓDIGO`.
 Todas em `.menu-status.err` (`#ff6b5e`). **Nenhuma recarrega a página nem tira o jogador da tela.**
 O campo de código preserva o valor digitado para permitir correção.
 
-| Motivo | Quando | Texto |
-|---|---|---|
-| **Código inválido** | Validação local: menos de 4 caracteres, ou caractere fora do alfabeto | *"O código tem 4 letras."* / *"Esse caractere não existe em código de sala."* |
-| **Sala inexistente** | Broker devolve `peer-unavailable` | *"Sala não encontrada. Confira o código."* |
-| **Sala cheia** | O host recusa por lotação | *"Sala cheia — já são 10 jogadores."* |
-| **Sala trancada** | O host recusa por tranca | *"Sala trancada pelo host."* |
+| Motivo               | Quando                                                                | Texto                                                                         |
+| -------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Código inválido**  | Validação local: menos de 4 caracteres, ou caractere fora do alfabeto | _"O código tem 4 letras."_ / _"Esse caractere não existe em código de sala."_ |
+| **Sala inexistente** | Broker devolve `peer-unavailable`                                     | _"Sala não encontrada. Confira o código."_                                    |
+| **Sala cheia**       | O host recusa por lotação                                             | _"Sala cheia — já são 10 jogadores."_                                         |
+| **Sala trancada**    | O host recusa por tranca                                              | _"Sala trancada pelo host."_                                                  |
 
 Distinções que importam:
+
 - **Cheia e trancada não são erro de digitação.** O texto não sugere conferir o código.
 - **Cheia e trancada chegam do host**, depois do handshake — o campo continua preenchido e o
   botão volta de `Procurando a sala…` para `Entrar na sala`.
@@ -75,12 +77,12 @@ Distinções que importam:
 
 ## 5. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** | Nome com placeholder `Herói`; nenhuma vocação selecionada desabilita `Criar sala`, `Jogar sozinho` e `Entrar na sala` |
-| **Carregando** | `.menu-status` em `--ember`: *"Abrindo sala…"* ou *"Procurando a sala…"*; as três ações `:disabled` |
-| **Erro** | `.menu-status.err` com um dos quatro textos; ações reabilitadas na hora |
-| **Cheio** | Caso de erro acima, com texto próprio; nenhum tratamento visual extra no menu |
+| Estado         | Tratamento                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Vazio**      | Nome com placeholder `Herói`; nenhuma vocação selecionada desabilita `Criar sala`, `Jogar sozinho` e `Entrar na sala` |
+| **Carregando** | `.menu-status` em `--ember`: _"Abrindo sala…"_ ou _"Procurando a sala…"_; as três ações `:disabled`                   |
+| **Erro**       | `.menu-status.err` com um dos quatro textos; ações reabilitadas na hora                                               |
+| **Cheio**      | Caso de erro acima, com texto próprio; nenhum tratamento visual extra no menu                                         |
 
 O alfabeto do código é `ACDEFGHJKLMNPQRTUVWXYZ34679` — sem `O/0`, `I/1`, `S/5`, `B/8`. O campo
 aceita minúscula e converte na hora; caractere fora do alfabeto é bloqueado na digitação, não

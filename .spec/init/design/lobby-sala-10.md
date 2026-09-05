@@ -47,6 +47,7 @@ Estende `.screen` > `.menu-inner.narrow` — a mesma estrutura de hoje, com o ro
 ## 2. Visão do convidado
 
 Mesma tela, três diferenças:
+
 - Sem `Trancar`, sem `Expulsar`, sem `Descer`.
 - No lugar de `Descer`, o texto de espera em `.menu-status`: `Esperando o host descer.`
 - O `lock-badge` continua visível — quem está dentro precisa saber que a sala está fechada.
@@ -80,20 +81,20 @@ Uma coluna, `.menu-inner.narrow` já resolve a largura.
 
 ## 4. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** (só o host) | `.lobby-row.empty`: *"Ninguém chegou ainda. O link está na sua mão."* Contador `1/10`. `Descer` continua **habilitado** — jogar sozinho é fluxo válido (US-1.7) |
-| **Carregando** (abrindo sala) | Código exibido como `----`; `.menu-status` em `--ember`: *"Abrindo sala…"*; todas as ações `:disabled` |
-| **Entrando** (linha nova) | A linha aparece com estado `conectando` em `--bone-dim`, e troca para `pronto` quando o peer confirma. Sem animação de entrada além do padrão |
-| **Erro** (falha ao abrir) | `.menu-status.err`: *"Não consegui abrir a sala."*; a tela volta ao menu com o motivo preservado |
-| **Cheio** (10/10) | `capacity-counter` em `--ember`. Linha de rodapé do roster: *"Sala cheia — novas entradas serão recusadas."* Não é erro; o host segue podendo descer |
-| **Trancada** | `lock-badge` visível para todos; botão do host vira `Destrancar` |
-| **Saída de jogador** | A linha some sem animação de colapso; `.menu-status` registra *"Marina saiu."* por 4s |
+| Estado                        | Tratamento                                                                                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vazio** (só o host)         | `.lobby-row.empty`: _"Ninguém chegou ainda. O link está na sua mão."_ Contador `1/10`. `Descer` continua **habilitado** — jogar sozinho é fluxo válido (US-1.7) |
+| **Carregando** (abrindo sala) | Código exibido como `----`; `.menu-status` em `--ember`: _"Abrindo sala…"_; todas as ações `:disabled`                                                          |
+| **Entrando** (linha nova)     | A linha aparece com estado `conectando` em `--bone-dim`, e troca para `pronto` quando o peer confirma. Sem animação de entrada além do padrão                   |
+| **Erro** (falha ao abrir)     | `.menu-status.err`: _"Não consegui abrir a sala."_; a tela volta ao menu com o motivo preservado                                                                |
+| **Cheio** (10/10)             | `capacity-counter` em `--ember`. Linha de rodapé do roster: _"Sala cheia — novas entradas serão recusadas."_ Não é erro; o host segue podendo descer            |
+| **Trancada**                  | `lock-badge` visível para todos; botão do host vira `Destrancar`                                                                                                |
+| **Saída de jogador**          | A linha some sem animação de colapso; `.menu-status` registra _"Marina saiu."_ por 4s                                                                           |
 
 ## 5. Regras de conteúdo
 
 - O contador é **sempre** `n/10`, mesmo com 1 jogador. Nunca "aguardando o segundo jogador".
-- **Nenhum texto pressupõe dois jogadores.** O texto atual — *"Assim que ela entrar, o botão desce vocês dois"* — sai. Substitutos: `Sala aberta. Desça quando quiser.` · `Passe esse código para quem vai jogar.`
+- **Nenhum texto pressupõe dois jogadores.** O texto atual — _"Assim que ela entrar, o botão desce vocês dois"_ — sai. Substitutos: `Sala aberta. Desça quando quiser.` · `Passe esse código para quem vai jogar.`
 - O código de sala nunca muda enquanto a sala existe, nem ao trancar e destrancar.
 - Dois jogadores podem escolher a mesma vocação; o roster não deduplica nem avisa.
 

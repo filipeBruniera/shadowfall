@@ -54,8 +54,8 @@ parecer diferentes.
 - `.overlay` com o gradiente vermelho padrão.
 - A linha de progresso salvo é **obrigatória** e usa `--verdigris` com o glifo `◈` — o mesmo de
   `.chip.gold`. É a informação que tira a ansiedade de perder o personagem.
-- Se a gravação falhou, a linha vira `--ember`: *"Não consegui salvar o progresso neste
-  navegador."* — nunca omitir.
+- Se a gravação falhou, a linha vira `--ember`: _"Não consegui salvar o progresso neste
+  navegador."_ — nunca omitir.
 
 ## 2. Transição entre os estados
 
@@ -66,13 +66,14 @@ perda de conexão ──▶ [A] reconectando ──── reconectou ───�
 ```
 
 - Saída **deliberada** do host (ele fecha a sala pelo botão) pula direto para o estado B, com o
-  texto *"O host encerrou a partida."*
+  texto _"O host encerrou a partida."_
 - Fechamento de aba, sem aviso, entra pelo estado A.
 - Reconexão bem-sucedida remove o overlay sem banner nem comemoração — o jogo simplesmente volta.
 
 ## 3. Voltar ao menu sem recarregar
 
 `VOLTAR AO MENU` **não usa `location.reload()`**. Ele:
+
 1. Grava o progresso (se ainda não gravou).
 2. Limpa visão, mapa, filas de ação e conexões.
 3. Mostra `#menu` com nome e vocação preservados, pronto para criar ou entrar em outra sala.
@@ -83,6 +84,7 @@ sai.
 ## 4. Layout mobile
 
 O `.overlay` já é centralizado e responsivo. Ajustes:
+
 - `h2` usa `clamp(28px, 8vw, 48px)`.
 - A barra de reconexão ocupa `min(240px, 70vw)`.
 - O botão ocupa largura total com `max-width: 280px`, altura mínima `44px`.
@@ -90,17 +92,17 @@ O `.overlay` já é centralizado e responsivo. Ajustes:
 
 ## 5. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** | Não se aplica — o overlay só existe quando há o que avisar |
-| **Carregando** | É o próprio estado A, com a barra regressiva |
-| **Erro** | Estado B; a falha de gravação aparece como linha em `--ember`, não como segundo overlay |
-| **Cheio** | Não se aplica |
+| Estado         | Tratamento                                                                              |
+| -------------- | --------------------------------------------------------------------------------------- |
+| **Vazio**      | Não se aplica — o overlay só existe quando há o que avisar                              |
+| **Carregando** | É o próprio estado A, com a barra regressiva                                            |
+| **Erro**       | Estado B; a falha de gravação aparece como linha em `--ember`, não como segundo overlay |
+| **Cheio**      | Não se aplica                                                                           |
 
 ## 6. Vale também para
 
 - **Jogador expulso** (`moderacao-sala.md`): mesmo layout do estado B, com título
-  *"Você saiu da sala"* e texto *"O host removeu você."* — nunca uma tela de erro.
+  _"Você saiu da sala"_ e texto _"O host removeu você."_ — nunca uma tela de erro.
 - **Jogador na fila** (`fila-late-join.md`) quando o host cai: mesmo estado B.
 
 ## 7. Aponta para

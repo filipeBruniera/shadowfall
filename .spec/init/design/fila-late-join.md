@@ -77,29 +77,30 @@ Abaixo de `520px`, o `roster-row` da fila mostra só vocação, nome e posição
 
 Permitida até a inserção (US-8.1 + US-1.3). O botão abre a `.voc-grid` no lugar das listas,
 com `Voltar` para desfazer. Trocar de vocação troca o save que será aplicado na inserção — a
-tela avisa isso em uma linha: *"Você entra com o progresso da vocação escolhida."*
+tela avisa isso em uma linha: _"Você entra com o progresso da vocação escolhida."_
 
 ## 4. Transição para o jogo
 
 Quando o grupo cruza o portal:
+
 1. A tela troca o `.eyebrow` para `ENTRANDO` e as listas somem.
 2. `#banner` do jogo assume: `Andar 8` / `Você entrou com o grupo`.
 3. A transição é imediata, sem tela de carregamento — o mapa é gerado por seed no cliente e
    não depende de download.
 
 Se a inserção não couber (alguém entrou antes e a sala encheu), a tela volta ao estado de fila
-com `.menu-status.err`: *"A sala encheu antes da sua vez. Você continua na fila."*
+com `.menu-status.err`: _"A sala encheu antes da sua vez. Você continua na fila."_
 
 ## 5. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** (você é o único na fila) | A seção `NA FILA` mostra só a sua linha; nenhum `.lobby-row.empty` é necessário |
-| **Carregando** (conectando) | `.eyebrow` = `CONECTANDO`; listas ainda vazias com `.lobby-row.empty`: *"Recebendo o estado da sala…"*; ações `:disabled` |
-| **Erro** | Recusa por sala cheia ou trancada **não chega nesta tela** — é barrada no menu (`menu-entrada.md`). Aqui só aparece erro de perda de conexão |
-| **Cheio** | Contador em `--ember`; a fila continua aceitando até o teto combinado de partida + fila |
-| **Host caiu** | A fila é esvaziada; o jogador vai para o aviso de `aviso-host-caiu.md`, não fica preso aqui |
-| **Expulso da fila** | Mensagem do `moderacao-sala.md` e retorno ao menu |
+| Estado                             | Tratamento                                                                                                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vazio** (você é o único na fila) | A seção `NA FILA` mostra só a sua linha; nenhum `.lobby-row.empty` é necessário                                                              |
+| **Carregando** (conectando)        | `.eyebrow` = `CONECTANDO`; listas ainda vazias com `.lobby-row.empty`: _"Recebendo o estado da sala…"_; ações `:disabled`                    |
+| **Erro**                           | Recusa por sala cheia ou trancada **não chega nesta tela** — é barrada no menu (`menu-entrada.md`). Aqui só aparece erro de perda de conexão |
+| **Cheio**                          | Contador em `--ember`; a fila continua aceitando até o teto combinado de partida + fila                                                      |
+| **Host caiu**                      | A fila é esvaziada; o jogador vai para o aviso de `aviso-host-caiu.md`, não fica preso aqui                                                  |
+| **Expulso da fila**                | Mensagem do `moderacao-sala.md` e retorno ao menu                                                                                            |
 
 ## 6. Regras
 

@@ -18,6 +18,7 @@ inclusive as que o código atual já entrega: elas servem de checklist de valida
 regressão antes e durante o próximo ciclo.
 
 **User Types:**
+
 - **Jogador** - qualquer pessoa dentro de uma partida, independente de ser host ou convidado. Herda todas as capacidades de jogo (mover, lutar, catar loot, morrer, evoluir).
 - **Anfitrião (Host)** - o jogador que criou a sala. Sua máquina roda a simulação autoritativa; ele detém as decisões de sala (começar, trancar, expulsar) e sua saída encerra a partida.
 - **Convidado** - o jogador que entrou numa sala existente pelo código de 4 letras ou pelo link de convite. Sofre latência de rede e depende de predição local e interpolação.
@@ -28,11 +29,13 @@ regressão antes e durante o próximo ciclo.
 ## 1. Sala e Lobby
 
 ### US-1.1: Criar sala com código curto
+
 **As a** Anfitrião
 **I want to** criar uma sala e receber um código curto e um link de convite
 **So that** eu chame alguém para jogar sem cadastro, instalação ou troca de IP
 
 **Acceptance Criteria:**
+
 - [ ] O código tem exatamente 4 caracteres, sorteados do alfabeto `ACDEFGHJKLMNPQRTUVWXYZ34679` (sem glifos ambíguos como O/0, I/1, S/5, B/8)
 - [ ] O peer é registrado no broker com o id `shadowfall-ashen-{CÓDIGO}`
 - [ ] A tela exibe o código e um link de convite copiável que já embute o código
@@ -44,11 +47,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-1.2: Entrar por código ou link
+
 **As a** Convidado
 **I want to** entrar numa sala digitando o código de 4 letras ou abrindo o link de convite
 **So that** eu comece a jogar em segundos, sem criar conta
 
 **Acceptance Criteria:**
+
 - [ ] Abrir o link de convite preenche o código automaticamente e leva direto à escolha de vocação
 - [ ] Digitar o código funciona em maiúsculas ou minúsculas
 - [ ] Código inexistente ou sala fora do ar exibe mensagem de erro legível, e o jogador continua na tela de entrada (não trava nem recarrega)
@@ -60,11 +65,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-1.3: Escolher vocação antes de começar
+
 **As a** Jogador
 **I want to** escolher entre Cavaleiro, Paladino, Feiticeiro e Druida antes da partida começar
 **So that** eu jogue o papel que quero e carregue o progresso daquela vocação
 
 **Acceptance Criteria:**
+
 - [ ] As 4 vocações são exibidas com nome, tag (EK/RP/MS/ED), cor e blurb de papel
 - [ ] Selecionar uma vocação carrega o save correspondente (`sf-save-{vocação}`) se existir, mostrando o nível atual
 - [ ] Dois jogadores podem escolher a mesma vocação na mesma sala
@@ -75,11 +82,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-1.4: Sala com até 10 jogadores
+
 **As a** Anfitrião
 **I want to** que minha sala aceite até 10 jogadores em vez de 2
 **So that** eu jogue com um grupo, não só com uma pessoa
 
 **Acceptance Criteria:**
+
 - [ ] O lobby aceita de 1 a 10 jogadores e exibe o contador `n/10`
 - [ ] A 11ª tentativa de conexão é recusada com motivo "sala cheia"
 - [ ] Todos os convidados conectam **apenas ao host** (topologia estrela); não há conexão convidado↔convidado
@@ -91,11 +100,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-1.5: Expulsar jogador
+
 **As a** Anfitrião
 **I want to** remover um jogador específico da minha sala
 **So that** eu recupere o controle quando alguém atrapalha ou entrou por engano
 
 **Acceptance Criteria:**
+
 - [ ] A lista de jogadores no lobby e em partida oferece a ação de expulsar, visível apenas para o host
 - [ ] Expulsar encerra a conexão daquele peer e remove a entidade dele da simulação
 - [ ] O jogador expulso vê uma mensagem explicando que foi removido da sala, e não uma tela de erro
@@ -107,11 +118,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-1.6: Trancar sala
+
 **As a** Anfitrião
 **I want to** trancar a sala mesmo havendo vagas
 **So that** eu jogue só com quem já está dentro, mesmo que o código tenha vazado
 
 **Acceptance Criteria:**
+
 - [ ] Existe um controle de trancar/destrancar visível apenas para o host
 - [ ] Com a sala trancada, novas conexões são recusadas com o motivo "sala trancada", inclusive abaixo do limite de 10
 - [ ] Destrancar volta a aceitar conexões imediatamente, sem trocar o código
@@ -122,11 +135,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-1.7: Começar e jogar sozinho
+
 **As a** Jogador Solo
 **I want to** criar uma sala e começar sem esperar ninguém
 **So that** eu jogue quando não tem grupo disponível
 
 **Acceptance Criteria:**
+
 - [ ] O botão Começar fica habilitado com 1 jogador na sala
 - [ ] O conteúdo do andar é escalado para 1 jogador (a mesma regra de escalonamento por jogadores vivos de US-5.3)
 - [ ] A rede de segurança de respawn próprio em 5s continua funcionando sem nenhum aliado presente
@@ -138,11 +153,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-1.8: Definir nome persistente
+
 **As a** Jogador
 **I want to** definir meu nome uma vez e ele ser lembrado
 **So that** eu não redigite a cada partida e o grupo saiba quem é quem
 
 **Acceptance Criteria:**
+
 - [ ] O nome digitado é gravado em `localStorage` na chave `sf-name`
 - [ ] Ao reabrir o jogo, o campo já vem preenchido com o nome salvo
 - [ ] O nome aparece no lobby, no HUD dos aliados e no chat
@@ -155,11 +172,13 @@ regressão antes e durante o próximo ciclo.
 ## 2. Sessão e Rede
 
 ### US-2.1: Movimento responsivo apesar da latência
+
 **As a** Convidado
 **I want to** que meu personagem responda ao meu comando na hora, sem esperar o host
 **So that** o jogo não pareça travado por causa da distância de rede
 
 **Acceptance Criteria:**
+
 - [ ] O convidado envia input a 30Hz e aplica **predição local** do próprio movimento imediatamente
 - [ ] Entidades remotas (outros jogadores, monstros, projéteis) são **interpoladas** entre snapshots de 15Hz, sem teleporte visível
 - [ ] Divergência entre predição e estado autoritativo é reconciliada suavemente, sem "puxão" perceptível em condição normal de rede
@@ -170,11 +189,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-2.2: Nenhuma ação perdida por pacote perdido
+
 **As a** Jogador
 **I want to** que minha magia, poção ou equipamento não se percam se um pacote cair
 **So that** eu não morra por uma ação que "não saiu"
 
 **Acceptance Criteria:**
+
 - [ ] Toda ação discreta (magia, poção, equipar, ressuscitar) recebe um id incremental e entra numa fila
 - [ ] A ação é reenviada até o host confirmar o recebimento
 - [ ] O host ignora ids já processados (idempotência), de modo que reenvio não dispara a ação duas vezes
@@ -185,11 +206,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-2.3: Host aguenta o grupo de 10
+
 **As a** Anfitrião
 **I want to** rodar a simulação para até 10 jogadores sem engasgo
 **So that** o grupo inteiro jogue no mesmo ritmo
 
 **Acceptance Criteria:**
+
 - [ ] A simulação mantém o tick de 30Hz e o snapshot de 15Hz com 10 jogadores e a população máxima de monstros do andar
 - [ ] O orçamento de tempo por tick da simulação continua sendo verificado pelo teste headless com o grupo cheio
 - [ ] Se o custo de banda inviabilizar 9 conexões, um corte por área de interesse é aplicado (enviar só entidades relevantes ao destinatário)
@@ -200,11 +223,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-2.4: Aviso claro quando o host sai
+
 **As a** Convidado
 **I want to** ser avisado com clareza quando o host fecha a aba
 **So that** eu entenda que a partida acabou em vez de olhar uma tela congelada
 
 **Acceptance Criteria:**
+
 - [ ] A perda da conexão com o host mostra uma mensagem explícita de fim de partida
 - [ ] O progresso do convidado é gravado no `localStorage` dele antes de sair da partida
 - [ ] O convidado é levado de volta ao menu, podendo criar ou entrar noutra sala sem recarregar a página
@@ -215,11 +240,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-2.5: Entrada rápida sem transferir o mapa
+
 **As a** Jogador
 **I want to** entrar na partida sem esperar download de mapa
 **So that** a conexão seja instantânea mesmo em rede ruim
 
 **Acceptance Criteria:**
+
 - [ ] O mapa nunca trafega pela rede: cada cliente gera o andar a partir de `seed` + número do andar
 - [ ] O mesmo par (seed, andar) produz mapa byte a byte idêntico em qualquer máquina — verificado por teste de determinismo
 - [ ] Só entidades e eventos trafegam no snapshot
@@ -232,11 +259,13 @@ regressão antes e durante o próximo ciclo.
 ## 3. Combate
 
 ### US-3.1: Mover pelo cenário
+
 **As a** Jogador
 **I want to** mover por teclado ou clique e contornar paredes sozinho
 **So that** eu me concentre no combate em vez de na navegação
 
 **Acceptance Criteria:**
+
 - [ ] WASD move em 8 direções, com velocidade dependente dos stats e do terreno
 - [ ] Clique no chão traça rota com A* e contorna paredes
 - [ ] Entidades vivem em tiles float e a projeção isométrica só ocorre no desenho: câmera, mira, clique e projétil usam o mesmo espaço de coordenadas
@@ -248,11 +277,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-3.2: Lançar as magias da vocação
+
 **As a** Jogador
 **I want to** usar as 4 magias da minha vocação nas teclas 1–4
 **So that** eu jogue o papel da classe em vez de só bater
 
 **Acceptance Criteria:**
+
 - [ ] Cada vocação tem exatamente 4 magias, com custo de mana, cooldown e elemento próprios
 - [ ] A magia só dispara se houver mana suficiente e o cooldown estiver zerado; caso contrário há retorno visual claro da recusa
 - [ ] O simulador resolve corretamente cada `type`: `bolt`, `wave`, `nova`, `ground`, `heal`, `buff`, `dash` e `chain`
@@ -264,11 +295,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-3.3: Ataque rápido na direção do mouse
+
 **As a** Jogador
 **I want to** disparar a magia 1 com o botão direito na direção do cursor
 **So that** eu reaja rápido sem tirar a mão do movimento
 
 **Acceptance Criteria:**
+
 - [ ] O botão direito lança a magia do slot 1 na direção do cursor, respeitando mana e cooldown
 - [ ] A direção usada é a mesma do espaço de coordenadas da simulação, não a do espaço da tela
 - [ ] O menu de contexto do navegador é suprimido dentro do canvas
@@ -278,11 +311,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-3.4: Explorar fraqueza elemental
+
 **As a** Jogador
 **I want to** que meu elemento importe contra cada tipo de monstro
 **So that** escolher a magia certa seja uma decisão real
 
 **Acceptance Criteria:**
+
 - [ ] Dano contra fraqueza é multiplicado por 1,5×; contra resistência, por 0,55×
 - [ ] Os 7 elementos (Físico, Fogo, Gelo, Energia, Terra, Sagrado, Morte) têm nome e cor próprios na interface
 - [ ] O número de dano exibido reflete o multiplicador aplicado
@@ -293,11 +328,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-3.5: Jogar no celular
+
 **As a** Jogador
 **I want to** jogar no celular com controles de toque
 **So that** eu não precise de computador para entrar na partida
 
 **Acceptance Criteria:**
+
 - [ ] Joystick virtual na metade esquerda da tela controla o movimento
 - [ ] Botões de magia e de poção ficam na metade direita, alcançáveis com o polegar
 - [ ] O layout se adapta a viewport de celular sem sobreposição de elementos nem scroll da página
@@ -308,11 +345,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-3.6: Horda sem queda de framerate
+
 **As a** Jogador
 **I want to** enfrentar mais de cem monstros sem o jogo engasgar
 **So that** a fantasia de horda funcione de fato
 
 **Acceptance Criteria:**
+
 - [ ] A IA de perseguição usa flow field recalculado periodicamente, não pathfinding por monstro
 - [ ] A simulação fica dentro do orçamento de tempo por tick com a população máxima do andar, verificado em teste headless
 - [ ] O renderizador desenha chão e paredes em lotes de `Path2D` — uma chamada por cor, não por tile
@@ -325,11 +364,13 @@ regressão antes e durante o próximo ciclo.
 ## 4. Morte e Ressurreição
 
 ### US-4.1: Morrer sem perder o que juntei
+
 **As a** Jogador
 **I want to** que a morte custe pouco
 **So that** eu arrisque avançar em vez de jogar com medo
 
 **Acceptance Criteria:**
+
 - [ ] A morte custa exatamente 10% do ouro atual, arredondado para baixo
 - [ ] Inventário e equipamento nunca são perdidos
 - [ ] Nível e XP não são reduzidos
@@ -340,11 +381,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-4.2: Ser erguido por qualquer aliado
+
 **As a** Jogador
 **I want to** ser ressuscitado por qualquer companheiro que chegue perto
 **So that** o grupo se ajude sem depender de um par fixo
 
 **Acceptance Criteria:**
+
 - [ ] Qualquer aliado dentro de 1,6 tiles do caído acumula progresso de ressurreição
 - [ ] O tempo total é de 3,5s e há barra de progresso visível para os dois lados
 - [ ] Mais de um aliado erguendo ao mesmo tempo acelera a barra proporcionalmente
@@ -356,11 +399,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-4.3: Nunca ficar preso na tela de morte
+
 **As a** Jogador Solo
 **I want to** renascer por conta própria quando não há ninguém para me erguer
 **So that** eu não fique olhando uma tela de morte sem saída
 
 **Acceptance Criteria:**
+
 - [ ] Após 5s de morto, a opção de renascer sozinho fica disponível e funciona sem aliado presente
 - [ ] Aos 30s, o respawn acontece automaticamente mesmo sem ação do jogador
 - [ ] O renascimento reposiciona o jogador no spawn do andar corrente
@@ -373,11 +418,13 @@ regressão antes e durante o próximo ciclo.
 ## 5. Progressão de Andar
 
 ### US-5.1: Matar o chefe e abrir o portal
+
 **As a** Jogador
 **I want to** que derrubar o chefe abra o caminho para o andar seguinte
 **So that** o andar tenha um objetivo claro
 
 **Acceptance Criteria:**
+
 - [ ] Cada andar tem exatamente um chefe, sorteado entre os 4 disponíveis
 - [ ] A morte do chefe abre um portal na sala dele e anuncia o evento a todos os jogadores
 - [ ] O chefe dropa loot com nível efetivo +4 em relação aos monstros comuns
@@ -388,11 +435,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-5.2: Descer só com o grupo reunido
+
 **As a** Jogador
 **I want to** que a descida de andar exija todos os vivos no portal
 **So that** ninguém arraste o grupo para o andar seguinte sozinho
 
 **Acceptance Criteria:**
+
 - [ ] A descida só dispara quando **todos os jogadores vivos** estão em cima do portal por 1,5s
 - [ ] O HUD mostra quantos dos vivos já estão no portal (ex.: `3/5`)
 - [ ] Jogadores mortos não contam para o requisito, e um jogador morrer com o grupo em cima não interrompe a contagem
@@ -404,11 +453,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-5.3: Conteúdo escala com o tamanho do grupo
+
 **As a** Jogador
 **I want to** que o andar continue desafiador com 10 pessoas
 **So that** um grupo grande não trivialize a masmorra
 
 **Acceptance Criteria:**
+
 - [ ] A quantidade e o HP dos monstros escalam com o número de jogadores vivos na sala
 - [ ] O HP do chefe escala pela mesma regra
 - [ ] A escala é recalculada ao trocar de andar, não no meio do andar corrente
@@ -420,11 +471,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-5.4: Subir de nível junto com o grupo
+
 **As a** Jogador
 **I want to** ganhar XP pelos abates do grupo sem depender de quem deu o golpe final
 **So that** ninguém precise competir por abate
 
 **Acceptance Criteria:**
+
 - [ ] O XP de cada morte é creditado a **todos os jogadores vivos dentro de 26 tiles** do monstro, independente de quem deu o golpe final
 - [ ] A parcela de cada jogador é o XP do monstro multiplicado por `1/√(vivos)`, arredondada para baixo, com mínimo de 1 — decisão de balanceamento: **o divisor atual é mantido**, não é XP integral
 - [ ] Jogador caído não recebe XP e não entra na contagem de vivos que forma o divisor
@@ -440,11 +493,13 @@ regressão antes e durante o próximo ciclo.
 ## 6. Loot e Inventário
 
 ### US-6.1: Coleta automática
+
 **As a** Jogador
 **I want to** catar loot só de passar por cima
 **So that** o combate não seja interrompido por micro-gerência
 
 **Acceptance Criteria:**
+
 - [ ] Itens e ouro no chão são coletados automaticamente dentro de 0,85 tile
 - [ ] Ouro dropa por monstro no valor `floor((6 + nível*4) * rand(0,7 a 1,5))` e é somado na hora
 - [ ] Item coletado vai para o primeiro slot vazio da mochila
@@ -455,11 +510,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-6.2: Loot com raridade e afixos
+
 **As a** Jogador
 **I want to** encontrar itens de raridades diferentes com modificadores aleatórios
 **So that** cada drop tenha chance de ser interessante
 
 **Acceptance Criteria:**
+
 - [ ] Quatro raridades com multiplicador, número de afixos e peso de sorteio: Comum (1,0× / 0 / 100), Raro (1,35× / 1 / 38), Épico (1,8× / 2 / 13), Lendário (2,5× / 3 / 3)
 - [ ] Os afixos são sorteados entre os 8 disponíveis (atk, def, ml, hp, mp, speed, crit, leech), dentro das faixas mínima e máxima definidas
 - [ ] A raridade é sinalizada por cor no chão e na mochila
@@ -470,11 +527,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-6.3: Gerenciar mochila e equipar
+
 **As a** Jogador
 **I want to** abrir a mochila e equipar o que encontrei
 **So that** meu personagem melhore com o loot
 
 **Acceptance Criteria:**
+
 - [ ] Tab ou I abre e fecha a mochila; Esc fecha qualquer painel aberto
 - [ ] A mochila tem 20 slots e mostra nome, raridade, stats e afixos de cada item
 - [ ] Há 6 slots equipáveis: arma, mão secundária, armadura, botas, anel e amuleto
@@ -486,11 +545,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-6.4: Usar poções sem abrir painel
+
 **As a** Jogador
 **I want to** beber poção de vida e de mana por tecla
 **So that** eu me cure no meio da luta sem parar
 
 **Acceptance Criteria:**
+
 - [ ] Q consome poção de vida (70 HP) e E consome poção de mana (60 MP)
 - [ ] Cada tipo empilha até 20 unidades num único slot
 - [ ] Usar sem estoque não consome nada e dá retorno visual da falta
@@ -503,11 +564,13 @@ regressão antes e durante o próximo ciclo.
 ## 7. Persistência de Progresso
 
 ### US-7.1: Progresso salvo por vocação
+
 **As a** Jogador
 **I want to** que cada vocação guarde o próprio progresso
 **So that** eu alterne de classe sem perder nada
 
 **Acceptance Criteria:**
+
 - [ ] O save é gravado em `localStorage` na chave `sf-save-{vocação}`, uma chave independente por vocação
 - [ ] O save contém nível, XP, ouro, equipamento e inventário
 - [ ] A gravação acontece nos marcos da partida (troca de andar, fim de sessão), não apenas ao sair
@@ -518,11 +581,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-7.2: Levar meu progresso para qualquer sala
+
 **As a** Convidado
 **I want to** entrar na sala de outra pessoa com meu personagem evoluído
 **So that** meu tempo de jogo conte independente de quem hospeda
 
 **Acceptance Criteria:**
+
 - [ ] Ao conectar, o convidado envia o save da vocação escolhida para o host
 - [ ] O host instancia o jogador com o nível, os stats, o equipamento e o inventário recebidos
 - [ ] O host não guarda nem sobrescreve o progresso dos convidados: o dono do save é sempre o navegador de quem jogou
@@ -533,11 +598,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-7.3: Falha de armazenamento não derruba a partida
+
 **As a** Jogador
 **I want to** continuar jogando mesmo se o navegador recusar a gravação
 **So that** um problema de cota não me tire do jogo
 
 **Acceptance Criteria:**
+
 - [ ] Exceção de gravação (cota cheia, modo privado) é capturada e não propaga
 - [ ] A partida continua normalmente após a falha
 - [ ] O jogador recebe um aviso não bloqueante de que o progresso pode não ter sido salvo
@@ -549,11 +616,13 @@ regressão antes e durante o próximo ciclo.
 ## 8. Late Join
 
 ### US-8.1: Entrar com a partida em curso
+
 **As a** Convidado
 **I want to** entrar numa sala que já está jogando
 **So that** eu não precise esperar o grupo recomeçar do andar 1
 
 **Acceptance Criteria:**
+
 - [ ] Conectar a uma sala em partida coloca o jogador numa **fila de entrada**, sem instanciar entidade no andar corrente
 - [ ] A tela de espera informa o andar atual do grupo e a posição na fila
 - [ ] O jogador na fila enxerga o estado da sala (quem está jogando) e pode desistir a qualquer momento
@@ -564,11 +633,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-8.2: Entrar junto na virada de andar
+
 **As a** Convidado
 **I want to** ser inserido na partida quando o grupo descer de andar
 **So that** eu comece junto com todo mundo, no mesmo lugar
 
 **Acceptance Criteria:**
+
 - [ ] Ao cruzar o portal, a fila de entrada é drenada e todos os jogadores em espera entram no novo andar
 - [ ] Os jogadores que entraram nascem no spawn do novo andar, junto com o grupo
 - [ ] O save de cada jogador que entrou é aplicado no momento da inserção (US-7.2)
@@ -582,11 +653,13 @@ regressão antes e durante o próximo ciclo.
 ## 9. Comunicação e Consciência de Grupo
 
 ### US-9.1: Conversar durante a partida
+
 **As a** Jogador
 **I want to** mandar mensagem para o grupo sem sair do jogo
 **So that** a gente se combine sem precisar de outro aplicativo
 
 **Acceptance Criteria:**
+
 - [ ] Enter abre a caixa de chat e Enter novamente envia a mensagem
 - [ ] Com o chat aberto, as teclas de movimento e magia não disparam ações
 - [ ] A mensagem é identificada pelo nome do remetente e visível para todos na sala
@@ -598,11 +671,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-9.2: Não perder o grupo de vista
+
 **As a** Jogador
 **I want to** enxergar onde estão meus aliados quando nos separamos
 **So that** ninguém se perca na masmorra
 
 **Acceptance Criteria:**
+
 - [ ] Passando de 7 tiles de distância, uma linha de partículas liga o jogador ao **aliado mais próximo**
 - [ ] Passando de 14 tiles, aparece um indicador de direção e distância desse aliado
 - [ ] Com nenhum aliado na sala, nenhum dos dois elementos é desenhado
@@ -613,11 +688,13 @@ regressão antes e durante o próximo ciclo.
 ---
 
 ### US-9.3: HUD legível com grupo grande
+
 **As a** Jogador
 **I want to** um HUD que continue legível com 10 pessoas na sala
 **So that** eu enxergue quem precisa de ajuda sem poluir a tela
 
 **Acceptance Criteria:**
+
 - [ ] O HUD mostra barra de vida e mana apenas dos **3 aliados mais próximos**
 - [ ] Os demais aliados aparecem como ícone posicionado no minimapa
 - [ ] Um aliado caído é destacado independentemente da distância, para que alguém possa erguê-lo
@@ -646,35 +723,35 @@ registrado abaixo. Nenhuma foi marcada por inspeção visual.
 **Suítes:** `npm test` (10 arquivos, sem navegador) e `npm run test:multipeer`
 (N abas de Chromium numa sessão P2P real pelo broker público do PeerJS).
 
-| História | Coberta por |
-|---|---|
-| US-1.1 | tests/multipeer.mjs · tests/sim.test.mjs (código e seed) |
-| US-1.2 | tests/multipeer.mjs (recusa cheia/trancada) · tests/room.test.mjs |
-| US-1.4 | tests/room.test.mjs · tests/multipeer.mjs (10 abas + 11º recusado) |
-| US-1.5 | tests/session.test.mjs · tests/multipeer.mjs (caso kick) |
-| US-1.6 | tests/room.test.mjs · tests/multipeer.mjs (caso lock) |
-| US-1.8 | tests/save.test.mjs (perfil) |
-| US-2.2 | tests/net.test.mjs (fila de ações e idempotência) |
-| US-2.3 | tests/net.test.mjs · tests/party10.test.mjs · tests/multipeer.mjs (medição) |
-| US-2.4 | tests/session.test.mjs · tests/multipeer.mjs (caso drop) |
-| US-2.5 | tests/sim.test.mjs (determinismo) · tests/net.test.mjs (snapshot sem mapa) |
-| US-3.1 | tests/sim.test.mjs (A*, colisão, parede) |
-| US-3.5 | tests/browser.mjs (fluxo completo em viewport de celular) |
-| US-3.6 | tests/sim.test.mjs · tests/party10.test.mjs (orçamento de tick) |
-| US-4.2 | tests/group.test.mjs (ressurreição em grupo) |
-| US-4.3 | tests/group.test.mjs (respawn 5s/30s) |
-| US-5.1 | tests/sim.test.mjs · tests/party10.test.mjs (chefe e portal) |
-| US-5.2 | tests/group.test.mjs · tests/party10.test.mjs (portal coletivo) |
-| US-5.3 | tests/group.test.mjs (escala por grupo) |
-| US-5.4 | tests/group.test.mjs (XP e divisor) |
-| US-6.1 | tests/group.test.mjs (coleta determinística) |
-| US-6.2 | tests/sim.test.mjs · tests/save.test.mjs (raridade e afixos) |
-| US-6.3 | tests/save.test.mjs · tests/net.test.mjs (mochila remota) |
-| US-7.1 | tests/save.test.mjs (formato, versão, migração) |
-| US-7.2 | tests/validate.test.mjs · tests/session.test.mjs |
-| US-7.3 | tests/save.test.mjs (falha de gravação e corrupção) |
-| US-8.1 | tests/room.test.mjs · tests/multipeer.mjs (caso late) |
-| US-9.3 | tests/hud.test.mjs (trilho de aliados) · tests/multipeer.mjs (caso shot) |
+| História | Coberta por                                                                 |
+| -------- | --------------------------------------------------------------------------- |
+| US-1.1   | tests/multipeer.mjs · tests/sim.test.mjs (código e seed)                    |
+| US-1.2   | tests/multipeer.mjs (recusa cheia/trancada) · tests/room.test.mjs           |
+| US-1.4   | tests/room.test.mjs · tests/multipeer.mjs (10 abas + 11º recusado)          |
+| US-1.5   | tests/session.test.mjs · tests/multipeer.mjs (caso kick)                    |
+| US-1.6   | tests/room.test.mjs · tests/multipeer.mjs (caso lock)                       |
+| US-1.8   | tests/save.test.mjs (perfil)                                                |
+| US-2.2   | tests/net.test.mjs (fila de ações e idempotência)                           |
+| US-2.3   | tests/net.test.mjs · tests/party10.test.mjs · tests/multipeer.mjs (medição) |
+| US-2.4   | tests/session.test.mjs · tests/multipeer.mjs (caso drop)                    |
+| US-2.5   | tests/sim.test.mjs (determinismo) · tests/net.test.mjs (snapshot sem mapa)  |
+| US-3.1   | tests/sim.test.mjs (A*, colisão, parede)                                    |
+| US-3.5   | tests/browser.mjs (fluxo completo em viewport de celular)                   |
+| US-3.6   | tests/sim.test.mjs · tests/party10.test.mjs (orçamento de tick)             |
+| US-4.2   | tests/group.test.mjs (ressurreição em grupo)                                |
+| US-4.3   | tests/group.test.mjs (respawn 5s/30s)                                       |
+| US-5.1   | tests/sim.test.mjs · tests/party10.test.mjs (chefe e portal)                |
+| US-5.2   | tests/group.test.mjs · tests/party10.test.mjs (portal coletivo)             |
+| US-5.3   | tests/group.test.mjs (escala por grupo)                                     |
+| US-5.4   | tests/group.test.mjs (XP e divisor)                                         |
+| US-6.1   | tests/group.test.mjs (coleta determinística)                                |
+| US-6.2   | tests/sim.test.mjs · tests/save.test.mjs (raridade e afixos)                |
+| US-6.3   | tests/save.test.mjs · tests/net.test.mjs (mochila remota)                   |
+| US-7.1   | tests/save.test.mjs (formato, versão, migração)                             |
+| US-7.2   | tests/validate.test.mjs · tests/session.test.mjs                            |
+| US-7.3   | tests/save.test.mjs (falha de gravação e corrupção)                         |
+| US-8.1   | tests/room.test.mjs · tests/multipeer.mjs (caso late)                       |
+| US-9.3   | tests/hud.test.mjs (trilho de aliados) · tests/multipeer.mjs (caso shot)    |
 
 **Ainda pendentes de verificação:**
 
@@ -697,43 +774,43 @@ continuam sem cobertura.
 
 ## Appendix: User Story Status
 
-| ID | Story | Priority | Status |
-|----|-------|----------|--------|
-| US-1.1 | Criar sala com código curto | High | Validado (auto) 2026-08-20 |
-| US-1.2 | Entrar por código ou link | High | Validado (auto) 2026-08-20 |
-| US-1.3 | Escolher vocação antes de começar | High | Pending |
-| US-1.4 | Sala com até 10 jogadores | High | Validado (auto) 2026-08-20 |
-| US-1.7 | Começar e jogar sozinho | High | Pending |
-| US-2.1 | Movimento responsivo apesar da latência | High | Pending |
-| US-2.2 | Nenhuma ação perdida por pacote perdido | High | Validado (auto) 2026-08-20 |
-| US-2.3 | Host aguenta o grupo de 10 | High | Validado (auto) 2026-08-20 |
-| US-2.5 | Entrada rápida sem transferir o mapa | High | Validado (auto) 2026-08-20 |
-| US-3.1 | Mover pelo cenário | High | Validado (auto) 2026-08-20 |
-| US-3.2 | Lançar as magias da vocação | High | Pending |
-| US-3.4 | Explorar fraqueza elemental | High | Pending |
-| US-3.6 | Horda sem queda de framerate | High | Validado (auto) 2026-08-20 |
-| US-4.1 | Morrer sem perder o que juntei | High | Pending |
-| US-4.2 | Ser erguido por qualquer aliado | High | Validado (auto) 2026-08-20 |
-| US-4.3 | Nunca ficar preso na tela de morte | High | Validado (auto) 2026-08-20 |
-| US-5.1 | Matar o chefe e abrir o portal | High | Validado (auto) 2026-08-20 |
-| US-5.2 | Descer só com o grupo reunido | High | Validado (auto) 2026-08-20 |
-| US-5.3 | Conteúdo escala com o tamanho do grupo | High | Validado (auto) 2026-08-20 |
-| US-5.4 | Subir de nível junto com o grupo | High | Validado (auto) 2026-08-20 |
-| US-6.1 | Coleta automática | High | Validado (auto) 2026-08-20 |
-| US-6.2 | Loot com raridade e afixos | High | Validado (auto) 2026-08-20 |
-| US-6.3 | Gerenciar mochila e equipar | High | Validado (auto) 2026-08-20 |
-| US-6.4 | Usar poções sem abrir painel | High | Pending |
-| US-7.1 | Progresso salvo por vocação | High | Validado (auto) 2026-08-20 |
-| US-7.2 | Levar meu progresso para qualquer sala | High | Validado (auto) 2026-08-20 |
-| US-8.2 | Entrar junto na virada de andar | High | Pending |
-| US-1.5 | Expulsar jogador | Medium | Validado (auto) 2026-08-20 |
-| US-1.6 | Trancar sala | Medium | Validado (auto) 2026-08-20 |
-| US-1.8 | Definir nome persistente | Medium | Validado (auto) 2026-08-20 |
-| US-2.4 | Aviso claro quando o host sai | Medium | Validado (auto) 2026-08-20 |
-| US-3.3 | Ataque rápido na direção do mouse | Medium | Pending |
-| US-3.5 | Jogar no celular | Medium | Validado (auto) 2026-08-20 |
-| US-7.3 | Falha de armazenamento não derruba a partida | Medium | Validado (auto) 2026-08-20 |
-| US-8.1 | Entrar com a partida em curso | Medium | Validado (auto) 2026-08-20 |
-| US-9.1 | Conversar durante a partida | Medium | Pending |
-| US-9.2 | Não perder o grupo de vista | Medium | Pending |
-| US-9.3 | HUD legível com grupo grande | Low | Validado (auto) 2026-08-20 |
+| ID     | Story                                        | Priority | Status                     |
+| ------ | -------------------------------------------- | -------- | -------------------------- |
+| US-1.1 | Criar sala com código curto                  | High     | Validado (auto) 2026-08-20 |
+| US-1.2 | Entrar por código ou link                    | High     | Validado (auto) 2026-08-20 |
+| US-1.3 | Escolher vocação antes de começar            | High     | Pending                    |
+| US-1.4 | Sala com até 10 jogadores                    | High     | Validado (auto) 2026-08-20 |
+| US-1.7 | Começar e jogar sozinho                      | High     | Pending                    |
+| US-2.1 | Movimento responsivo apesar da latência      | High     | Pending                    |
+| US-2.2 | Nenhuma ação perdida por pacote perdido      | High     | Validado (auto) 2026-08-20 |
+| US-2.3 | Host aguenta o grupo de 10                   | High     | Validado (auto) 2026-08-20 |
+| US-2.5 | Entrada rápida sem transferir o mapa         | High     | Validado (auto) 2026-08-20 |
+| US-3.1 | Mover pelo cenário                           | High     | Validado (auto) 2026-08-20 |
+| US-3.2 | Lançar as magias da vocação                  | High     | Pending                    |
+| US-3.4 | Explorar fraqueza elemental                  | High     | Pending                    |
+| US-3.6 | Horda sem queda de framerate                 | High     | Validado (auto) 2026-08-20 |
+| US-4.1 | Morrer sem perder o que juntei               | High     | Pending                    |
+| US-4.2 | Ser erguido por qualquer aliado              | High     | Validado (auto) 2026-08-20 |
+| US-4.3 | Nunca ficar preso na tela de morte           | High     | Validado (auto) 2026-08-20 |
+| US-5.1 | Matar o chefe e abrir o portal               | High     | Validado (auto) 2026-08-20 |
+| US-5.2 | Descer só com o grupo reunido                | High     | Validado (auto) 2026-08-20 |
+| US-5.3 | Conteúdo escala com o tamanho do grupo       | High     | Validado (auto) 2026-08-20 |
+| US-5.4 | Subir de nível junto com o grupo             | High     | Validado (auto) 2026-08-20 |
+| US-6.1 | Coleta automática                            | High     | Validado (auto) 2026-08-20 |
+| US-6.2 | Loot com raridade e afixos                   | High     | Validado (auto) 2026-08-20 |
+| US-6.3 | Gerenciar mochila e equipar                  | High     | Validado (auto) 2026-08-20 |
+| US-6.4 | Usar poções sem abrir painel                 | High     | Pending                    |
+| US-7.1 | Progresso salvo por vocação                  | High     | Validado (auto) 2026-08-20 |
+| US-7.2 | Levar meu progresso para qualquer sala       | High     | Validado (auto) 2026-08-20 |
+| US-8.2 | Entrar junto na virada de andar              | High     | Pending                    |
+| US-1.5 | Expulsar jogador                             | Medium   | Validado (auto) 2026-08-20 |
+| US-1.6 | Trancar sala                                 | Medium   | Validado (auto) 2026-08-20 |
+| US-1.8 | Definir nome persistente                     | Medium   | Validado (auto) 2026-08-20 |
+| US-2.4 | Aviso claro quando o host sai                | Medium   | Validado (auto) 2026-08-20 |
+| US-3.3 | Ataque rápido na direção do mouse            | Medium   | Pending                    |
+| US-3.5 | Jogar no celular                             | Medium   | Validado (auto) 2026-08-20 |
+| US-7.3 | Falha de armazenamento não derruba a partida | Medium   | Validado (auto) 2026-08-20 |
+| US-8.1 | Entrar com a partida em curso                | Medium   | Validado (auto) 2026-08-20 |
+| US-9.1 | Conversar durante a partida                  | Medium   | Pending                    |
+| US-9.2 | Não perder o grupo de vista                  | Medium   | Pending                    |
+| US-9.3 | HUD legível com grupo grande                 | Low      | Validado (auto) 2026-08-20 |

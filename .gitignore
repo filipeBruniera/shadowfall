@@ -5,3 +5,4 @@ api_freesound
 .husky/_/
 coverage
 .env*
+graphify-out

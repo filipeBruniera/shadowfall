@@ -36,23 +36,23 @@ entrar em ciclos futuros.
 - **Simulação determinística:** RNG `mulberry32` semeado. **Mesma seed + mesmo andar = mesmo mapa nos dois lados.** Por isso o mapa nunca trafega na rede — só entidades e eventos.
 - **Vocação:** classe do personagem. Quatro fixas, cada uma com 4 magias (teclas 1–4 / Q,W,E,R) e stats base + ganho por nível:
 
-  | Vocação | Tag | HP/MP base | ATK/DEF/ML base | Alcance | Papel |
-  |---|---|---|---|---|---|
-  | Cavaleiro | EK | 185 / 40 | 11 / 9 / 0 | 1,15 | Frente, taunt, dano físico em área |
-  | Paladino | RP | 125 / 80 | 9 / 5 / 2 | 6,5 | Dano à distância + cura de emergência |
-  | Feiticeiro | MS | 82 / 150 | 4 / 2 / 6 | 6,0 | Vidro puro, dano em área altíssimo |
-  | Druida | ED | 90 / 140 | 4 / 2 / 5 | 6,0 | Controle (congela/envenena) + cura |
+  | Vocação    | Tag | HP/MP base | ATK/DEF/ML base | Alcance | Papel                                 |
+  | ---------- | --- | ---------- | --------------- | ------- | ------------------------------------- |
+  | Cavaleiro  | EK  | 185 / 40   | 11 / 9 / 0      | 1,15    | Frente, taunt, dano físico em área    |
+  | Paladino   | RP  | 125 / 80   | 9 / 5 / 2       | 6,5     | Dano à distância + cura de emergência |
+  | Feiticeiro | MS  | 82 / 150   | 4 / 2 / 6       | 6,0     | Vidro puro, dano em área altíssimo    |
+  | Druida     | ED  | 90 / 140   | 4 / 2 / 5       | 6,0     | Controle (congela/envenena) + cura    |
 
 - **Elemento:** todo dano tem elemento — Físico, Fogo, Gelo, Energia, Terra, Sagrado, Morte. **Fraqueza multiplica por 1,5×; resistência por 0,55×.**
 - **Monstro:** 12 tipos em 5 tiers (`rat` tier 0 … `wyrm` tier 4), mais **4 chefes** (Arauto de Cinzas, Senhor do Fosso, Rainha Glacial, Ossuário Ancião — 900 a 1400 HP). O pool disponível por andar é `tier <= min(4, floor((andar-1)/1.5)+1)`; a população é `min(150, 62 + andar*8)`. IA por arquétipo: `melee`, `pack`, `ranged`, `caster`, `tank`, `boss`.
 - **Loot:** 14 bases de item em 6 slots equipáveis (arma, mão sec., armadura, botas, anel, amuleto) + 2 consumíveis. **4 raridades** com multiplicador, número de afixos e peso de sorteio:
 
   | Raridade | Mult. | Afixos | Peso |
-  |---|---|---|---|
-  | Comum | 1,0× | 0 | 100 |
-  | Raro | 1,35× | 1 | 38 |
-  | Épico | 1,8× | 2 | 13 |
-  | Lendário | 2,5× | 3 | 3 |
+  | -------- | ----- | ------ | ---- |
+  | Comum    | 1,0×  | 0      | 100  |
+  | Raro     | 1,35× | 1      | 38   |
+  | Épico    | 1,8×  | 2      | 13   |
+  | Lendário | 2,5×  | 3      | 3    |
 
 - **Afixo:** modificador aleatório sorteado sobre o item (8 tipos: Afiado/atk, Reforçado/def, Arcano/ml, Vital/hp, Etéreo/mp, Veloz/speed, Cruel/crit, Vampírico/leech).
 - **Inventário:** **20 slots**. Item cai em slot vazio automaticamente. Poções empilham até 20. **O inventário nunca se perde na morte.**
@@ -64,19 +64,19 @@ entrar em ciclos futuros.
 
 ## Tech Stack
 
-| Camada | Tecnologia |
-|---|---|
-| Linguagem | JavaScript ES2022, **ES modules nativos** (`"type": "module"`) — sem transpilação |
-| Build | **Nenhum.** Sem bundler, sem step de build. Os arquivos servidos são os arquivos-fonte |
-| Runtime | Navegador (desktop + mobile). Node.js apenas para os testes headless |
-| Render | **Canvas 2D** — projeção isométrica (tile 64×32, parede 30px), sprites vetoriais, iluminação dinâmica em meia resolução, batches de `Path2D` (uma chamada por cor, não por tile) |
-| Rede | **WebRTC via PeerJS 1.5.4** (CDN unpkg, tag `<script>` no `index.html`). Broker público só para handshake; tráfego de jogo é P2P direto |
-| Simulação | Módulo puro (`js/sim.js`) — **não toca o DOM**, roda em Node. Tick fixo de **30Hz** |
-| Persistência | `localStorage` do navegador. **Sem banco de dados, sem backend** |
-| Mapa | Geração procedural por seed (`mulberry32`), flow field para IA de perseguição, A* para movimento por clique |
-| Testes | `node tests/sim.test.mjs` (headless, sem navegador) + `tests/browser.mjs` (Puppeteer/Chromium) |
-| Dev server | `npx serve -l 5173 .` (`npm run dev`) — `file://` não funciona, ES modules bloqueiam import |
-| Deploy | **Vercel estático**, sem build command, output `.`. `vercel.json` define `cleanUrls`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` e no-cache em `/js/*` |
+| Camada       | Tecnologia                                                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linguagem    | JavaScript ES2022, **ES modules nativos** (`"type": "module"`) — sem transpilação                                                                                                                 |
+| Build        | **Nenhum.** Sem bundler, sem step de build. Os arquivos servidos são os arquivos-fonte                                                                                                            |
+| Runtime      | Navegador (desktop + mobile). Node.js apenas para os testes headless                                                                                                                              |
+| Render       | **Canvas 2D** — projeção isométrica (tile 64×32, parede 30px), sprites vetoriais, iluminação dinâmica em meia resolução, batches de `Path2D` (uma chamada por cor, não por tile)                  |
+| Rede         | **WebRTC via PeerJS 1.5.4** (CDN unpkg, tag `<script>` no `index.html`). Broker público só para handshake; tráfego de jogo é P2P direto                                                           |
+| Simulação    | Módulo puro (`js/sim.js`) — **não toca o DOM**, roda em Node. Tick fixo de **30Hz**                                                                                                               |
+| Persistência | `localStorage` do navegador. **Sem banco de dados, sem backend**                                                                                                                                  |
+| Mapa         | Geração procedural por seed (`mulberry32`), flow field para IA de perseguição, A* para movimento por clique                                                                                       |
+| Testes       | `node tests/sim.test.mjs` (headless, sem navegador) + `tests/browser.mjs` (Puppeteer/Chromium)                                                                                                    |
+| Dev server   | `npx serve -l 5173 .` (`npm run dev`) — `file://` não funciona, ES modules bloqueiam import                                                                                                       |
+| Deploy       | **Vercel estático**, sem build command, output `.`. `vercel.json` define `cleanUrls`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` e no-cache em `/js/*` |
 
 Layout dos módulos:
 
@@ -186,6 +186,7 @@ mantém o snapshot como transporte único.
 2. O **elo de brasas** desenha uma linha de partículas quando a distância passa de **7 tiles**; acima de **14 tiles**, aparece indicador de direção e distância.
 
 **Alvo do MVP — sala de até 10:**
+
 - O elo de brasas passa a ligar o jogador ao **aliado mais próximo**, não a um par fixo.
 - **XP continua compartilhado com todos da sala**, independente de quem matou e de distância.
 - O HUD mostra barras apenas dos **3 aliados mais próximos**; os demais viram ícone no minimapa.

@@ -25,17 +25,17 @@
 
 ### Regras de arquitetura que governam cada task
 
-| Regra | Fonte | Como aparece nas tasks |
-|---|---|---|
-| `js/sim.js` é estado puro, zero DOM | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` "Layer responsibilities" | Nenhuma task toca `js/sim.js`; T18 reconfere `grep -c "document\|window" js/sim.js` = 0 e `node tests/sim.test.mjs` |
-| Todo número de tuning vive em `js/balance.js` | `AGENTS.md:38`, `AGENTS.md:57` | T01 cria `LOG_MAX_LINES`; T14 alimenta a custom property a partir dele; T12 troca o literal `120` por `CHAT_MAX_LEN`; T02 lê tudo por `import * as balance` |
-| Apresentação (`ui.js`, `render.js`) dona de HUD, telas e log; não muta estado do simulador nem envia pacote | `docs/agents/architecture.md`, tabela "Layer responsibilities" | O teto de linhas do `#log` é escrito por `js/ui.js` (T14), não por `js/main.js`; o alvo de chat só chama `openChat()` (T10) e o de fechar só chama `closeChat()` (T12) — nenhum caminho novo de envio |
-| Composição (`main.js`) é cola de input, delega regra a `sim.js` e política de sala a `room.js` | `docs/agents/architecture.md` | T10, T11 e T12 mexem só em entrada de UI e texto; nenhuma regra nova |
-| Antiflood do chat é do host, 3 por 5 s | `docs/agents/domain_rules.md` seção "Chat", `js/balance.js:218-219` | Uma mensagem originada no celular continua entrando por `chatGate.clean()` em `js/main.js:673-685`; T12 não duplica esse caminho |
-| Testes sem framework, `process.exit(failures ? 1 : 0)` | `AGENTS.md:32`, `AGENTS.md:43` | T03-T05 mantêm `errors[]` (`tests/browser.mjs:28`) e T06 mantém `check()`/`failures` (`tests/multipeer.mjs:58-62`) |
-| pt-BR em comentário, log, texto de UI e label de teste; identificador em inglês | `AGENTS.md:45`, `AGENTS.md:51` | Todas as tasks; ver OQ-01 sobre o nome `LOG_MAX_LINES` |
-| Sem dependência de runtime, sem passo de build | `AGENTS.md:60-61` | Nenhuma task adiciona pacote; T18 confere `package.json` e `vercel.json` |
-| Alvo de toque mínimo 44x44 | `.spec/init/design/tokens-componentes.md:151`, `ALVO_MIN` em `tests/mobile-helpers.mjs` | T08/T09 (abrir), T12/T13 (campo e fechar), T16 (linhas da `.equip-col` continuam ≥ 44px) |
+| Regra                                                                                                       | Fonte                                                                                   | Como aparece nas tasks                                                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `js/sim.js` é estado puro, zero DOM                                                                         | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` "Layer responsibilities"  | Nenhuma task toca `js/sim.js`; T18 reconfere `grep -c "document\|window" js/sim.js` = 0 e `node tests/sim.test.mjs`                                                                                   |
+| Todo número de tuning vive em `js/balance.js`                                                               | `AGENTS.md:38`, `AGENTS.md:57`                                                          | T01 cria `LOG_MAX_LINES`; T14 alimenta a custom property a partir dele; T12 troca o literal `120` por `CHAT_MAX_LEN`; T02 lê tudo por `import * as balance`                                           |
+| Apresentação (`ui.js`, `render.js`) dona de HUD, telas e log; não muta estado do simulador nem envia pacote | `docs/agents/architecture.md`, tabela "Layer responsibilities"                          | O teto de linhas do `#log` é escrito por `js/ui.js` (T14), não por `js/main.js`; o alvo de chat só chama `openChat()` (T10) e o de fechar só chama `closeChat()` (T12) — nenhum caminho novo de envio |
+| Composição (`main.js`) é cola de input, delega regra a `sim.js` e política de sala a `room.js`              | `docs/agents/architecture.md`                                                           | T10, T11 e T12 mexem só em entrada de UI e texto; nenhuma regra nova                                                                                                                                  |
+| Antiflood do chat é do host, 3 por 5 s                                                                      | `docs/agents/domain_rules.md` seção "Chat", `js/balance.js:218-219`                     | Uma mensagem originada no celular continua entrando por `chatGate.clean()` em `js/main.js:673-685`; T12 não duplica esse caminho                                                                      |
+| Testes sem framework, `process.exit(failures ? 1 : 0)`                                                      | `AGENTS.md:32`, `AGENTS.md:43`                                                          | T03-T05 mantêm `errors[]` (`tests/browser.mjs:28`) e T06 mantém `check()`/`failures` (`tests/multipeer.mjs:58-62`)                                                                                    |
+| pt-BR em comentário, log, texto de UI e label de teste; identificador em inglês                             | `AGENTS.md:45`, `AGENTS.md:51`                                                          | Todas as tasks; ver OQ-01 sobre o nome `LOG_MAX_LINES`                                                                                                                                                |
+| Sem dependência de runtime, sem passo de build                                                              | `AGENTS.md:60-61`                                                                       | Nenhuma task adiciona pacote; T18 confere `package.json` e `vercel.json`                                                                                                                              |
+| Alvo de toque mínimo 44x44                                                                                  | `.spec/init/design/tokens-componentes.md:151`, `ALVO_MIN` em `tests/mobile-helpers.mjs` | T08/T09 (abrir), T12/T13 (campo e fechar), T16 (linhas da `.equip-col` continuam ≥ 44px)                                                                                                              |
 
 ## AS IS — Componentes impactados
 
@@ -107,13 +107,13 @@ Congelados aqui porque CT-01 AC 2 exige seletor idêntico nos dois harness e RF-
 mensagem de toque e o `aria-label` não divirjam. Qualquer mudança nestes cinco valores é mudança de
 PLAN, não de implementação.
 
-| Item | Valor congelado | Consumidores |
-|---|---|---|
-| Seletor do alvo de abrir | `#btnChat` | T02 (`SEL_CHAT_ABRIR`), T03, T04, T06, T08, T09, T10 |
-| `aria-label` do alvo de abrir | `Conversar com o grupo` | T08 (DOM), T03 (guarda de rótulo fantasma) — **desacoplado de T11**, ver nota abaixo |
-| Seletor do alvo de fechar | `#btnChatClose` | T02 (`SEL_CHAT_FECHAR`), T04, T12, T13 |
-| `aria-label` do alvo de fechar | `Fechar conversa` | T12, T04 |
-| Mensagem de abertura em `pointer: coarse` | `Arraste o polegar na metade esquerda para o joystick; use os botões à direita para magias, poções e mochila; o balão ao lado da mochila abre a conversa.` | T11 (string), T03 (regex positiva e negativa) |
+| Item                                      | Valor congelado                                                                                                                                            | Consumidores                                                                         |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Seletor do alvo de abrir                  | `#btnChat`                                                                                                                                                 | T02 (`SEL_CHAT_ABRIR`), T03, T04, T06, T08, T09, T10                                 |
+| `aria-label` do alvo de abrir             | `Conversar com o grupo`                                                                                                                                    | T08 (DOM), T03 (guarda de rótulo fantasma) — **desacoplado de T11**, ver nota abaixo |
+| Seletor do alvo de fechar                 | `#btnChatClose`                                                                                                                                            | T02 (`SEL_CHAT_FECHAR`), T04, T12, T13                                               |
+| `aria-label` do alvo de fechar            | `Fechar conversa`                                                                                                                                          | T12, T04                                                                             |
+| Mensagem de abertura em `pointer: coarse` | `Arraste o polegar na metade esquerda para o joystick; use os botões à direita para magias, poções e mochila; o balão ao lado da mochila abre a conversa.` | T11 (string), T03 (regex positiva e negativa)                                        |
 
 > **Correção pós-medição em aparelho real (Chrome/Android, 375x689).** A mensagem de toque
 > congelada acima mandava `toque em <b>Conversar com o grupo</b>`, e RF-02 AC 5 exigia que ela
@@ -126,7 +126,7 @@ PLAN, não de implementação.
 > porque só toca no centro exato do botão — e porque a própria AC obrigava a frase enganosa.
 > RF-02 AC 5 foi invertida: a instrução agora precisa descrever o que se vê (posição e desenho), e
 > é **proibido** citar rótulo que exista apenas em `aria-label`. O `aria-label` do botão não mudou.
-| Mensagem de abertura em mouse | `Use <b>1–4</b> para magias, <b>Q/E</b> para poções, <b>Enter</b> para conversar.` — byte a byte igual a `js/main.js:270`, travessão U+2013 | T11 (ramo preservado), T03 (RF-02 AC 3) |
+> | Mensagem de abertura em mouse | `Use <b>1–4</b> para magias, <b>Q/E</b> para poções, <b>Enter</b> para conversar.` — byte a byte igual a `js/main.js:270`, travessão U+2013 | T11 (ramo preservado), T03 (RF-02 AC 3) |
 
 A mensagem de toque passa nas quatro regex negativas de RF-02 AC 1 (`/1\s*[–-]\s*4/`, `/Q\s*\/\s*E/`,
 `/\bTab\b/`, `/\bEnter\b/`), casa `/joystick/i` e contém o `aria-label` verbatim. Ela **não** é
@@ -140,12 +140,12 @@ Derivada da convenção que `#portalHold` já usa em `styles.css:538` (12 de gut
 `#actionBar` + 12 de respiro = 126). Nenhuma medida nova de tuning entra em `js/balance.js`: são
 offsets de layout, no mesmo padrão dos 126/138 já escritos no CSS.
 
-| Caixa | Regra CSS no `pointer: coarse` | 390x844 | 360x640 |
-|---|---|---|---|
-| `#chatInput` | `left: 12px; right: calc(126px + 52px); width: auto; min-block-size: 44px; bottom: max(12px, env(safe-area-inset-bottom))` | x 12–212, h ≥ 44 | x 12–182, h ≥ 44 |
-| `#btnChatClose` | `right: 126px; min-inline-size/min-block-size: 44px; bottom: max(12px, env(safe-area-inset-bottom))` | x 220–264 | x 190–234 |
-| `#actionBar` (inalterado) | `right: 12px`, 102px de largura | x 276–378 | x 246–348 |
-| `#log` | `bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px)` | topo em 684,3 com 6 linhas | oculto abaixo de 460px de altura |
+| Caixa                     | Regra CSS no `pointer: coarse`                                                                                             | 390x844                    | 360x640                          |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------- | -------------------------------- |
+| `#chatInput`              | `left: 12px; right: calc(126px + 52px); width: auto; min-block-size: 44px; bottom: max(12px, env(safe-area-inset-bottom))` | x 12–212, h ≥ 44           | x 12–182, h ≥ 44                 |
+| `#btnChatClose`           | `right: 126px; min-inline-size/min-block-size: 44px; bottom: max(12px, env(safe-area-inset-bottom))`                       | x 220–264                  | x 190–234                        |
+| `#actionBar` (inalterado) | `right: 12px`, 102px de largura                                                                                            | x 276–378                  | x 246–348                        |
+| `#log`                    | `bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px)`                                                              | topo em 684,3 com 6 linhas | oculto abaixo de 460px de altura |
 
 Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fechar e o
 `#actionBar`, e nenhuma das duas caixas cruza a barra em nenhuma das 7 alturas de `ALTURAS_UI03`
@@ -154,6 +154,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 ## Tasks
 
 ### T01 — `LOG_MAX_LINES` em `js/balance.js`
+
 - **Files**: `js/balance.js`
 - **Change**: acrescentar, logo depois do bloco `// ---------- Chat ----------` (`js/balance.js:215-219`),
   a seção `// ---------- Registro ----------` com `export const LOG_MAX_LINES = 6;` e comentário
@@ -168,6 +169,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: none
 
 ### T02 — Helpers compartilhados: constante, seletores e medidores
+
 - **Files**: `tests/mobile-helpers.mjs`
 - **Change**: (a) reexportar `LOG_MAX_LINES` e `CHAT_MAX_LEN` a partir do `import * as balance` já
   existente (`tests/mobile-helpers.mjs:20`) — namespace, não import nomeado, pelo motivo já
@@ -189,6 +191,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T01
 
 ### T03 — Casos `TECLA` e `ABERTURA` em `tests/browser.mjs`, mais a passagem de mouse
+
 - **Files**: `tests/browser.mjs`
 - **Change**: (a) `medirTeclas(page, ctx)` — conta `document.querySelectorAll('.slot .key').length`
   (esperado 7 em qualquer modo, RF-01 AC 2) e quantos passam em `__M.visible` (esperado 0 no toque,
@@ -219,6 +222,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T02
 
 ### T04 — Casos `CHAT` em `tests/browser.mjs` com toque real
+
 - **Files**: `tests/browser.mjs`
 - **Change**: `medirChat(page, ctx)`, chamado depois de `medirMochila` (que já fecha o `#bag`) e
   antes de `medirLog`, com comentário em pt-BR no topo registrando a **proibição de CT-02 AC 1**:
@@ -237,7 +241,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
      duas por passarem de primeira).
   3. **Campo** — `rect('#chatInput').height >= 44` (UI-02 AC 1); `intersects(rect('#chatInput'), rect('#log')) === false`
      **com pré-condição** `rect('#log') !== null`, senão registrar `CHAT: <ctx> #log oculto por
-     max-height: 460px — UI-02 AC 2 pulada` no console e não asserir (UI-02 AC 2); caixa inteira
+max-height: 460px — UI-02 AC 2 pulada` no console e não asserir (UI-02 AC 2); caixa inteira
      dentro da viewport (AC 3); `document.querySelector('#chatInput').maxLength === CHAT_MAX_LEN`
      (RNF-03 AC 2).
   4. **Alvo de fechar** — `rect(SEL_CHAT_FECHAR)` ≥ 44x44, `pointerEvents === 'auto'`, dentro da
@@ -263,8 +267,8 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
      abrir por toque real e asserir `rect('#chatInput')` não-nulo, `height >= 44`, as quatro
      comparações de viewport e `intersects(rect('#chatInput'), rect('#actionBar')) === false`;
      fechar por toque ao sair.
-  Toda falha vira `errors.push('CHAT: <ctx> <detalhe em pt-BR com o valor medido>')`; todo acesso é
-  null-safe pelo mesmo motivo de T03.
+     Toda falha vira `errors.push('CHAT: <ctx> <detalhe em pt-BR com o valor medido>')`; todo acesso é
+     null-safe pelo mesmo motivo de T03.
 - **Covers**: RF-03, RF-04, RF-05, UI-01, UI-02, UI-05, CT-01, CT-02, RNF-03 (AC 2)
 - **Tests**: `URL=http://localhost:5173 npm run test:browser` — passa a sair 1 com erros `CHAT`
   medidos (hoje: `elementFromPoint` na célula livre devolve `.slots potions`, `#btnChat` ausente,
@@ -275,6 +279,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T02, T03
 
 ### T05 — Casos `MOCHILA` e `LOG` em `tests/browser.mjs`
+
 - **Files**: `tests/browser.mjs`
 - **Change**: (a) dentro de `medirMochila` (`tests/browser.mjs:321`), com o painel aberto e
   `bag.scrollTop = 0`, medir `rect('#equipCol')` e `rect('#bag')` e asserir, **apenas em 360x640**
@@ -291,7 +296,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
   `rect('#log').height <= LOG_MAX_LINES * parseFloat(getComputedStyle(log).lineHeight) + 1` com o
   `line-height` medido na página (AC 2); quando `rect('#log') === null` (alturas 440, 380 e 360),
   **pular com registro explícito** no console — `LOG: 390x440 #log oculto por max-height: 460px,
-  ACs 1 e 2 puladas` — nunca dar por aprovado em silêncio (AC 5). Chamar nos dois alvos cheios,
+ACs 1 e 2 puladas` — nunca dar por aprovado em silêncio (AC 5). Chamar nos dois alvos cheios,
   dentro do laço de `ALTURAS_UI03` e uma vez na aba de mouse de T03 para UI-04 AC 4 (`#log` em
   `min(340px, 42vw)` por `26vh`, medido). `medirLog` é o **último** caso do alvo, porque suja o
   `#log` com as sentinelas.
@@ -304,6 +309,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T02, T03
 
 ### T06 — Não regressão `CHAT` do `#actionBar` em sala real
+
 - **Files**: `tests/multipeer.mjs`
 - **Change**: no passo de toque em sala (`tests/multipeer.mjs:283-345`, laço de
   `VIEWPORT_MOBILE`/`VIEWPORT_SMALL` na aba do host), acrescentar um bloco com prefixo `CHAT`:
@@ -323,6 +329,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T02
 
 ### T07 — Dicas de tecla invisíveis no toque
+
 - **Files**: `styles.css`
 - **Change**: dentro do bloco `@media (pointer: coarse)` já existente (`styles.css:390-408`),
   acrescentar `.slot .key { display: none; }` com comentário pt-BR citando a medição: 7 spans
@@ -337,6 +344,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T03 (o caso `TECLA` precisa existir antes para a fase ter gate)
 
 ### T08 — `#btnChat` na célula livre ao lado do `#btnBag`
+
 - **Files**: `index.html`
 - **Change**: acrescentar, como **quarto e último filho** de `.slots.potions` (`index.html:161-165`,
   logo depois do `#btnBag`), `<button class="slot chat" id="btnChat" aria-label="Conversar com o grupo"><i class="glyph-chat"></i></button>`.
@@ -349,12 +357,13 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
   Nenhuma outra linha de `index.html` muda.
 - **Covers**: UI-01, RF-03, CT-01
 - **Tests**: `URL=http://localhost:5173 npm run test:browser` — o erro `CHAT: ... não encontrou
-  #btnChat` desaparece; `npm run test:multipeer:quick` — `CHAT` passa a contar 8 alvos
+#btnChat` desaparece; `npm run test:multipeer:quick` — `CHAT` passa a contar 8 alvos
 - **Risk**: Medium — é o único arquivo de marcação tocado; um filho a mais em `.slots.potions`
   mudaria a largura da barra no mouse se T09 não gatilhar o `display`
 - **Dependencies**: none
 
 ### T09 — Caixa e glifo do `#btnChat`, sem mexer no mouse
+
 - **Files**: `styles.css`
 - **Change**: (a) fora de qualquer media query, junto das demais regras de `.slot`,
   `#btnChat { display: none; }` com comentário pt-BR: no desktop a `.slots` é flex e um quarto slot
@@ -373,6 +382,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T08
 
 ### T10 — Ligação do alvo de chat com `openChat()`
+
 - **Files**: `js/main.js`
 - **Change**: ao lado das ligações de HUD já existentes (`js/main.js:654-657`), acrescentar
   `UI.el('btnChat').onpointerdown = (e) => { e.preventDefault(); openChat(); };` com comentário
@@ -394,6 +404,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T08
 
 ### T11 — Mensagem de abertura por modo de entrada
+
 - **Files**: `js/main.js`
 - **Change**: em `enterGame()` (`js/main.js:255-272`), trocar a linha fixa de `js/main.js:270` por
   uma ramificação em `matchMedia('(pointer: coarse)').matches`, com **as duas strings lado a lado**
@@ -414,6 +425,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T08 (o `aria-label` precisa estar no DOM para o caso `ABERTURA` ler)
 
 ### T12 — Alvo de fechar, `maxLength` e o par abrir/fechar no mesmo estado
+
 - **Files**: `js/main.js`
 - **Change**: no bloco de conversa (`js/main.js:664-695`):
   (a) `chatEl.maxLength = CHAT_MAX_LEN` no lugar do literal `120` de `js/main.js:671` —
@@ -442,6 +454,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: none (independe de T08/T10; a fase 3 executa depois delas por ordem de gate)
 
 ### T13 — Linha de chat no toque: 44px, área segura e `#log` acima do campo
+
 - **Files**: `styles.css`
 - **Change**: dentro do bloco `@media (pointer: coarse)` (`styles.css:390-408`), usando a geometria
   congelada deste PLAN:
@@ -473,6 +486,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T12
 
 ### T14 — `js/ui.js` publica o teto de linhas como custom property
+
 - **Files**: `js/ui.js`
 - **Change**: acrescentar `LOG_MAX_LINES` ao import de `./balance.js` (`js/ui.js:4`) e, em escopo
   de módulo junto das demais preparações de HUD, escrever
@@ -489,6 +503,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T01
 
 ### T15 — `#log` de toque em `LOG_MAX_LINES` linhas
+
 - **Files**: `styles.css`
 - **Change**: no bloco `@media (pointer: coarse)`, trocar `max-height: 18vh` do `#log`
   (`styles.css:391`) por `max-height: calc(var(--log-linhas) * 1lh);`, mantendo `width: 50vw`,
@@ -508,6 +523,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T14
 
 ### T16 — Mochila em telas estreitas: `.equip-col` em duas colunas
+
 - **Files**: `styles.css`
 - **Change**: no bloco `@media (max-width: 620px)` já existente (`styles.css:337`, onde `.bag-cols`
   vira coluna única — "reutilizar, não criar novos" por `tokens-componentes.md` §7):
@@ -537,6 +553,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: T05
 
 ### T17 — Reescrever as três specs de design que esta feature derruba
+
 - **Files**: `.spec/init/design/chat-grupo.md`, `.spec/init/design/hud-grupo-mobile.md`,
   `.spec/init/design/tokens-componentes.md`
 - **Change**: no mesmo commit do CSS, com o desenvolvedor tendo aprovado reverter as decisões
@@ -564,6 +581,7 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 - **Dependencies**: none
 
 ### T18 — Fechamento: regressão completa e greps de fonte única
+
 - **Files**: nenhum (verificação); correções pontuais voltam à task de origem
 - **Change**: rodar e registrar, nesta ordem:
   (1) `npm test` — 10 suítes, saída 0 (RNF-05) e `node tests/sim.test.mjs` verde com
@@ -591,14 +609,14 @@ Folga de 8px entre campo e alvo de fechar (UI-05 AC 4), 12px entre o alvo de fec
 
 ## Execution Phases
 
-| Phase | Tasks | Parallel-safe? |
-|-------|-------|----------------|
-| 1 — Primitiva e medição vermelha | T01, T02, T03, T04, T05, T06 | Parcial — T01 → T02 primeiro; T03 → T04 → T05 são o mesmo arquivo e vão em ordem; T06 é paralelo a T03-T05 |
-| 2 — Dicas de tecla, alvo de chat e mensagem de abertura | T07, T08, T09, T10, T11 | Parcial — T07 é independente; T08 antes de T09, T10 e T11 |
-| 3 — Chat operável e fechável no dedo | T12, T13 | Não — T13 estiliza o nó que T12 cria |
-| 4 — Log em seis linhas | T14, T15 | Não — T15 consome a custom property de T14 |
-| 5 — Mochila estreita e specs de design | T16, T17 | Sim — `styles.css` e `.spec/init/design/*` são disjuntos |
-| 6 — Fechamento de regressão | T18 | Não se aplica — task única |
+| Phase                                                   | Tasks                        | Parallel-safe?                                                                                             |
+| ------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 1 — Primitiva e medição vermelha                        | T01, T02, T03, T04, T05, T06 | Parcial — T01 → T02 primeiro; T03 → T04 → T05 são o mesmo arquivo e vão em ordem; T06 é paralelo a T03-T05 |
+| 2 — Dicas de tecla, alvo de chat e mensagem de abertura | T07, T08, T09, T10, T11      | Parcial — T07 é independente; T08 antes de T09, T10 e T11                                                  |
+| 3 — Chat operável e fechável no dedo                    | T12, T13                     | Não — T13 estiliza o nó que T12 cria                                                                       |
+| 4 — Log em seis linhas                                  | T14, T15                     | Não — T15 consome a custom property de T14                                                                 |
+| 5 — Mochila estreita e specs de design                  | T16, T17                     | Sim — `styles.css` e `.spec/init/design/*` são disjuntos                                                   |
+| 6 — Fechamento de regressão                             | T18                          | Não se aplica — task única                                                                                 |
 
 **Regra de gate das fases 1 a 5**: a medição é escrita antes da implementação de propósito
 (CT-02 AC 6 exige que a união das duas saídas reprove hoje em `TECLA`, `ABERTURA`, `CHAT`,
@@ -611,17 +629,17 @@ Nenhuma fase depende de caso de harness escrito em fase posterior: todos os caso
 
 ## Risks
 
-| Risk | Blast radius | Mitigation | Rollback |
-|------|-------------|------------|----------|
-| R-01 — Um quarto filho em `.slots.potions` muda a caixa do `#actionBar` no mouse (flex) ou cria quarta linha no toque | `#actionBar` em todo viewport; UI-01 AC 3/AC 5/AC 6 e o `#hudRight` nas alturas 380 e 360 | `#btnChat { display: none }` fora do toque (T09); barra medida em 102x212 nos dois alvos cheios e nas 7 alturas de `ALTURAS_UI03` (T04/T06) | Remover o `<button>` de `index.html` e as duas regras de `styles.css` — duas edições, sem estado |
-| R-02 — Harness vermelho que **estoura** em vez de reprovar (`#btnChat` ausente hoje) aborta o arquivo e esconde os outros quatro prefixos | `tests/browser.mjs` inteiro; CT-02 AC 6 | Null-safety obrigatória em T03/T04/T05: `__M.rect`/`__M.centro` devolvem `null` e cada caso emite erro medido | `git checkout tests/browser.mjs` e reintroduzir caso a caso |
-| R-03 — `--log-linhas` não escrita (ou `1lh` não resolvido) invalida o `max-height` e o `#log` volta a crescer | `#log` em todo viewport de toque; UI-04 AC 1 e AC 2 | Sem fallback numérico no CSS (T14), para a falha ser barulhenta; o caso `LOG` mede altura e contagem nos dois alvos e nas 7 alturas | Reverter T15 para `max-height: 18vh` e reabrir OQ-01/UI-04 |
-| R-04 — `.equip-col` em duas colunas quebra nome de item em duas linhas, engorda a linha e come a folga de ~11px do `scrollHeight` | `#bag` abaixo de 620px de largura; UI-03 AC 3/AC 4 e a guarda `transbordo` que passa a ligar | Ellipsis em `.equip-slot .nm` e padding de `.equip-slot` intocado (T16); medição de `scrollHeight` vs `clientHeight` no caso `MOCHILA` | Reverter as três regras do bloco `max-width: 620px`; o painel volta a rolar, como hoje |
-| R-05 — `preventDefault()` no `pointerdown` do alvo de abrir impede o foco e o teclado do sistema não sobe no aparelho real | Caminho de chat no celular — o principal depois desta feature | `chatEl.focus()` explícito em `openChat()` (`js/main.js:687`) e AC de `activeElement` no caso `CHAT`; teste manual num aparelho antes do deploy | Trocar `onpointerdown` por `onclick` sem `preventDefault` — uma linha em T10 |
-| R-06 — Alvo de fechar sobra visível ou rouba toque do `#actionBar` | HUD de toque com o chat fechado | `hidden` em `closeChat()` (T12), AC "visível se e somente se `chatting`" e geometria congelada com 12px de folga da barra (T13) | Reverter T12 (b)/(c) e T13 (b); volta o estado de hoje, sem fechar por toque — mas RF-05 não fecha |
-| R-07 — Empilhamento estático deixa o `#log` 52px acima da base mesmo com o chat fechado | Percepção visual do HUD de toque; nenhuma AC | Registrado em OQ-02 com a variante dinâmica pronta (classe `chatting` no `#game`) | Trocar a regra de `#log` por uma condicionada à classe — uma linha em T13 |
-| R-08 — `page.touchscreen.tap()` completo devolve `stick.active === false` sempre e UI-02 AC 6 vira falso vermelho | Um caso do `CHAT`; risco de "consertar" código são para calar teste | `touchStart`/`touchEnd` separados, documentados no caso (T04) com a citação de `js/main.js:644-649` | Remover só o passo 7 de T04 e registrar a lacuna |
-| R-09 — Alguém "conserta" RF-04 AC 1/AC 2, que nascem verdes por construção | `js/main.js:602` (portão do joystick) e a hierarquia `#actionBar`/`#canvas` | Nota explícita em T04 e em A-07; o texto da SPEC também marca as duas como guarda | N/A — a mitigação é documental |
+| Risk                                                                                                                                      | Blast radius                                                                                 | Mitigation                                                                                                                                      | Rollback                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| R-01 — Um quarto filho em `.slots.potions` muda a caixa do `#actionBar` no mouse (flex) ou cria quarta linha no toque                     | `#actionBar` em todo viewport; UI-01 AC 3/AC 5/AC 6 e o `#hudRight` nas alturas 380 e 360    | `#btnChat { display: none }` fora do toque (T09); barra medida em 102x212 nos dois alvos cheios e nas 7 alturas de `ALTURAS_UI03` (T04/T06)     | Remover o `<button>` de `index.html` e as duas regras de `styles.css` — duas edições, sem estado   |
+| R-02 — Harness vermelho que **estoura** em vez de reprovar (`#btnChat` ausente hoje) aborta o arquivo e esconde os outros quatro prefixos | `tests/browser.mjs` inteiro; CT-02 AC 6                                                      | Null-safety obrigatória em T03/T04/T05: `__M.rect`/`__M.centro` devolvem `null` e cada caso emite erro medido                                   | `git checkout tests/browser.mjs` e reintroduzir caso a caso                                        |
+| R-03 — `--log-linhas` não escrita (ou `1lh` não resolvido) invalida o `max-height` e o `#log` volta a crescer                             | `#log` em todo viewport de toque; UI-04 AC 1 e AC 2                                          | Sem fallback numérico no CSS (T14), para a falha ser barulhenta; o caso `LOG` mede altura e contagem nos dois alvos e nas 7 alturas             | Reverter T15 para `max-height: 18vh` e reabrir OQ-01/UI-04                                         |
+| R-04 — `.equip-col` em duas colunas quebra nome de item em duas linhas, engorda a linha e come a folga de ~11px do `scrollHeight`         | `#bag` abaixo de 620px de largura; UI-03 AC 3/AC 4 e a guarda `transbordo` que passa a ligar | Ellipsis em `.equip-slot .nm` e padding de `.equip-slot` intocado (T16); medição de `scrollHeight` vs `clientHeight` no caso `MOCHILA`          | Reverter as três regras do bloco `max-width: 620px`; o painel volta a rolar, como hoje             |
+| R-05 — `preventDefault()` no `pointerdown` do alvo de abrir impede o foco e o teclado do sistema não sobe no aparelho real                | Caminho de chat no celular — o principal depois desta feature                                | `chatEl.focus()` explícito em `openChat()` (`js/main.js:687`) e AC de `activeElement` no caso `CHAT`; teste manual num aparelho antes do deploy | Trocar `onpointerdown` por `onclick` sem `preventDefault` — uma linha em T10                       |
+| R-06 — Alvo de fechar sobra visível ou rouba toque do `#actionBar`                                                                        | HUD de toque com o chat fechado                                                              | `hidden` em `closeChat()` (T12), AC "visível se e somente se `chatting`" e geometria congelada com 12px de folga da barra (T13)                 | Reverter T12 (b)/(c) e T13 (b); volta o estado de hoje, sem fechar por toque — mas RF-05 não fecha |
+| R-07 — Empilhamento estático deixa o `#log` 52px acima da base mesmo com o chat fechado                                                   | Percepção visual do HUD de toque; nenhuma AC                                                 | Registrado em OQ-02 com a variante dinâmica pronta (classe `chatting` no `#game`)                                                               | Trocar a regra de `#log` por uma condicionada à classe — uma linha em T13                          |
+| R-08 — `page.touchscreen.tap()` completo devolve `stick.active === false` sempre e UI-02 AC 6 vira falso vermelho                         | Um caso do `CHAT`; risco de "consertar" código são para calar teste                          | `touchStart`/`touchEnd` separados, documentados no caso (T04) com a citação de `js/main.js:644-649`                                             | Remover só o passo 7 de T04 e registrar a lacuna                                                   |
+| R-09 — Alguém "conserta" RF-04 AC 1/AC 2, que nascem verdes por construção                                                                | `js/main.js:602` (portão do joystick) e a hierarquia `#actionBar`/`#canvas`                  | Nota explícita em T04 e em A-07; o texto da SPEC também marca as duas como guarda                                                               | N/A — a mitigação é documental                                                                     |
 
 ## Open Questions
 
@@ -687,7 +705,8 @@ Nenhuma fase depende de caso de harness escrito em fase posterior: todos os caso
   `.slot` visíveis em `.slots.potions` (3) em vez de cravar a largura da barra, para não introduzir
   literal de layout novo no harness (RNF-07).
 - **A-10** — `tests/browser.mjs` alcança tudo em partida solo, inclusive `openChat()` — medido e
-  registrado em CT-02 AC 5. Por isso `tests/multipeer.mjs` recebe só a não regressão geométrica do
-  `#actionBar` (T06), mantendo baixo o custo do harness P2P.
+registrado em CT-02 AC 5. Por isso `tests/multipeer.mjs` recebe só a não regressão geométrica do
+`#actionBar` (T06), mantendo baixo o custo do harness P2P.
 </content>
+
 </invoke>

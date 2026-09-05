@@ -278,68 +278,68 @@ Table character_consumables {
 
 **elements** (7 — `E` e `ELEM_NAME` em `js/data.js`)
 
-| slug | name | color |
-|---|---|---|
-| phys | Físico | `#d9cbb0` |
-| fire | Fogo | `#ff7a2f` |
-| ice | Gelo | `#7fd4ff` |
+| slug   | name    | color     |
+| ------ | ------- | --------- |
+| phys   | Físico  | `#d9cbb0` |
+| fire   | Fogo    | `#ff7a2f` |
+| ice    | Gelo    | `#7fd4ff` |
 | energy | Energia | `#ffd84d` |
-| earth | Terra | `#8fbf4d` |
-| holy | Sagrado | `#ffeeba` |
-| death | Morte | `#b06bff` |
+| earth  | Terra   | `#8fbf4d` |
+| holy   | Sagrado | `#ffeeba` |
+| death  | Morte   | `#b06bff` |
 
 **vocations** (4)
 
-| slug | name | tag | element | hp/mp | atk/def/ml | atk_speed | range |
-|---|---|---|---|---|---|---|---|
-| knight | Cavaleiro | EK | phys | 185 / 40 | 11 / 9 / 0 | 0,85 | 1,15 |
-| paladin | Paladino | RP | holy | 125 / 80 | 9 / 5 / 2 | 0,55 | 6,50 |
-| sorcerer | Feiticeiro | MS | fire | 82 / 150 | 4 / 2 / 6 | 0,70 | 6,00 |
-| druid | Druida | ED | ice | 90 / 140 | 4 / 2 / 5 | 0,70 | 6,00 |
+| slug     | name       | tag | element | hp/mp    | atk/def/ml | atk_speed | range |
+| -------- | ---------- | --- | ------- | -------- | ---------- | --------- | ----- |
+| knight   | Cavaleiro  | EK  | phys    | 185 / 40 | 11 / 9 / 0 | 0,85      | 1,15  |
+| paladin  | Paladino   | RP  | holy    | 125 / 80 | 9 / 5 / 2  | 0,55      | 6,50  |
+| sorcerer | Feiticeiro | MS  | fire    | 82 / 150 | 4 / 2 / 6  | 0,70      | 6,00  |
+| druid    | Druida     | ED  | ice     | 90 / 140 | 4 / 2 / 5  | 0,70      | 6,00  |
 
 Ganhos por nível: knight 22/3/3,2/2,4/0,3 · paladin 14/7/2,4/1,3/1,0 · sorcerer 8/16/0,8/0,7/2,2 · druid 9/14/0,8/0,8/2,0 (hp/mp/atk/def/ml).
 
 **rarities** (4)
 
-| slug | name | multiplier | affix_count | weight |
-|---|---|---|---|---|
-| common | Comum | 1,00 | 0 | 100 |
-| rare | Raro | 1,35 | 1 | 38 |
-| epic | Épico | 1,80 | 2 | 13 |
-| legendary | Lendário | 2,50 | 3 | 3 |
+| slug      | name     | multiplier | affix_count | weight |
+| --------- | -------- | ---------- | ----------- | ------ |
+| common    | Comum    | 1,00       | 0           | 100    |
+| rare      | Raro     | 1,35       | 1           | 38     |
+| epic      | Épico    | 1,80       | 2           | 13     |
+| legendary | Lendário | 2,50       | 3           | 3      |
 
 **equipment_slots** (6): `weapon` (Arma), `offhand` (Mão sec.), `armor` (Armadura), `boots` (Botas), `ring` (Anel), `amulet` (Amuleto).
 
 **item_bases** (14)
 
-| slug | name | slot | stats | forVoc |
-|---|---|---|---|---|
-| sword | Espada | weapon | atk 9 | knight |
-| axe | Machado de Guerra | weapon | atk 11, atk_speed −0,08 | knight |
-| bow | Arco Élfico | weapon | atk 8 | paladin |
-| spear | Lança Real | weapon | atk 10 | paladin |
-| wand | Varinha | weapon | atk 3, ml 6 | sorcerer |
-| rod | Cajado | weapon | atk 3, ml 6 | druid |
-| leather | Armadura de Couro | armor | def 5 | todas |
-| plate | Peitoral de Placas | armor | def 11 | knight, paladin |
-| robe | Manto Arcano | armor | def 4, ml 3 | sorcerer, druid |
-| boots | Botas de Pressa | boots | speed 0,5 | todas |
-| ring | Anel | ring | atk 2, ml 2 | todas |
-| amulet | Amuleto | amulet | def 3, hp 15 | todas |
-| shield | Escudo | offhand | def 7 | knight, paladin |
-| book | Grimório | offhand | ml 5, mp 20 | sorcerer, druid |
+| slug    | name               | slot    | stats                   | forVoc          |
+| ------- | ------------------ | ------- | ----------------------- | --------------- |
+| sword   | Espada             | weapon  | atk 9                   | knight          |
+| axe     | Machado de Guerra  | weapon  | atk 11, atk_speed −0,08 | knight          |
+| bow     | Arco Élfico        | weapon  | atk 8                   | paladin         |
+| spear   | Lança Real         | weapon  | atk 10                  | paladin         |
+| wand    | Varinha            | weapon  | atk 3, ml 6             | sorcerer        |
+| rod     | Cajado             | weapon  | atk 3, ml 6             | druid           |
+| leather | Armadura de Couro  | armor   | def 5                   | todas           |
+| plate   | Peitoral de Placas | armor   | def 11                  | knight, paladin |
+| robe    | Manto Arcano       | armor   | def 4, ml 3             | sorcerer, druid |
+| boots   | Botas de Pressa    | boots   | speed 0,5               | todas           |
+| ring    | Anel               | ring    | atk 2, ml 2             | todas           |
+| amulet  | Amuleto            | amulet  | def 3, hp 15            | todas           |
+| shield  | Escudo             | offhand | def 7                   | knight, paladin |
+| book    | Grimório           | offhand | ml 5, mp 20             | sorcerer, druid |
 
 **affix_types** (8)
 
-| slug | name | stat | min | max | formato |
-|---|---|---|---|---|---|
-| atk | Afiado | atk | 2 | 6 | inteiro |
-| def | Reforçado | def | 2 | 5 | inteiro |
-| ml | Arcano | ml | 2 | 5 | inteiro |
-| hp | Vital | hp | 12 | 40 | inteiro |
-| mp | Etéreo | mp | 10 | 35 | inteiro |
-| speed | Veloz | speed | 0,2 | 0,6 | 2 casas |
-| crit | Cruel | crit | 0,03 | 0,09 | percentual, teto 0,35 |
+| slug  | name      | stat  | min  | max  | formato               |
+| ----- | --------- | ----- | ---- | ---- | --------------------- |
+| atk   | Afiado    | atk   | 2    | 6    | inteiro               |
+| def   | Reforçado | def   | 2    | 5    | inteiro               |
+| ml    | Arcano    | ml    | 2    | 5    | inteiro               |
+| hp    | Vital     | hp    | 12   | 40   | inteiro               |
+| mp    | Etéreo    | mp    | 10   | 35   | inteiro               |
+| speed | Veloz     | speed | 0,2  | 0,6  | 2 casas               |
+| crit  | Cruel     | crit  | 0,03 | 0,09 | percentual, teto 0,35 |
 | leech | Vampírico | leech | 0,02 | 0,07 | percentual, teto 0,35 |
 
 **consumable_types** (2): `hpPot` (Poção de Vida, restaura 70 HP, pilha 20), `mpPot` (Poção de Mana, restaura 60 MP, pilha 20).

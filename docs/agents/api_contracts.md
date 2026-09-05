@@ -6,7 +6,7 @@
 
 ### HTTP endpoints
 
-Não aplicável neste repositório. Não há rotas HTTP, controller, router, OpenAPI ou GraphQL: `vercel.json` declara `"framework": null`, `outputDirectory: "."` e apenas `headers` estáticos — nenhuma entrada `rewrites`, `redirects` ou `functions`; não existe diretório `api/`; `package.json` não tem `dependencies` e nenhum módulo em `js/` importa `http`, `express` ou equivalente. O único contrato de rede implementado é o protocolo P2P sobre WebRTC DataChannel descrito abaixo.
+Existe uma única função HTTP `POST /api/vitals`, sem framework e sem estado. Ela aceita Web Vitals e métricas numéricas `game_*`; para eventos de jogo, rejeita nomes fora da allowlist e não registra nome, código de sala, save, identificador persistente ou user-agent. O protocolo de jogo continua sendo P2P sobre WebRTC DataChannel.
 
 ### Contrato P2P — visão geral
 
@@ -18,17 +18,17 @@ Não aplicável neste repositório. Não há rotas HTTP, controller, router, Ope
 
 ### Convidado → host
 
-| `t` | Quando | Campos | Handler |
-|---|---|---|---|
-| `join` | Logo após abrir a conexão | `name`, `voc`, `save` (save cru do `localStorage`) | `js/main.js:386-406` |
-| `revoc` | Quem está na fila troca de vocação | `voc`, `save` | `js/main.js:407-418` |
-| `in` | 30 Hz (`INPUT_HZ`) | `mx`, `my`, `target`, `acts[]` | `js/main.js:419-421` |
-| `chat` | Enter no chat | `name`, `m` | `js/main.js:422-430` |
-| `ping` | A cada 3 s | `ts` (`performance.now()`) | `js/main.js:431-433` |
+| `t`     | Quando                             | Campos                                             | Handler              |
+| ------- | ---------------------------------- | -------------------------------------------------- | -------------------- |
+| `join`  | Logo após abrir a conexão          | `name`, `voc`, `save` (save cru do `localStorage`) | `js/main.js:386-406` |
+| `revoc` | Quem está na fila troca de vocação | `voc`, `save`                                      | `js/main.js:407-418` |
+| `in`    | 30 Hz (`INPUT_HZ`)                 | `mx`, `my`, `target`, `acts[]`                     | `js/main.js:419-421` |
+| `chat`  | Enter no chat                      | `name`, `m`                                        | `js/main.js:422-430` |
+| `ping`  | A cada 3 s                         | `ts` (`performance.now()`)                         | `js/main.js:431-433` |
 
 Regras de admissão aplicadas a `join`/`revoc`:
 
-- `save` passa por `validateSave(msg.save, { floor })` antes de qualquer uso (`js/main.js:388`, `js/main.js:411`).
+- `save` passa por `validateSave(msg.save)` antes de qualquer uso; a integridade usa o maior andar histórico declarado, nunca o checkpoint efêmero da sala. O formato atual é v4 e inclui somente os metadados P3 `bestiary.kills` e `contracts.{day,progress,claimed}`.
 - O relatório de saneamento vai para `console.info('[sala]', …)` do host, **nunca** para o chat da sala (`js/main.js:390`, `js/validate.js:139-152`).
 - Veredito negativo responde `{t:'refused', reason}` e fecha a conexão 250 ms depois (`js/net.js:146-154`).
 
@@ -40,7 +40,7 @@ Erros possíveis: `reason` ∈ `'full'` | `'locked'` (`js/room.js:7-8`) | `'kick
   "name": "Bruno",
   "voc": "knight",
   "save": {
-    "v": 3,
+    "v": 4,
     "voc": "knight",
     "name": "Bruno",
     "totalXp": 40217,
@@ -49,6 +49,12 @@ Erros possíveis: `reason` ∈ `'full'` | `'locked'` (`js/room.js:7-8`) | `'kick
     "gold": 340,
     "floor": 7,
     "potions": { "hp": 8, "mp": 6 },
+    "bestiary": { "kills": { "rat": 25 } },
+    "contracts": {
+      "day": "2026-08-30",
+      "progress": { "daily_1": 12 },
+      "claimed": []
+    },
     "items": [
       {
         "loc": "equipped",
@@ -59,8 +65,15 @@ Erros possíveis: `reason` ∈ `'full'` | `'locked'` (`js/room.js:7-8`) | `'kick
         "ilvl": 9,
         "name": "Espada Afiada",
         "glyph": "sword",
-        "atk": 14, "def": 0, "ml": 0, "hp": 0, "mp": 0,
-        "speed": 0, "atkSpeed": 0, "crit": 0, "leech": 0,
+        "atk": 14,
+        "def": 0,
+        "ml": 0,
+        "hp": 0,
+        "mp": 0,
+        "speed": 0,
+        "atkSpeed": 0,
+        "crit": 0,
+        "leech": 0,
         "affixes": [{ "id": "atk", "value": 4, "pct": false }]
       },
       {
@@ -72,8 +85,15 @@ Erros possíveis: `reason` ∈ `'full'` | `'locked'` (`js/room.js:7-8`) | `'kick
         "ilvl": 9,
         "name": "Anel Cruel",
         "glyph": "ring",
-        "atk": 2, "def": 0, "ml": 2, "hp": 0, "mp": 0,
-        "speed": 0, "atkSpeed": 0, "crit": 0.05, "leech": 0,
+        "atk": 2,
+        "def": 0,
+        "ml": 2,
+        "hp": 0,
+        "mp": 0,
+        "speed": 0,
+        "atkSpeed": 0,
+        "crit": 0.05,
+        "leech": 0,
         "affixes": [{ "id": "crit", "value": 0.05, "pct": true }]
       }
     ]
@@ -82,6 +102,12 @@ Erros possíveis: `reason` ∈ `'full'` | `'locked'` (`js/room.js:7-8`) | `'kick
 ```
 
 Fixture de origem: `tests/save.test.mjs:13-27` (`item()` e `hero()`) mais o formato serializado de `js/save.js:96-146`.
+
+Os metadados P3 entram apenas no `save` de `join`/`revoc`; não há mensagem P2P própria para
+bestiário, contratos ou Refúgio. No host, `step()` produz os eventos autoritativos e
+`createDailyContractProgress()` atualiza o estado do jogador antes da persistência. A lista
+diária e suas recompensas são reconstituídas localmente por `rollDailyContracts()`, não aceitas
+do pacote (`js/main.js`, `js/contracts.js`).
 
 Pacote de input, enviado a cada `1/30` s com a fila inteira de ações ainda não confirmadas (`js/main.js:899-906`, `js/actqueue.js:33`):
 
@@ -113,20 +139,21 @@ Pacote de input, enviado a cada `1/30` s com a fila inteira de ações ainda nã
 
 ### Host → convidado
 
-| `t` | Quando | Campos | Handler |
-|---|---|---|---|
-| `refused` | Admissão negada ou expulsão | `reason` | `js/main.js:440-454` |
-| `lock` | Host tranca/destranca a sala | `locked` | `js/main.js:455-460` |
-| `roster` | Qualquer mudança na lista | `players[]`, `queue[]` | `js/main.js:461-466` |
-| `bye` | Host fecha a aba de propósito | — | `js/main.js:467-470` |
-| `queued` | Entrou com a partida em curso | `floor`, `position`, `players[]`, `queue[]` | `js/main.js:471-478` |
-| `start` | Partida começa ou fila é drenada | `seed`, `floor` | `js/main.js:479-489` |
-| `s` | 15 Hz (`SNAP_HZ`) | snapshot completo + `E[]` | `js/main.js:490-500` |
-| `inv` | Só quando `invVer` do dono muda | `inv`, `equip`, `potions` | `js/main.js:501-505` |
-| `floor` | Virada de andar | `floor` | `js/main.js:506-515` |
-| `chat` | Retransmissão após antiflood | `name`, `m` | `js/main.js:516-518` |
-| `chatBlocked` | Rajada estourada | — | `js/main.js:519-521` |
-| `pong` | Resposta ao `ping` | `ts` (eco) | `js/main.js:522-527` |
+| `t`           | Quando                           | Campos                                      | Handler              |
+| ------------- | -------------------------------- | ------------------------------------------- | -------------------- |
+| `refused`     | Admissão negada ou expulsão      | `reason`                                    | `js/main.js:440-454` |
+| `lock`        | Host tranca/destranca a sala     | `locked`                                    | `js/main.js:455-460` |
+| `roster`      | Qualquer mudança na lista        | `players[]`, `queue[]`, `startFloor`        | `js/main.js`         |
+| `checkpoint`  | Host escolhe a próxima run       | `floor`                                     | `js/main.js`         |
+| `bye`         | Host fecha a aba de propósito    | —                                           | `js/main.js:467-470` |
+| `queued`      | Entrou com a partida em curso    | `floor`, `position`, `players[]`, `queue[]` | `js/main.js:471-478` |
+| `start`       | Partida começa ou fila é drenada | `seed`, `floor`                             | `js/main.js:479-489` |
+| `s`           | 15 Hz (`SNAP_HZ`)                | snapshot completo + `E[]`                   | `js/main.js:490-500` |
+| `inv`         | Só quando `invVer` do dono muda  | `inv`, `equip`, `potions`                   | `js/main.js:501-505` |
+| `floor`       | Virada de andar                  | `floor`                                     | `js/main.js:506-515` |
+| `chat`        | Retransmissão após antiflood     | `name`, `m`                                 | `js/main.js:516-518` |
+| `chatBlocked` | Rajada estourada                 | —                                           | `js/main.js:519-521` |
+| `pong`        | Resposta ao `ping`               | `ts` (eco)                                  | `js/main.js:522-527` |
 
 ```json
 { "t": "refused", "reason": "full" }
@@ -136,16 +163,45 @@ Pacote de input, enviado a cada `1/30` s com a fila inteira de ações ainda nã
 {
   "t": "roster",
   "players": [
-    { "id": "host", "name": "Bruno", "voc": "knight", "level": 12, "isHost": true, "state": "pronto", "stateCls": "ready" },
-    { "id": "a1b2c3d4-e5f6", "name": "Ana", "voc": "druid", "level": 9, "isHost": false, "state": "pronto", "stateCls": "ready" }
+    {
+      "id": "host",
+      "name": "Bruno",
+      "voc": "knight",
+      "level": 12,
+      "deepestFloor": 7,
+      "isHost": true,
+      "state": "pronto",
+      "stateCls": "ready"
+    },
+    {
+      "id": "a1b2c3d4-e5f6",
+      "name": "Ana",
+      "voc": "druid",
+      "level": 9,
+      "deepestFloor": 4,
+      "isHost": false,
+      "state": "pronto",
+      "stateCls": "ready"
+    }
   ],
   "queue": [
-    { "id": "9f8e7d6c-5b4a", "name": "Caio", "voc": "paladin", "level": 4, "isHost": false, "state": "na fila", "stateCls": "queued" }
-  ]
+    {
+      "id": "9f8e7d6c-5b4a",
+      "name": "Caio",
+      "voc": "paladin",
+      "level": 4,
+      "isHost": false,
+      "state": "na fila",
+      "stateCls": "queued"
+    }
+  ],
+  "startFloor": 4
 }
 ```
 
-Forma exata do `strip` em `js/main.js:184` e `js/main.js:287`; os valores de `state`/`stateCls` vêm de `js/main.js:393`, `js/main.js:399` e `js/main.js:209`.
+Cada jogador do `roster` também leva `deepestFloor`, usado para recompor os checkpoints comuns;
+`startFloor` é a escolha atual do host. A mensagem `checkpoint` transmite a alteração sem
+reiniciar a sala: o convidado atualiza apenas a próxima run (`js/main.js`).
 
 ```json
 {
@@ -153,10 +209,26 @@ Forma exata do `strip` em `js/main.js:184` e `js/main.js:287`; os valores de `st
   "floor": 5,
   "position": 1,
   "players": [
-    { "id": "host", "name": "Bruno", "voc": "knight", "level": 12, "isHost": true, "state": "pronto", "stateCls": "ready" }
+    {
+      "id": "host",
+      "name": "Bruno",
+      "voc": "knight",
+      "level": 12,
+      "isHost": true,
+      "state": "pronto",
+      "stateCls": "ready"
+    }
   ],
   "queue": [
-    { "id": "9f8e7d6c-5b4a", "name": "Caio", "voc": "paladin", "level": 4, "isHost": false, "state": "na fila", "stateCls": "queued" }
+    {
+      "id": "9f8e7d6c-5b4a",
+      "name": "Caio",
+      "voc": "paladin",
+      "level": 4,
+      "isHost": false,
+      "state": "na fila",
+      "stateCls": "queued"
+    }
   ]
 }
 ```
@@ -175,21 +247,21 @@ O convidado regenera o mapa localmente com `generateMap(S.seed, msg.floor)`, lim
 
 Chaves de 1–2 caracteres para caber no orçamento de banda; coordenadas passam por `r2(v) = Math.round(v*100)/100` (`js/net.js:173`, `js/net.js:184-244`).
 
-| Chave | Conteúdo |
-|---|---|
-| `ti` | `G.time` |
-| `po` | portal aberto, 0/1 |
-| `fl` | andar |
-| `pr` / `pt` | jogadores no portal / total de vivos |
-| `ph` | segundos acumulados no portal |
-| `P[]` | jogadores — **sempre inteiro**, sem recorte de distância |
-| `M[]` | monstros visíveis |
-| `I[]` | itens no chão |
-| `R[]` | projéteis |
-| `Z[]` | zonas persistentes |
-| `E[]` | eventos drenados, anexado em `js/main.js:925` |
+| Chave       | Conteúdo                                                 |
+| ----------- | -------------------------------------------------------- |
+| `ti`        | `G.time`                                                 |
+| `po`        | portal aberto, 0/1                                       |
+| `fl`        | andar                                                    |
+| `pr` / `pt` | jogadores no portal / total de vivos                     |
+| `ph`        | segundos acumulados no portal                            |
+| `P[]`       | jogadores — **sempre inteiro**, sem recorte de distância |
+| `M[]`       | monstros visíveis                                        |
+| `I[]`       | itens no chão                                            |
+| `R[]`       | projéteis                                                |
+| `Z[]`       | zonas persistentes                                       |
+| `E[]`       | eventos drenados, anexado em `js/main.js:925`            |
 
-Campos por jogador (`P[]`): `i` id, `n` nome, `v` vocação, `x`/`y`/`d` posição e direção, `h`/`m` HP/MP, `mh`/`mm` máximos, `sp` velocidade, `l` nível, `xp`, `g` ouro, `dd` morto, `rp` progresso de ressurreição, `dt` tempo morto, `ph`/`pm` poções, `a`/`c`/`hu`/`mv` animação, `b` buff ativo, `cd` cooldowns `[Q,W,E,R]`, `la` último `act.id` processado, `k` abates, `op` em cima do portal.
+Campos por jogador (`P[]`): `i` id, `n` nome, `v` vocação, `x`/`y`/`d` posição e direção, `h`/`m` HP/MP, `mh`/`mm` máximos, `sp` velocidade, `l` nível, `xp`, `g` ouro, `dd` morto, `rp` progresso de ressurreição, `dt` tempo morto, `ph`/`pm` poções, `a`/`c`/`hu`/`mv` animação, `b` buff ativo, `cd` cooldowns `[Q,W,E,R]`, `la` último `act.id` processado, `iv` versão autoritativa do inventário, `k` abates, `op` em cima do portal.
 
 Campos por monstro (`M[]`): sempre `i`, `t` (typeId), `x`, `y`, `d`, `h`, `mh`, `l`. Opcionais, presentes só quando têm valor: `b`+`n` (chefe), `f` (hitFlash), `w` (windup), `df` (deathFade), `s` (`[burn, poison, freeze, stun]`).
 
@@ -206,26 +278,64 @@ Payload real gerado por `buildSnapshot(G, { viewer, aoi: true })` sobre `createG
   "ph": 0,
   "P": [
     {
-      "i": "host", "n": "Bruno", "v": "knight",
-      "x": 29.5, "y": 35.5, "d": 0,
-      "h": 185, "m": 40, "mh": 185, "mm": 40, "sp": 3.5,
-      "l": 1, "xp": 0, "g": 0,
-      "dd": 0, "rp": 0, "dt": 0,
-      "ph": 8, "pm": 6,
-      "a": 0, "c": 0, "hu": 0, "mv": 0, "b": 0,
+      "i": "host",
+      "n": "Bruno",
+      "v": "knight",
+      "x": 29.5,
+      "y": 35.5,
+      "d": 0,
+      "h": 185,
+      "m": 40,
+      "mh": 185,
+      "mm": 40,
+      "sp": 3.5,
+      "l": 1,
+      "xp": 0,
+      "g": 0,
+      "dd": 0,
+      "rp": 0,
+      "dt": 0,
+      "ph": 8,
+      "pm": 6,
+      "a": 0,
+      "c": 0,
+      "hu": 0,
+      "mv": 0,
+      "b": 0,
       "cd": [0, 0, 0, 0],
-      "la": 0, "k": 0, "op": 0
+      "la": 0,
+      "k": 0,
+      "op": 0
     },
     {
-      "i": "peer-2", "n": "Ana", "v": "druid",
-      "x": 30.49, "y": 36.18, "d": 0,
-      "h": 90, "m": 140, "mh": 90, "mm": 140, "sp": 3.5,
-      "l": 1, "xp": 0, "g": 0,
-      "dd": 0, "rp": 0, "dt": 0,
-      "ph": 8, "pm": 6,
-      "a": 0, "c": 0, "hu": 0, "mv": 0, "b": 0,
+      "i": "peer-2",
+      "n": "Ana",
+      "v": "druid",
+      "x": 30.49,
+      "y": 36.18,
+      "d": 0,
+      "h": 90,
+      "m": 140,
+      "mh": 90,
+      "mm": 140,
+      "sp": 3.5,
+      "l": 1,
+      "xp": 0,
+      "g": 0,
+      "dd": 0,
+      "rp": 0,
+      "dt": 0,
+      "ph": 8,
+      "pm": 6,
+      "a": 0,
+      "c": 0,
+      "hu": 0,
+      "mv": 0,
+      "b": 0,
       "cd": [0, 0, 0, 0],
-      "la": 0, "k": 0, "op": 0
+      "la": 0,
+      "k": 0,
+      "op": 0
     }
   ],
   "M": [
@@ -245,20 +355,48 @@ Payload real gerado por `buildSnapshot(G, { viewer, aoi: true })` sobre `createG
 ```json
 {
   "t": "inv",
-  "inv": [null, null, null, {
-    "id": 812, "kind": "equip", "baseId": "ring", "slot": "ring",
-    "name": "Anel Cruel", "glyph": "ring", "rarity": "epic", "ilvl": 9,
-    "forVoc": null,
-    "atk": 2, "def": 0, "ml": 2, "hp": 0, "mp": 0,
-    "speed": 0, "atkSpeed": 0, "crit": 0.05, "leech": 0,
-    "affixes": [{ "id": "crit", "name": "Cruel", "stat": "crit", "value": 0.05, "pct": true }]
-  }],
-  "equip": { "weapon": null, "offhand": null, "armor": null, "boots": null, "ring": null, "amulet": null },
+  "i": "peer-2",
+  "iv": 7,
+  "inv": [
+    null,
+    null,
+    null,
+    {
+      "id": 812,
+      "kind": "equip",
+      "baseId": "ring",
+      "slot": "ring",
+      "name": "Anel Cruel",
+      "glyph": "ring",
+      "rarity": "epic",
+      "ilvl": 9,
+      "forVoc": null,
+      "atk": 2,
+      "def": 0,
+      "ml": 2,
+      "hp": 0,
+      "mp": 0,
+      "speed": 0,
+      "atkSpeed": 0,
+      "crit": 0.05,
+      "leech": 0,
+      "affixes": [{ "id": "crit", "name": "Cruel", "stat": "crit", "value": 0.05, "pct": true }]
+    }
+  ],
+  "equip": {
+    "weapon": null,
+    "offhand": null,
+    "armor": null,
+    "boots": null,
+    "ring": null,
+    "amulet": null
+  },
   "potions": { "hp": 8, "mp": 6 }
 }
 ```
 
-Enviado só ao dono e só quando `gp.invVer` muda (`js/main.js:930-934`).
+Enviado só ao dono e só quando `gp.invVer` muda. O mesmo contador aparece no `P[].iv`
+do snapshot: o convidado só pode compor progresso persistível quando dono e `iv` coincidem.
 
 Eventos vão dentro do snapshot em `E[]`. Tipos que o host repassa: `d` (número flutuante de dano/cura), `fx`, `shake`, `log`, `portal`, `portalReset` (`js/main.js:965`).
 
@@ -276,17 +414,17 @@ Eventos vão dentro do snapshot em `E[]`. Tipos que o host repassa: `d` (número
 
 ### Message formats — controle de fluxo e descarte
 
-| Mecanismo | Regra | Fonte |
-|---|---|---|
-| Recorte AOI | `AOI_RADIUS = 20` tiles em `x` **e** `y` (caixa, não círculo). Só `M`, `I`, `R`, `Z` são cortados; `P` vai inteiro para o HUD de grupo funcionar a qualquer distância | `js/balance.js:97`, `js/net.js:186-190` |
-| Um pacote por destinatário | O host monta um snapshot por peer com `viewer = S.G.players[peerId]` | `js/main.js:919-926` |
-| Teto de eventos | `drainEvents(queue, cap = 120)`: se estourar, críticos primeiro, depois o resto até o teto | `js/net.js:327-342`, `js/balance.js:98` |
-| Eventos críticos | `log`, `portal`, `floor`, `levelup`, `fx` com `k ∈ {playerDeath, revive}`, e qualquer evento com `boss` | `js/net.js:327-331` |
-| Backpressure | `dataChannel.bufferedAmount > 512 KB` → pula o envio e conta strike; 40 strikes seguidos derrubam o peer e emitem `peerLeft` | `js/net.js:118-137`, `js/balance.js:99-100` |
-| Recusa educada | `refuse(peerId, reason)` envia `{t:'refused', reason}` e só chama `close()` depois de 250 ms | `js/net.js:146-154` |
-| Origem inválida | `acceptFrom()` falso → incrementa `net.rejected` e descarta a mensagem | `js/net.js:40-43`, `js/net.js:67`, `js/net.js:89` |
-| Antiflood de chat | 3 mensagens por 5 s por peer, texto cortado em 140 e `trim` | `js/chatgate.js:19-33` |
-| Medição | `bytesOut`, `bytesIn`, `packetsOut` por `approxBytes(JSON.stringify(msg).length)`, só contadores | `js/net.js:177-180` |
+| Mecanismo                  | Regra                                                                                                                                                                 | Fonte                                             |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Recorte AOI                | `AOI_RADIUS = 20` tiles em `x` **e** `y` (caixa, não círculo). Só `M`, `I`, `R`, `Z` são cortados; `P` vai inteiro para o HUD de grupo funcionar a qualquer distância | `js/balance.js:97`, `js/net.js:186-190`           |
+| Um pacote por destinatário | O host monta um snapshot por peer com `viewer = S.G.players[peerId]`                                                                                                  | `js/main.js:919-926`                              |
+| Teto de eventos            | `drainEvents(queue, cap = 120)`: se estourar, críticos primeiro, depois o resto até o teto                                                                            | `js/net.js:327-342`, `js/balance.js:98`           |
+| Eventos críticos           | `log`, `portal`, `floor`, `levelup`, `fx` com `k ∈ {playerDeath, revive}`, e qualquer evento com `boss`                                                               | `js/net.js:327-331`                               |
+| Backpressure               | `dataChannel.bufferedAmount > 512 KB` → pula o envio e conta strike; 40 strikes seguidos derrubam o peer e emitem `peerLeft`                                          | `js/net.js:118-137`, `js/balance.js:99-100`       |
+| Recusa educada             | `refuse(peerId, reason)` envia `{t:'refused', reason}` e só chama `close()` depois de 250 ms                                                                          | `js/net.js:146-154`                               |
+| Origem inválida            | `acceptFrom()` falso → incrementa `net.rejected` e descarta a mensagem                                                                                                | `js/net.js:40-43`, `js/net.js:67`, `js/net.js:89` |
+| Antiflood de chat          | 3 mensagens por 5 s por peer, texto cortado em 140 e `trim`                                                                                                           | `js/chatgate.js:19-33`                            |
+| Medição                    | `bytesOut`, `bytesIn`, `packetsOut` por `approxBytes(JSON.stringify(msg).length)`, só contadores                                                                      | `js/net.js:177-180`                               |
 
 Não há retry de mensagem nem DLQ: o DataChannel é `reliable: true` e a recuperação de estado acontece pelo próximo snapshot. A única fila com reenvio é a do convidado (`ActionQueue`), que retransmite tudo que ainda não foi confirmado por `la` (`js/actqueue.js:33-41`).
 

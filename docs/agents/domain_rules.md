@@ -31,12 +31,12 @@ O domínio codifica:
 - `nextFloor()` recalcula `G.groupSize` como o número de jogadores **não mortos** no momento da virada (`js/sim.js:50-52`).
 
 | Jogadores | `groupScale` | População base andar 5 (`62 + 5×8 = 102`) | População final |
-|---|---|---|---|
-| 1 | 1.00 | 102 | 102 |
-| 2 | 1.41 | 102 | 144 |
-| 4 | 2.00 | 102 | 150 (teto) |
-| 7 | 2.65 → 2.60 | 102 | 150 (teto) |
-| 10 | 3.16 → 2.60 | 102 | 150 (teto) |
+| --------- | ------------ | ----------------------------------------- | --------------- |
+| 1         | 1.00         | 102                                       | 102             |
+| 2         | 1.41         | 102                                       | 144             |
+| 4         | 2.00         | 102                                       | 150 (teto)      |
+| 7         | 2.65 → 2.60  | 102                                       | 150 (teto)      |
+| 10        | 3.16 → 2.60  | 102                                       | 150 (teto)      |
 
 Para estender: mudar `GROUP_SCALE_CAP` ou a curva em `groupScale()`; nenhum outro arquivo repete a fórmula.
 
@@ -54,12 +54,12 @@ Para estender: mudar `GROUP_SCALE_CAP` ou a curva em `groupScale()`; nenhum outr
 - Morte do chefe: 20 de shake, log `'boss'` e **5 chamadas** a `dropLoot(..., true)` (`js/sim.js:686-691`).
 - Sem chefe vivo e portal fechado → `G.portalOpen = true` + evento `{t:'portal'}` (`js/sim.js:301-307`).
 
-| Andar | `(floor-1) % 4` | Chefe | HP base | Nível |
-|---|---|---|---|---|
-| 1, 5, 9… | 0 | Arauto de Cinzas (`ferumbras`) | 900 | `floor+3` |
-| 2, 6, 10… | 1 | Senhor do Fosso (`morgaroth`) | 1200 | `floor+3` |
-| 3, 7, 11… | 2 | Rainha Glacial (`glacier`) | 1050 | `floor+3` |
-| 4, 8, 12… | 3 | Ossuário Ancião (`bonelord`) | 1400 | `floor+3` |
+| Andar     | `(floor-1) % 4` | Chefe                          | HP base | Nível     |
+| --------- | --------------- | ------------------------------ | ------- | --------- |
+| 1, 5, 9…  | 0               | Arauto de Cinzas (`ferumbras`) | 900     | `floor+3` |
+| 2, 6, 10… | 1               | Senhor do Fosso (`morgaroth`)  | 1200    | `floor+3` |
+| 3, 7, 11… | 2               | Rainha Glacial (`glacier`)     | 1050    | `floor+3` |
+| 4, 8, 12… | 3               | Ossuário Ancião (`bonelord`)   | 1400    | `floor+3` |
 
 Para estender: acrescentar entrada em `BOSSES` (`js/data.js:98-103`); o módulo `% BOSSES.length` já absorve o novo tamanho.
 
@@ -81,15 +81,15 @@ Para estender: acrescentar entrada em `BOSSES` (`js/data.js:98-103`); o módulo 
 
 ### Morte, ressurreição e respawn
 
-| Situação | Regra | Constante | Arquivo |
-|---|---|---|---|
-| Aliado por perto | Barra de ressurreição sobe `dt × min(helpers, 3)` | `REVIVE_RADIUS 1.6`, `REVIVE_TIME 3.5`, `REVIVE_MAX_HELPERS 3` | `js/sim.js:330-357` |
-| Ninguém por perto | Barra decai `dt × 0.5` | `REVIVE_DECAY 0.5` | `js/sim.js:353` |
-| Reerguido | Volta com 50% HP / 40% MP, status limpo | `REVIVE_HP_FRAC 0.5`, `REVIVE_MP_FRAC 0.4` | `js/sim.js:342-345` |
-| Respawn voluntário | Ação `respawn` aceita a partir de 5 s de morto | `RESPAWN_DELAY 5` | `js/sim.js:322-325` |
-| Respawn forçado | Aos 30 s sem ninguém erguendo | `AUTO_RESPAWN 30` | `js/sim.js:355` |
-| Respawn | No spawn do andar, 50% HP e 50% MP | literal `0.5` em `respawn()` | `js/sim.js:477-489` |
-| Custo da morte | Perde 10% do ouro; inventário intacto | `DEATH_GOLD_LOSS 0.1` | `js/sim.js:733-735` |
+| Situação           | Regra                                             | Constante                                                      | Arquivo             |
+| ------------------ | ------------------------------------------------- | -------------------------------------------------------------- | ------------------- |
+| Aliado por perto   | Barra de ressurreição sobe `dt × min(helpers, 3)` | `REVIVE_RADIUS 1.6`, `REVIVE_TIME 3.5`, `REVIVE_MAX_HELPERS 3` | `js/sim.js:330-357` |
+| Ninguém por perto  | Barra decai `dt × 0.5`                            | `REVIVE_DECAY 0.5`                                             | `js/sim.js:353`     |
+| Reerguido          | Volta com 50% HP / 40% MP, status limpo           | `REVIVE_HP_FRAC 0.5`, `REVIVE_MP_FRAC 0.4`                     | `js/sim.js:342-345` |
+| Respawn voluntário | Ação `respawn` aceita a partir de 5 s de morto    | `RESPAWN_DELAY 5`                                              | `js/sim.js:322-325` |
+| Respawn forçado    | Aos 30 s sem ninguém erguendo                     | `AUTO_RESPAWN 30`                                              | `js/sim.js:355`     |
+| Respawn            | No spawn do andar, 50% HP e 50% MP                | literal `0.5` em `respawn()`                                   | `js/sim.js:477-489` |
+| Custo da morte     | Perde 10% do ouro; inventário intacto             | `DEATH_GOLD_LOSS 0.1`                                          | `js/sim.js:733-735` |
 
 Enquanto morto, a única ação aceita é `respawn`; qualquer outra é descartada (`js/sim.js:322-326`).
 
@@ -102,11 +102,11 @@ Enquanto morto, a única ação aceita é `respawn`; qualquer outra é descartad
 - Limiar: `xpForLevel(level) = floor(80 × level^1.55)` (`js/data.js:161-163`).
 
 | Vivos no raio | `xpShare` | XP de um esqueleto (`xp` base 16, nível 1) |
-|---|---|---|
-| 1 | 1.000 | 16 |
-| 2 | 0.707 | 11 |
-| 4 | 0.500 | 8 |
-| 10 | 0.316 | 5 |
+| ------------- | --------- | ------------------------------------------ |
+| 1             | 1.000     | 16                                         |
+| 2             | 0.707     | 11                                         |
+| 4             | 0.500     | 8                                          |
+| 10            | 0.316     | 5                                          |
 
 ### Coleta determinística de itens
 
@@ -121,21 +121,21 @@ Enquanto morto, a única ação aceita é `respawn`; qualquer outra é descartad
 - Equipamento: `guaranteed || isBoss ? 1 : 0.26 + min(0.15, floor × 0.012)` (`js/sim.js:1032`).
 - Item de chefe rola em `m.level + 4` e com pesos de não-comum triplicados (comum cai para peso 5) (`js/sim.js:1033-1038`, `js/sim.js:1043-1046`).
 
-| Andar | Chance de equipamento (comum) | Chance (chefe) |
-|---|---|---|
-| 1 | 0.272 | 1.00 |
-| 5 | 0.320 | 1.00 |
-| 10 | 0.380 | 1.00 |
-| ≥ 13 | 0.410 (teto de `min(0.15, …)`) | 1.00 |
+| Andar | Chance de equipamento (comum)  | Chance (chefe) |
+| ----- | ------------------------------ | -------------- |
+| 1     | 0.272                          | 1.00           |
+| 5     | 0.320                          | 1.00           |
+| 10    | 0.380                          | 1.00           |
+| ≥ 13  | 0.410 (teto de `min(0.15, …)`) | 1.00           |
 
 ### Raridade, afixos e stats do item
 
-| Raridade | Peso normal | Peso em drop de chefe | `mult` | Afixos |
-|---|---|---|---|---|
-| `common` | 100 | 5 | 1.00 | 0 |
-| `rare` | 38 | 114 | 1.35 | 1 |
-| `epic` | 13 | 39 | 1.80 | 2 |
-| `legendary` | 3 | 9 | 2.50 | 3 |
+| Raridade    | Peso normal | Peso em drop de chefe | `mult` | Afixos |
+| ----------- | ----------- | --------------------- | ------ | ------ |
+| `common`    | 100         | 5                     | 1.00   | 0      |
+| `rare`      | 38          | 114                   | 1.35   | 1      |
+| `epic`      | 13          | 39                    | 1.80   | 2      |
+| `legendary` | 3           | 9                     | 2.50   | 3      |
 
 - Stat de item = `base × (1 + ilvl × 0.16) × rarity.mult`, arredondado, mínimo 1 quando a base tem o campo (`js/sim.js:1049-1064`).
 - `speed` usa `Math.min(1.6, R.mult)` em vez do multiplicador cheio (`js/sim.js:1060`).
@@ -151,15 +151,15 @@ Para estender: acrescentar linha em `ITEM_BASES` ou `AFFIXES`; `rollItem` sortei
 - `canEquip(p, item)` retorna `true` quando o item não tem `forVoc`; caso contrário exige `item.forVoc.includes(p.voc)` (`js/sim.js:1113-1115`).
 - A UI espelha a regra e marca o item como bloqueado (`js/ui.js:302`).
 
-| Base | `forVoc` |
-|---|---|
-| `sword`, `axe` | knight |
-| `bow`, `spear` | paladin |
-| `wand` | sorcerer |
-| `rod` | druid |
-| `plate`, `shield` | knight, paladin |
-| `robe`, `book` | sorcerer, druid |
-| `leather`, `boots`, `ring`, `amulet` | sem restrição |
+| Base                                 | `forVoc`        |
+| ------------------------------------ | --------------- |
+| `sword`, `axe`                       | knight          |
+| `bow`, `spear`                       | paladin         |
+| `wand`                               | sorcerer        |
+| `rod`                                | druid           |
+| `plate`, `shield`                    | knight, paladin |
+| `robe`, `book`                       | sorcerer, druid |
+| `leather`, `boots`, `ring`, `amulet` | sem restrição   |
 
 ### Venda de itens — divergência entre código e rótulo
 
@@ -169,39 +169,39 @@ Para estender: acrescentar linha em `ITEM_BASES` ou `AFFIXES`; `rollItem` sortei
 
 ### Matriz de IA de monstro
 
-| `ai` | Alcance de ataque | Recuo | Cooldown | Windup | Resolução do ataque |
-|---|---|---|---|---|---|
-| `melee` | `0.9 + size×0.4` | — | 1.4 s | 0.35 s | Corpo a corpo, com lifesteal/veneno do tipo |
-| `pack` | `0.9 + size×0.4` | — | 1.4 s | 0.35 s | Idêntico a `melee` — `sim.js` não ramifica em `pack` |
-| `tank` | `0.9 + size×0.4` | — | 1.4 s | 0.35 s | Idêntico a `melee` — `sim.js` não ramifica em `tank` |
-| `ranged` | 7.5 | 4.0 | 2.2 s | 0.35 s | Projétil velocidade 9, alcance 12 |
-| `caster` | 7.5 | 4.0 | 2.2 s | 0.35 s | Projétil velocidade 9, alcance 12 |
-| `boss` | 7.5 | — | 1.5 s | 0.5 s | Projétil + especial a cada 7 s |
+| `ai`     | Alcance de ataque | Recuo | Cooldown | Windup | Resolução do ataque                                  |
+| -------- | ----------------- | ----- | -------- | ------ | ---------------------------------------------------- |
+| `melee`  | `0.9 + size×0.4`  | —     | 1.4 s    | 0.35 s | Corpo a corpo, com lifesteal/veneno do tipo          |
+| `pack`   | `0.9 + size×0.4`  | —     | 1.4 s    | 0.35 s | Idêntico a `melee` — `sim.js` não ramifica em `pack` |
+| `tank`   | `0.9 + size×0.4`  | —     | 1.4 s    | 0.35 s | Idêntico a `melee` — `sim.js` não ramifica em `tank` |
+| `ranged` | 7.5               | 4.0   | 2.2 s    | 0.35 s | Projétil velocidade 9, alcance 12                    |
+| `caster` | 7.5               | 4.0   | 2.2 s    | 0.35 s | Projétil velocidade 9, alcance 12                    |
+| `boss`   | 7.5               | —     | 1.5 s    | 0.5 s  | Projétil + especial a cada 7 s                       |
 
 Fonte: `js/sim.js:798-799`, `js/sim.js:815-816`, `js/sim.js:856-875`. Os valores `pack` e `tank` existem em `js/data.js:87` e `js/data.js:92` mas não têm ramo próprio em `sim.js` (verificado: `grep "\.ai" js/sim.js` só cita `ranged`, `caster` e `boss`).
 
 Especial do chefe, sorteado a cada 7 s (`js/sim.js:822-853`):
 
-| Faixa de `Math.random()` | Efeito |
-|---|---|
-| `< 0.45` | Nova em raio 4,5 causando `atk × 1.6`, shake 12 |
-| `0.45 – 0.75` | 8 projéteis em círculo, `atk × 0.9`, alcance 9 |
-| `≥ 0.75` | Invoca 3 monstros de `tier <= 2` no nível `boss.level - 1`, marcados `summoned` (não dropam loot) |
+| Faixa de `Math.random()` | Efeito                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `< 0.45`                 | Nova em raio 4,5 causando `atk × 1.6`, shake 12                                                   |
+| `0.45 – 0.75`            | 8 projéteis em círculo, `atk × 0.9`, alcance 9                                                    |
+| `≥ 0.75`                 | Invoca 3 monstros de `tier <= 2` no nível `boss.level - 1`, marcados `summoned` (não dropam loot) |
 
 Para estender: acrescentar `case` no bloco de `m.ai` em `updateMonster`; hoje qualquer valor desconhecido cai no comportamento corpo a corpo.
 
 ### Matriz de tipos de magia
 
-| `type` | Resolução | Campos lidos | Local |
-|---|---|---|---|
-| `bolt` | Projétil teleguiado ou direcional, `big: true` | `speed`, `range`, `mult`, `burn` | `js/sim.js:545-552` |
-| `wave` | Retângulo frontal: `along ∈ (-0.4, range)` e `side < width + size×0.3` | `range`, `width`, `mult` | `js/sim.js:553-566` |
-| `nova` | Círculo em volta do lançador, `dist <= radius + size×0.4` | `radius`, `mult`, `stun` | `js/sim.js:567-575` |
-| `ground` | Zona persistente no ponto mirado, dano por `tick` | `radius`, `time`, `tick`, `poison` | `js/sim.js:576-585` |
-| `heal` | Cura `flat + power × skill.power × 0.5`; com `ally`, escolhe o aliado vivo de menor % de HP em `HEAL_ALLY_RADIUS = 8` | `flat`, `power`, `ally`, `allyFirst` | `js/sim.js:586-607` |
-| `buff` | Empilha `skill.buff` em `p.buffs`; com `taunt`, prende monstros no raio por `TAUNT_TIME = 6` s | `buff`, `taunt`, `radius` | `js/sim.js:608-618` |
-| `dash` | Avança em 14 passos na direção mirada, parando na primeira colisão | `range` | `js/sim.js:619-631` |
-| `chain` | Citado no comentário de `js/data.js:21`, sem `case` em `sim.js` e sem magia que o use | — | — |
+| `type`   | Resolução                                                                                                             | Campos lidos                         | Local               |
+| -------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------- |
+| `bolt`   | Projétil teleguiado ou direcional, `big: true`                                                                        | `speed`, `range`, `mult`, `burn`     | `js/sim.js:545-552` |
+| `wave`   | Retângulo frontal: `along ∈ (-0.4, range)` e `side < width + size×0.3`                                                | `range`, `width`, `mult`             | `js/sim.js:553-566` |
+| `nova`   | Círculo em volta do lançador, `dist <= radius + size×0.4`                                                             | `radius`, `mult`, `stun`             | `js/sim.js:567-575` |
+| `ground` | Zona persistente no ponto mirado, dano por `tick`                                                                     | `radius`, `time`, `tick`, `poison`   | `js/sim.js:576-585` |
+| `heal`   | Cura `flat + power × skill.power × 0.5`; com `ally`, escolhe o aliado vivo de menor % de HP em `HEAL_ALLY_RADIUS = 8` | `flat`, `power`, `ally`, `allyFirst` | `js/sim.js:586-607` |
+| `buff`   | Empilha `skill.buff` em `p.buffs`; com `taunt`, prende monstros no raio por `TAUNT_TIME = 6` s                        | `buff`, `taunt`, `radius`            | `js/sim.js:608-618` |
+| `dash`   | Avança em 14 passos na direção mirada, parando na primeira colisão                                                    | `range`                              | `js/sim.js:619-631` |
+| `chain`  | Citado no comentário de `js/data.js:21`, sem `case` em `sim.js` e sem magia que o use                                 | —                                    | —                   |
 
 - Poder da magia: `power = st.atk × 0.8 + st.ml × 2.0 + level × 2` (`js/sim.js:539`).
 - Portões antes de lançar, nesta ordem: magia existe → cooldown zerado → mana suficiente → sem `stun`/`freeze` (`js/sim.js:527-531`).
@@ -211,24 +211,24 @@ Para estender: acrescentar `case` no `switch (skill.type)` de `castSkill` e a ma
 
 ### Multiplicador elemental
 
-| Relação | Multiplicador | Fonte |
-|---|---|---|
-| Elemento é a fraqueza (`weak`) do alvo | 1.5× | `js/data.js:156` |
-| Elemento é a resistência (`resist`) do alvo | 0.55× | `js/data.js:157` |
-| Nenhum dos dois | 1.0× | `js/data.js:158` |
+| Relação                                     | Multiplicador | Fonte            |
+| ------------------------------------------- | ------------- | ---------------- |
+| Elemento é a fraqueza (`weak`) do alvo      | 1.5×          | `js/data.js:156` |
+| Elemento é a resistência (`resist`) do alvo | 0.55×         | `js/data.js:157` |
+| Nenhum dos dois                             | 1.0×          | `js/data.js:158` |
 
 Dano final no monstro: `max(1, floor(raw × mult - def × 0.45))` (`js/sim.js:653`). Dano no jogador: `max(1, raw × (1 - dmgRes) - def × 0.5)`, exceto fontes `silent` como lava, que ignoram defesa (`js/sim.js:713-721`).
 
 ### Sala: teto, tranca, fila e expulsão
 
-| Estado da sala | Peer novo | Resultado |
-|---|---|---|
-| `locked = true` | qualquer | `{t:'refused', reason:'locked'}` (`js/room.js:8`, `js/room.js:23`) |
-| `count >= max` (`players.size + queue.length >= 10`) | qualquer | `{t:'refused', reason:'full'}` (`js/room.js:7`, `js/room.js:19-24`) |
-| Já presente em `players` ou `queue` | mesmo id | Aceito, sem duplicar (`js/room.js:22`) |
-| `started = false` | novo | Entra direto em `players` (`js/room.js:38-39`) |
-| `started = true` | novo | Vai para `queue`, entra só na virada de andar (`js/room.js:34-37`) |
-| Host expulsa | alvo | `{t:'refused', reason:'kicked'}`, `Room.remove`, `removePlayer` na simulação (`js/main.js:217-227`) |
+| Estado da sala                                       | Peer novo | Resultado                                                                                           |
+| ---------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `locked = true`                                      | qualquer  | `{t:'refused', reason:'locked'}` (`js/room.js:8`, `js/room.js:23`)                                  |
+| `count >= max` (`players.size + queue.length >= 10`) | qualquer  | `{t:'refused', reason:'full'}` (`js/room.js:7`, `js/room.js:19-24`)                                 |
+| Já presente em `players` ou `queue`                  | mesmo id  | Aceito, sem duplicar (`js/room.js:22`)                                                              |
+| `started = false`                                    | novo      | Entra direto em `players` (`js/room.js:38-39`)                                                      |
+| `started = true`                                     | novo      | Vai para `queue`, entra só na virada de andar (`js/room.js:34-37`)                                  |
+| Host expulsa                                         | alvo      | `{t:'refused', reason:'kicked'}`, `Room.remove`, `removePlayer` na simulação (`js/main.js:217-227`) |
 
 - `MAX_PLAYERS = 10` conta jogadores **mais** fila (`js/balance.js:62`, `js/room.js:17`).
 - `refuse()` envia o motivo e só fecha a conexão 250 ms depois, para o outro lado conseguir exibir a mensagem certa (`js/net.js:141-149`).
@@ -254,13 +254,13 @@ Dano final no monstro: `max(1, floor(raw × mult - def × 0.45))` (`js/sim.js:65
 
 ### Ciclo de sessão do convidado
 
-| Evento | Transição | Efeito |
-|---|---|---|
-| Conexão cai sem aviso | `live → reconnecting` | Janela de `RECONNECT_WINDOW = 12` s, tentativa a cada `RECONNECT_RETRY = 3` s (`js/session.js:36-44`, `js/balance.js:84-85`) |
-| Janela esgota | `reconnecting → ended` | `onEnded('Partida encerrada', 'O host saiu e a sala foi fechada.', false)`, uma única vez (`js/session.js:59-66`) |
-| Host envia `{t:'bye'}` | `* → ended` | `endExpected` pula a tentativa de reconexão (`js/session.js:47-54`, `js/main.js:467-470`) |
-| Expulso (`reason:'kicked'`) | `* → ended` | Mensagem própria; se estava na fila, volta ao menu sem overlay (`js/main.js:440-455`) |
-| Reconecta a tempo | `reconnecting → live` | `rejoined()` dispara `onResumed` (`js/session.js:68-74`) |
+| Evento                      | Transição              | Efeito                                                                                                                       |
+| --------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Conexão cai sem aviso       | `live → reconnecting`  | Janela de `RECONNECT_WINDOW = 12` s, tentativa a cada `RECONNECT_RETRY = 3` s (`js/session.js:36-44`, `js/balance.js:84-85`) |
+| Janela esgota               | `reconnecting → ended` | `onEnded('Partida encerrada', 'O host saiu e a sala foi fechada.', false)`, uma única vez (`js/session.js:59-66`)            |
+| Host envia `{t:'bye'}`      | `* → ended`            | `endExpected` pula a tentativa de reconexão (`js/session.js:47-54`, `js/main.js:467-470`)                                    |
+| Expulso (`reason:'kicked'`) | `* → ended`            | Mensagem própria; se estava na fila, volta ao menu sem overlay (`js/main.js:440-455`)                                        |
+| Reconecta a tempo           | `reconnecting → live`  | `rejoined()` dispara `onResumed` (`js/session.js:68-74`)                                                                     |
 
 ### HUD de aliados com histerese
 

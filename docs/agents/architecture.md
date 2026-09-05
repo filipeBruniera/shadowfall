@@ -24,8 +24,11 @@ shadowfall/
 │   ├── rng.js          #  56 · mulberry32, hash2 por tile, roomCode 4 chars, seedFromCode (FNV-1a)
 │   ├── world.js        # 216 · mapa 72×72 procedural por seed+andar, flow field por BFS, A*
 │   ├── sim.js          # 1229 · simulação autoritativa; estado puro, zero DOM
-│   ├── save.js         # 319 · formato localStorage v3 + migrações, storage injetável
+│   ├── save.js         # formato localStorage v4 + migrações, storage injetável
 │   ├── validate.js     # 149 · saneamento no host do save que chega pela rede
+│   ├── bestiary.js     # catálogo derivado de MONSTERS/BOSSES e revelações por tier
+│   ├── contracts.js    # contratos diários UTC, progresso autoritativo e resgate idempotente
+│   ├── refuge.js       # projeções puras de checkpoint, bestiário e contratos para a UI
 │   ├── room.js         #  83 · teto, tranca, fila de entrada tardia, ordem do roster
 │   ├── session.js      #  79 · SessionGuard: live | reconnecting | ended
 │   ├── actqueue.js     #  45 · ids incrementais, reenvio até o host confirmar
@@ -40,13 +43,13 @@ shadowfall/
 
 ### Layer responsibilities
 
-| Layer | Owns | Does NOT own |
-|---|---|---|
-| Conteúdo/config (`data.js`, `balance.js`) | Tabelas de conteúdo e todo número de balanceamento (`balance.js:1-4`) | Lógica, DOM, rede |
-| Lógica pura (`rng`, `world`, `sim`, `save`, `validate`, `room`, `session`, `actqueue`, `chatgate`, `allyrail`) | Estado, regras, política de sala, formato de save, RNG determinístico | `document`, `window`, `Peer`, `canvas` |
-| Transporte (`net.js`) | Peer PeerJS, topologia estrela, serialização/recorte AOI, interpolação, fila de eventos | Regras de jogo, desenho, telas |
-| Apresentação (`render.js`, `ui.js`) | Projeção isométrica, sprites, HUD, telas, log | Mutação do estado do simulador, envio de pacote |
-| Composição (`main.js`) | Loop de frame, input, roteamento `hostMsg`/`guestMsg`, cola entre rede e renderer | Regra de jogo (delega a `sim.js`) e política de sala (delega a `room.js`) |
+| Layer                                                                                                                                             | Owns                                                                                         | Does NOT own                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Conteúdo/config (`data.js`, `balance.js`)                                                                                                         | Tabelas de conteúdo e todo número de balanceamento (`balance.js:1-4`)                        | Lógica, DOM, rede                                                         |
+| Lógica pura (`rng`, `world`, `sim`, `save`, `validate`, `bestiary`, `contracts`, `refuge`, `room`, `session`, `actqueue`, `chatgate`, `allyrail`) | Estado, regras, política de sala, formato de save, RNG determinístico e projeções do Refúgio | `document`, `window`, `Peer`, `canvas`                                    |
+| Transporte (`net.js`)                                                                                                                             | Peer PeerJS, topologia estrela, serialização/recorte AOI, interpolação, fila de eventos      | Regras de jogo, desenho, telas                                            |
+| Apresentação (`render.js`, `ui.js`)                                                                                                               | Projeção isométrica, sprites, HUD, telas, log                                                | Mutação do estado do simulador, envio de pacote                           |
+| Composição (`main.js`)                                                                                                                            | Loop de frame, input, roteamento `hostMsg`/`guestMsg`, cola entre rede e renderer            | Regra de jogo (delega a `sim.js`) e política de sala (delega a `room.js`) |
 
 Invariantes observados:
 
@@ -54,16 +57,19 @@ Invariantes observados:
 - `main.js` é o único módulo que importa ao mesmo tempo `net.js` e `render.js` (`js/main.js:7-9`).
 - Um só sistema de coordenadas: entidades em tiles float; a projeção isométrica só acontece no desenho (`js/render.js:8-10` — `project(x,y)`).
 - Estrela pura: `Net.acceptFrom()` garante que convidado só aceita a conexão do host e host só aceita peer que ele registrou (`js/net.js:36-40`).
+- O bestiário grava apenas `id → derrotas`; `BESTIARY_CATALOG` é derivado de `MONSTERS` e `BOSSES` e as revelações vêm de `getBestiaryRevelations()` (`js/bestiary.js`).
+- A lista de contratos não pertence ao save: `rollDailyContracts()` a reconstitui por chave UTC e `DAILY_CONTRACT_SEED`; apenas a projeção `{ day, progress, claimed }` é persistida (`js/contracts.js`).
+- `buildRefugeView()` é uma fronteira pura. A composição em `js/main.js` abre o Refúgio apenas fora de partida, fila e encerramento pendente, e aplica o resgate via `claimDailyContractReward()` antes de `Save.writeSave()`.
 
 ### External integration points
 
-| System | Client/config | Notes |
-|---|---|---|
-| Broker PeerJS | `new Peer(PREFIX + code, { debug: 0 })` no host, `new Peer({debug:0})` no convidado (`js/net.js:48`, `js/net.js:80`) | Só o aperto de mão; `PREFIX = 'shadowfall-ashen-'` (`js/net.js:9`). Timeout 15 s no host, 20 s no convidado |
-| unpkg CDN | `<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js">` (`index.html:228`) | Global `Peer`; ausência é tratada com erro em pt-BR (`js/net.js:48`) |
-| Google Fonts | `<link href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch...">` (`index.html:11`) | `preconnect` em `index.html:9` |
-| `localStorage` | `store()` com fallback e injeção via `setStorage()` (`js/save.js:39-45`) | Cota cheia/modo privado avisam uma vez e a partida segue (`js/save.js:296-301`) |
-| Vercel | `vercel.json` | `cleanUrls: true`; `/js/*` com `public, max-age=0, must-revalidate` |
+| System         | Client/config                                                                                                        | Notes                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Broker PeerJS  | `new Peer(PREFIX + code, { debug: 0 })` no host, `new Peer({debug:0})` no convidado (`js/net.js:48`, `js/net.js:80`) | Só o aperto de mão; `PREFIX = 'shadowfall-ashen-'` (`js/net.js:9`). Timeout 15 s no host, 20 s no convidado |
+| unpkg CDN      | `<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js">` (`index.html:228`)                                | Global `Peer`; ausência é tratada com erro em pt-BR (`js/net.js:48`)                                        |
+| Google Fonts   | `<link href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch...">` (`index.html:11`)                         | `preconnect` em `index.html:9`                                                                              |
+| `localStorage` | `store()` com fallback e injeção via `setStorage()` (`js/save.js:39-45`)                                             | Cota cheia/modo privado avisam uma vez e a partida segue (`js/save.js:296-301`)                             |
+| Vercel         | `vercel.json`                                                                                                        | `cleanUrls: true`; `/js/*` com `public, max-age=0, must-revalidate`                                         |
 
 ### Macro flow: tick do host até a tela do convidado
 

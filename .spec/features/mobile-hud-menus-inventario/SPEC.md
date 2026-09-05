@@ -1,6 +1,7 @@
 # SPEC: mobile-hud-menus-inventario
 
 ## Metadata
+
 - Source: developer description via /plan (`.spec/features/mobile-hud-menus-inventario/.handoff/input.md`)
 - Clarificações vinculantes: `.spec/features/mobile-hud-menus-inventario/.handoff/clarifier-answers.md` (20/08/2026)
 - Service: shadowfall (repositório único, front-end sem bundler)
@@ -11,16 +12,16 @@
 
 ### Regras de arquitetura que amarram esta SPEC
 
-| Regra | Fonte | Efeito aqui |
-|---|---|---|
-| `js/sim.js` é estado puro, zero DOM | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` (tabela de camadas) | Nenhuma mudança desta feature entra em `js/sim.js`; a superfície é `index.html`, `styles.css`, `js/ui.js`, `js/main.js`, `js/render.js` |
-| Todo número de tuning vive em `js/balance.js` | `AGENTS.md:38`, `AGENTS.md:57` | A fração da zona do joystick, hoje literal `0.45` em `js/main.js:608`, migra para `js/balance.js` já com o valor decidido `F = 0.50` (RF-01, UI-03, RNF-03) |
-| Apresentação não muta estado do simulador nem envia pacote | `docs/agents/architecture.md`, tabela "Layer responsibilities" | `ui.js` e `render.js` só leem `view`/`local`; nenhum requisito abaixo cria mensagem de rede |
-| Testes sem framework; `process.exit(failures ? 1 : 0)` | `AGENTS.md:32`, `AGENTS.md:43` | Os casos mobile seguem o padrão já existente em cada harness: `errors[]` em `tests/browser.mjs:160-161` e `check()`/`failures` em `tests/multipeer.mjs:26-30` e `:332` (CT-02) |
-| Só o harness multi-peer exercita sala real (handshake, teto, tranca, expulsão, fila) | `tests/multipeer.mjs:1-8` | Os casos que exigem sala — `#roster`, os dez `Expulsar`, `#lobby`, trilho de aliados, aliado caído — não cabem em `tests/browser.mjs`; a verificação é dividida (RF-02, RF-03, RNF-05) |
-| pt-BR em comentário, log, texto de UI e label de teste; identificador em inglês | `AGENTS.md:45`, `AGENTS.md:51` | RNF-06 |
-| Sem dependência de runtime, sem passo de build | `AGENTS.md:60-61` | RNF-01 |
-| Trilho de aliados limitado por `HUD_ALLY_LIMIT` | `docs/agents/domain_rules.md`, seção "HUD de aliados com histerese"; `js/balance.js:204` | O corte de 3 linhas em altura `> 620px` é do JS; os cortes abaixo disso são de CSS (UI-07) |
+| Regra                                                                                | Fonte                                                                                    | Efeito aqui                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `js/sim.js` é estado puro, zero DOM                                                  | `AGENTS.md:37`, `AGENTS.md:56`, `docs/agents/architecture.md` (tabela de camadas)        | Nenhuma mudança desta feature entra em `js/sim.js`; a superfície é `index.html`, `styles.css`, `js/ui.js`, `js/main.js`, `js/render.js`                                                |
+| Todo número de tuning vive em `js/balance.js`                                        | `AGENTS.md:38`, `AGENTS.md:57`                                                           | A fração da zona do joystick, hoje literal `0.45` em `js/main.js:608`, migra para `js/balance.js` já com o valor decidido `F = 0.50` (RF-01, UI-03, RNF-03)                            |
+| Apresentação não muta estado do simulador nem envia pacote                           | `docs/agents/architecture.md`, tabela "Layer responsibilities"                           | `ui.js` e `render.js` só leem `view`/`local`; nenhum requisito abaixo cria mensagem de rede                                                                                            |
+| Testes sem framework; `process.exit(failures ? 1 : 0)`                               | `AGENTS.md:32`, `AGENTS.md:43`                                                           | Os casos mobile seguem o padrão já existente em cada harness: `errors[]` em `tests/browser.mjs:160-161` e `check()`/`failures` em `tests/multipeer.mjs:26-30` e `:332` (CT-02)         |
+| Só o harness multi-peer exercita sala real (handshake, teto, tranca, expulsão, fila) | `tests/multipeer.mjs:1-8`                                                                | Os casos que exigem sala — `#roster`, os dez `Expulsar`, `#lobby`, trilho de aliados, aliado caído — não cabem em `tests/browser.mjs`; a verificação é dividida (RF-02, RF-03, RNF-05) |
+| pt-BR em comentário, log, texto de UI e label de teste; identificador em inglês      | `AGENTS.md:45`, `AGENTS.md:51`                                                           | RNF-06                                                                                                                                                                                 |
+| Sem dependência de runtime, sem passo de build                                       | `AGENTS.md:60-61`                                                                        | RNF-01                                                                                                                                                                                 |
+| Trilho de aliados limitado por `HUD_ALLY_LIMIT`                                      | `docs/agents/domain_rules.md`, seção "HUD de aliados com histerese"; `js/balance.js:204` | O corte de 3 linhas em altura `> 620px` é do JS; os cortes abaixo disso são de CSS (UI-07)                                                                                             |
 
 ## Context
 
@@ -208,7 +209,7 @@ slot de 48px arrasta.
     exigem sala: `#roster` (UI-01), os dez botões `Expulsar` (UI-01), `#lobby` com 10 jogadores
     (UI-01, UI-06), trilho de aliados (UI-07) e aliado caído (UI-08).
     - AC: `grep -c "setViewport" tests/multipeer.mjs` retorna 1 ou mais com `width: 360,
-      height: 640` alcançável por variável de ambiente ou parâmetro, e em toda aba mobile
+height: 640` alcançável por variável de ambiente ou parâmetro, e em toda aba mobile
       `matchMedia('(pointer: coarse)').matches` é `true`.
   - **RF-02c**: Nenhuma costura de teste entra em `js/main.js` — os dois harnesses medem pelo DOM
     e pelos ids de CT-01.
@@ -312,7 +313,7 @@ slot de 48px arrasta.
   `rect.bottom` do painel quando o conteúdo cabe na altura útil.
   - AC 1 — painel dentro da viewport, com o gutter respeitado: em 390x844 e 360x640, com a mochila
     cheia em 20 itens, `rect.top >= 12 && rect.bottom <= innerHeight - 12 && rect.left >= 0 &&
-    rect.right <= innerWidth`.
+rect.right <= innerWidth`.
   - AC 2 — nada cortado quando o conteúdo cabe: se `bag.scrollHeight <= innerHeight - 24`, então
     `bag.scrollHeight <= bag.clientHeight` (sem conteúdo transbordando) e todo descendente visível
     tem `rect.bottom <= bag.rect.bottom + 0.5`.
@@ -330,7 +331,7 @@ slot de 48px arrasta.
   DEVE ser bloqueado no próprio painel.
   - AC: após `bag.scrollTop = bag.scrollHeight` em 360x640,
     `document.documentElement.scrollTop === 0 && document.body.scrollTop === 0 &&
-    document.documentElement.scrollHeight === document.documentElement.clientHeight`, e
+document.documentElement.scrollHeight === document.documentElement.clientHeight`, e
     `getComputedStyle(bag).overscrollBehaviorY !== 'auto'`. Guarda de regressão: a parte de página
     já é satisfeita por `styles.css:29-36`; `overscrollBehaviorY` hoje é `auto`.
 
@@ -365,12 +366,12 @@ slot de 48px arrasta.
 
   **Contagem por faixa** (largura 390; `visível` = `getComputedStyle(el).display !== 'none'`):
 
-  | Faixa de altura | `.plaque.mate:not(.down)` visíveis | `.plaque.mate.down` visíveis | Linhas do trilho | `#log` | `.plaque.self` | `#minimap` e `#actionBar` | Medido hoje (mesmo cenário) |
-  |---|---|---|---|---|---|---|---|
-  | `> 620px` | 3 (teto de `HUD_ALLY_LIMIT`, `js/balance.js:204`) | 1 | 4 | visível | 190px | presentes | conforme: 3 + 1 |
-  | `≤ 620px` e `> 460px` | 1 | 1 | 2 | visível | 190px | presentes | **2 vivos e 0 caído** — o corte `styles.css:500` come o caído, que hoje é o último filho |
-  | `≤ 460px` e `> 380px` | 0 | 1 | 1 | oculto | **180px** | presentes | **1 vivo e 0 caído**; `.plaque.self` em **190px** |
-  | `≤ 380px` | 0 | 1 | 1 | oculto | **180px** | presentes | **0 e 0** — `styles.css:507` esconde tudo; `.plaque.self` em **190px** |
+  | Faixa de altura       | `.plaque.mate:not(.down)` visíveis                | `.plaque.mate.down` visíveis | Linhas do trilho | `#log`  | `.plaque.self` | `#minimap` e `#actionBar` | Medido hoje (mesmo cenário)                                                              |
+  | --------------------- | ------------------------------------------------- | ---------------------------- | ---------------- | ------- | -------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
+  | `> 620px`             | 3 (teto de `HUD_ALLY_LIMIT`, `js/balance.js:204`) | 1                            | 4                | visível | 190px          | presentes                 | conforme: 3 + 1                                                                          |
+  | `≤ 620px` e `> 460px` | 1                                                 | 1                            | 2                | visível | 190px          | presentes                 | **2 vivos e 0 caído** — o corte `styles.css:500` come o caído, que hoje é o último filho |
+  | `≤ 460px` e `> 380px` | 0                                                 | 1                            | 1                | oculto  | **180px**      | presentes                 | **1 vivo e 0 caído**; `.plaque.self` em **190px**                                        |
+  | `≤ 380px`             | 0                                                 | 1                            | 1                | oculto  | **180px**      | presentes                 | **0 e 0** — `styles.css:507` esconde tudo; `.plaque.self` em **190px**                   |
 
   Derivação das contagens, para que o número não seja opinião: com `js/ui.js:173` reordenado para
   `[...downed, ...shown]`, o DOM de `#partyList` fica `[caído, vivo1, vivo2, vivo3]`. O corte
@@ -387,8 +388,7 @@ slot de 48px arrasta.
     `#partyList .plaque.mate.down` visíveis tem contagem 1 nas sete alturas.
   - AC 2 — `#log`: `getComputedStyle(log).display` é `block` em 700, 620 e 600 e `none` em 460,
     440, 380 e 360 (`styles.css:377-378`).
-  - AC 3 — placa própria: `.plaque.self` mede 190px em 700, 620 e 600 e 180px em 460, 440, 380 e
-    360. Medido hoje: 190px nas sete alturas.
+  - AC 3 — placa própria: `.plaque.self` mede 190px em 700, 620 e 600 e 180px em 460, 440, 380 e 360. Medido hoje: 190px nas sete alturas.
   - AC 4 — nada some fora da ordem: `.plaque.self`, `#minimap` e `#actionBar` têm
     `display !== 'none'` nas sete alturas.
   - AC 5 — `.ally-more`: no cenário cravado `extra === 0` e
@@ -536,27 +536,27 @@ slot de 48px arrasta.
 
 ## Acceptance Criteria Summary
 
-| ID | Criterion | Testable? |
-|----|-----------|-----------|
-| RF-01 | `F = 0.5` como constante exportada por `js/balance.js`; literais `0.45`, `64` e `54` fora de `js/main.js` | Sim — grep + import em Node |
-| RF-02 | `tests/browser.mjs` abre 360x640 além do 390x844; `tests/multipeer.mjs` abre as abas em viewport mobile; sem costura em `js/main.js` | Sim — grep + `matchMedia` + `git diff` |
-| RF-03 | Os dois harnesses saem 1 após `git stash push -- js/ styles.css index.html` e 0 depois do `pop` | Sim — exit code |
-| UI-01 | Zero alvos interativos com box < 44x44; `.slot` exatamente 48x48 e `#actionBar` com 102px; `#crewChip` ≥ 44px com pintura de 21px e demais chips ≤ 24px | Sim — bounding box + estilo computado |
-| UI-02 | Interseção zero entre quaisquer dois slots de `#actionBar` | Sim — interseção de retângulos |
-| UI-03 | `#actionBar` não intercepta `#portalHold`, `#log` nem a zona do joystick (`F = 0.50` → 244px em 360, 259px em 390) em 7 alturas | Sim — interseção de retângulos |
-| UI-04 | `#bag` com `top >= 12` e `bottom <= innerHeight - 12`; sem transbordo quando o conteúdo cabe | Sim — bounding box + `scrollHeight`/`clientHeight` |
-| UI-05 | Rolagem contida no painel; documento não rola; `overscrollBehaviorY !== 'auto'` | Sim — `scrollTop` + estilo computado |
-| UI-06 | `#menu` e `#lobby` sem rolagem horizontal, sem descendente fora da viewport e sem rótulo truncado | Sim — `scrollWidth` + bounding box + `textContent` |
-| UI-07 | Nas 7 alturas: `:not(.down)` 3/1/1/0/0/0/0, `.down` sempre 1, placa própria 190/190/190/180/180/180/180, `.plaque.mate` 170px | Sim — `display` computado + largura |
-| UI-08 | Caído visível como linha única, primeiro filho, com borda `--blood` e texto `caído` em 390x360 | Sim — `display` + `borderColor` + texto |
-| CT-01 | Os 28 ids e os ganchos de classe do contrato de medição continuam existindo | Sim — parse do `index.html` + `querySelector` |
-| CT-02 | `errors.push('<PREFIXO>: …')` em `browser.mjs` e `check('<PREFIXO>: …')` em `multipeer.mjs`, com os seis prefixos cobertos | Sim — saída + exit code |
-| RNF-01 | Sem `dependencies` no `package.json`; `vercel.json` sem build | Sim — leitura de arquivo |
-| RNF-02 | `js/sim.js` sem DOM; `node tests/sim.test.mjs` sai 0 | Sim — grep + exit code |
-| RNF-03 | Números de tuning novos só em `js/balance.js`, com comentário pt-BR; grep de literais retorna zero linhas | Sim — grep |
-| RNF-04 | Zero `[error]`/`[warning]` de console nos dois contextos mobile, nos dois harnesses | Sim — coleta de console |
-| RNF-05 | `npm test`, `npm run test:browser` e `npm run test:multipeer` saem 0 dentro do teto de tempo de cada um | Sim — exit code + tempo |
-| RNF-06 | Strings novas em pt-BR, identificadores novos em inglês | Parcial — revisão dirigida |
+| ID     | Criterion                                                                                                                                               | Testable?                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| RF-01  | `F = 0.5` como constante exportada por `js/balance.js`; literais `0.45`, `64` e `54` fora de `js/main.js`                                               | Sim — grep + import em Node                        |
+| RF-02  | `tests/browser.mjs` abre 360x640 além do 390x844; `tests/multipeer.mjs` abre as abas em viewport mobile; sem costura em `js/main.js`                    | Sim — grep + `matchMedia` + `git diff`             |
+| RF-03  | Os dois harnesses saem 1 após `git stash push -- js/ styles.css index.html` e 0 depois do `pop`                                                         | Sim — exit code                                    |
+| UI-01  | Zero alvos interativos com box < 44x44; `.slot` exatamente 48x48 e `#actionBar` com 102px; `#crewChip` ≥ 44px com pintura de 21px e demais chips ≤ 24px | Sim — bounding box + estilo computado              |
+| UI-02  | Interseção zero entre quaisquer dois slots de `#actionBar`                                                                                              | Sim — interseção de retângulos                     |
+| UI-03  | `#actionBar` não intercepta `#portalHold`, `#log` nem a zona do joystick (`F = 0.50` → 244px em 360, 259px em 390) em 7 alturas                         | Sim — interseção de retângulos                     |
+| UI-04  | `#bag` com `top >= 12` e `bottom <= innerHeight - 12`; sem transbordo quando o conteúdo cabe                                                            | Sim — bounding box + `scrollHeight`/`clientHeight` |
+| UI-05  | Rolagem contida no painel; documento não rola; `overscrollBehaviorY !== 'auto'`                                                                         | Sim — `scrollTop` + estilo computado               |
+| UI-06  | `#menu` e `#lobby` sem rolagem horizontal, sem descendente fora da viewport e sem rótulo truncado                                                       | Sim — `scrollWidth` + bounding box + `textContent` |
+| UI-07  | Nas 7 alturas: `:not(.down)` 3/1/1/0/0/0/0, `.down` sempre 1, placa própria 190/190/190/180/180/180/180, `.plaque.mate` 170px                           | Sim — `display` computado + largura                |
+| UI-08  | Caído visível como linha única, primeiro filho, com borda `--blood` e texto `caído` em 390x360                                                          | Sim — `display` + `borderColor` + texto            |
+| CT-01  | Os 28 ids e os ganchos de classe do contrato de medição continuam existindo                                                                             | Sim — parse do `index.html` + `querySelector`      |
+| CT-02  | `errors.push('<PREFIXO>: …')` em `browser.mjs` e `check('<PREFIXO>: …')` em `multipeer.mjs`, com os seis prefixos cobertos                              | Sim — saída + exit code                            |
+| RNF-01 | Sem `dependencies` no `package.json`; `vercel.json` sem build                                                                                           | Sim — leitura de arquivo                           |
+| RNF-02 | `js/sim.js` sem DOM; `node tests/sim.test.mjs` sai 0                                                                                                    | Sim — grep + exit code                             |
+| RNF-03 | Números de tuning novos só em `js/balance.js`, com comentário pt-BR; grep de literais retorna zero linhas                                               | Sim — grep                                         |
+| RNF-04 | Zero `[error]`/`[warning]` de console nos dois contextos mobile, nos dois harnesses                                                                     | Sim — coleta de console                            |
+| RNF-05 | `npm test`, `npm run test:browser` e `npm run test:multipeer` saem 0 dentro do teto de tempo de cada um                                                 | Sim — exit code + tempo                            |
+| RNF-06 | Strings novas em pt-BR, identificadores novos em inglês                                                                                                 | Parcial — revisão dirigida                         |
 
 ## Open Questions
 
@@ -566,17 +566,17 @@ em 20/08/2026 e já estão aplicadas acima
 
 ### Registro de resolução
 
-| Q | Assunto | Decisão aplicada | Onde |
-|---|---|---|---|
-| Q-01, Q-08 | Aliado caído sobrevivendo aos cortes | Corte estreitado para `.plaque.mate:not(.down)`, exceção `.down` em `@media (max-height: 380px)` e `js/ui.js:173` renderizando `[...downed, ...shown]`; escopo "Out" emendado para autorizar essa única linha | Scope, UI-07, UI-08 |
-| Q-02 | Onde medir | Verificação dividida: casos de solo em `tests/browser.mjs`, casos de sala em `tests/multipeer.mjs`; RF-03 e RNF-05 nomeiam os dois comandos | RF-02, RF-03, CT-02, RNF-04, RNF-05 |
-| Q-03 | Fração `F` da zona do joystick | `F = 0.50` ("metade esquerda inteira", `hud-grupo-mobile.md:35`), fonte única em `js/balance.js` | RF-01, UI-03, Context |
-| Q-04 | Tamanho do botão de magia | Slot uniforme de **48 x 48px** em todo `pointer: coarse` (piso 44, teto 49 vindo dos 104px úteis de 360 com `F = 0.50`); atualizar `tokens-componentes.md:142` e `hud-grupo-mobile.md:92` entra no escopo | UI-01, Scope |
-| Q-05 | AC de altura do `#bag` reprovava implementação correta | Igualdade de ±1px trocada por dois invariantes (`bottom <= innerHeight - 12`; sem transbordo quando o conteúdo cabe), por causa de `box-sizing: border-box` + borda de 1px | UI-04 |
-| Q-06 | `git stash` anulava a própria AC | `git stash push -- js/ styles.css index.html`, preservando `tests/` na árvore | RF-03 |
-| Q-07 | Faixas de altura divergiam do CSS | Faixas reescritas como `≤620`, `≤460`, `≤380`, casando com `styles.css:377`, `:499`, `:502`, `:506` | UI-07 |
-| Q-09 | Como o `#crewChip` chega a 44px | Caixa de 44px transparente com pintura de 21px por `padding` + `background-clip: content-box`, sem nó interno (`UI.setCapacity` sobrescreve `textContent`) e sem `align-items` em `.chips` | UI-01 |
-| Menores | CT-01 incompleto; `styles.css:373` → `:374`; RNF-03 sem baseline; UI-06 sem cláusula de truncagem | Todas aplicadas | CT-01, Context, AS IS, FLEXIBLE, UI-07, RNF-03, UI-06 |
+| Q          | Assunto                                                                                           | Decisão aplicada                                                                                                                                                                                              | Onde                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Q-01, Q-08 | Aliado caído sobrevivendo aos cortes                                                              | Corte estreitado para `.plaque.mate:not(.down)`, exceção `.down` em `@media (max-height: 380px)` e `js/ui.js:173` renderizando `[...downed, ...shown]`; escopo "Out" emendado para autorizar essa única linha | Scope, UI-07, UI-08                                   |
+| Q-02       | Onde medir                                                                                        | Verificação dividida: casos de solo em `tests/browser.mjs`, casos de sala em `tests/multipeer.mjs`; RF-03 e RNF-05 nomeiam os dois comandos                                                                   | RF-02, RF-03, CT-02, RNF-04, RNF-05                   |
+| Q-03       | Fração `F` da zona do joystick                                                                    | `F = 0.50` ("metade esquerda inteira", `hud-grupo-mobile.md:35`), fonte única em `js/balance.js`                                                                                                              | RF-01, UI-03, Context                                 |
+| Q-04       | Tamanho do botão de magia                                                                         | Slot uniforme de **48 x 48px** em todo `pointer: coarse` (piso 44, teto 49 vindo dos 104px úteis de 360 com `F = 0.50`); atualizar `tokens-componentes.md:142` e `hud-grupo-mobile.md:92` entra no escopo     | UI-01, Scope                                          |
+| Q-05       | AC de altura do `#bag` reprovava implementação correta                                            | Igualdade de ±1px trocada por dois invariantes (`bottom <= innerHeight - 12`; sem transbordo quando o conteúdo cabe), por causa de `box-sizing: border-box` + borda de 1px                                    | UI-04                                                 |
+| Q-06       | `git stash` anulava a própria AC                                                                  | `git stash push -- js/ styles.css index.html`, preservando `tests/` na árvore                                                                                                                                 | RF-03                                                 |
+| Q-07       | Faixas de altura divergiam do CSS                                                                 | Faixas reescritas como `≤620`, `≤460`, `≤380`, casando com `styles.css:377`, `:499`, `:502`, `:506`                                                                                                           | UI-07                                                 |
+| Q-09       | Como o `#crewChip` chega a 44px                                                                   | Caixa de 44px transparente com pintura de 21px por `padding` + `background-clip: content-box`, sem nó interno (`UI.setCapacity` sobrescreve `textContent`) e sem `align-items` em `.chips`                    | UI-01                                                 |
+| Menores    | CT-01 incompleto; `styles.css:373` → `:374`; RNF-03 sem baseline; UI-06 sem cláusula de truncagem | Todas aplicadas                                                                                                                                                                                               | CT-01, Context, AS IS, FLEXIBLE, UI-07, RNF-03, UI-06 |
 
 ### Ponto que o planejamento deve confirmar antes de codar
 

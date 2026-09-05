@@ -32,6 +32,7 @@ chips, log e barra do chefe. Somar 3 placas de aliado sem regra de corte produz 
 ```
 
 Zonas que **não podem** ser invadidas:
+
 - **Metade esquerda inteira** é área do joystick. Ele nasce onde o dedo toca, em qualquer ponto
   dessa metade — por isso o `ally-rail` fica **colado no topo**, nunca no meio vertical.
 - **Canto inferior direito** é o `#actionBar`, que em toque vira coluna com `env(safe-area-inset-bottom)`.
@@ -64,12 +65,12 @@ No celular a placa de aliado perde as barras separadas e vira uma linha só:
 
 Quando a altura da viewport aperta, cortar **nesta ordem**:
 
-| Altura | O que sai |
-|---|---|
-| `> 620px` | Nada sai: trilho com 3 linhas |
-| `460–620px` | Trilho cai para **2 linhas** + `+n no minimapa` |
-| `< 460px` | `#log` some (regra que já existe); trilho cai para **1 linha**; a placa própria encolhe para 180px |
-| `< 380px` | Trilho vira **só a linha de excedente**: `4 aliados · 1 caído` |
+| Altura      | O que sai                                                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------- |
+| `> 620px`   | Nada sai: trilho com 3 linhas                                                                      |
+| `460–620px` | Trilho cai para **2 linhas** + `+n no minimapa`                                                    |
+| `< 460px`   | `#log` some (regra que já existe); trilho cai para **1 linha**; a placa própria encolhe para 180px |
+| `< 380px`   | Trilho vira **só a linha de excedente**: `4 aliados · 1 caído`                                     |
 
 Nunca sai, em nenhuma altura: a placa própria, o minimapa, o `#actionBar` e o destaque de aliado
 caído. Se um caído existe e o trilho já foi cortado a zero, ele reaparece como uma linha única
@@ -90,24 +91,24 @@ de quem precisa de ajuda.
 
 ## 6. Alvos de toque
 
-| Elemento | Tamanho |
-|---|---|
-| Linha do trilho | `170×26px` — **não é alvo de toque**, é informação |
-| Chip de lotação (abre moderação) | `44×44px` mínimo, com área de toque estendida além do visual |
-| Botão de magia | `48×48px` (definido em `pointer: coarse`; derivação de UI-01: em 360 de largura sobram 104px úteis com `F = 0,50`, piso 44 e teto 49) |
-| Botão do painel de moderação | `44px` de altura mínima |
+| Elemento                         | Tamanho                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Linha do trilho                  | `170×26px` — **não é alvo de toque**, é informação                                                                                    |
+| Chip de lotação (abre moderação) | `44×44px` mínimo, com área de toque estendida além do visual                                                                          |
+| Botão de magia                   | `48×48px` (definido em `pointer: coarse`; derivação de UI-01: em 360 de largura sobram 104px úteis com `F = 0,50`, piso 44 e teto 49) |
+| Botão do painel de moderação     | `44px` de altura mínima                                                                                                               |
 
 O trilho não recebe toque de propósito: ele fica dentro da metade do joystick, e qualquer alvo
 ali roubaria o movimento.
 
 ## 7. Estados
 
-| Estado | Tratamento |
-|---|---|
-| **Vazio** | Sem aliados: trilho ausente, sem espaço reservado. O joystick usa a área inteira |
-| **Carregando** | Aliado inserido entra com a barra zerada até o primeiro snapshot |
-| **Erro** | Aliado desconectado some da linha na hora |
-| **Cheio** | 9 aliados em landscape alto: 3 linhas + `+6 no minimapa`; em `< 380px`, só a linha de excedente |
+| Estado         | Tratamento                                                                                      |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| **Vazio**      | Sem aliados: trilho ausente, sem espaço reservado. O joystick usa a área inteira                |
+| **Carregando** | Aliado inserido entra com a barra zerada até o primeiro snapshot                                |
+| **Erro**       | Aliado desconectado some da linha na hora                                                       |
+| **Cheio**      | 9 aliados em landscape alto: 3 linhas + `+6 no minimapa`; em `< 380px`, só a linha de excedente |
 
 ## 8. Medição pendente
 
