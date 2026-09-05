@@ -1,0 +1,7 @@
+node_modules
+.vercel
+tests/multipeer.mjs
+tests/browser.mjs
+dist
+coverage
+graphify-out

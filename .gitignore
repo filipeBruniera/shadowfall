@@ -2,3 +2,6 @@
 node_modules
 api_freesound
 *.token
+.husky/_/
+coverage
+.env*
