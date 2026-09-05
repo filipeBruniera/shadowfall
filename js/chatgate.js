@@ -10,13 +10,13 @@ export class ChatGate {
     this.burst = burst;
     this.window = win;
     this.maxLen = maxLen;
-    this.history = new Map();   // id -> [timestamps]
+    this.history = new Map(); // id -> [timestamps]
   }
 
   // `now` vem do relógio da simulação, não do relógio de parede: assim o
   // comportamento é reproduzível no teste.
   allow(id, now) {
-    const list = (this.history.get(id) || []).filter((t) => now - t < this.window);
+    const list = (this.history.get(id) || []).filter(t => now - t < this.window);
     if (list.length >= this.burst) {
       this.history.set(id, list);
       return { ok: false, reason: 'burst' };
@@ -28,9 +28,15 @@ export class ChatGate {
 
   // Trunca antes do envio: texto que ninguém verá não gasta banda do host.
   clean(text) {
-    return String(text ?? '').slice(0, this.maxLen).trim();
+    return String(text ?? '')
+      .slice(0, this.maxLen)
+      .trim();
   }
 
-  forget(id) { this.history.delete(id); }
-  reset() { this.history.clear(); }
+  forget(id) {
+    this.history.delete(id);
+  }
+  reset() {
+    this.history.clear();
+  }
 }

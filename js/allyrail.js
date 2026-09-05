@@ -16,7 +16,7 @@ export class AllyRail {
     this.hysteresis = hysteresis;
     this.reorderDelay = reorderDelay;
     this.maxDowned = maxDowned;
-    this.current = [];      // ids mostrados agora
+    this.current = []; // ids mostrados agora
     this.sinceReorder = 0;
   }
 
@@ -28,19 +28,19 @@ export class AllyRail {
       return { shown: [], downed: [], extra: 0 };
     }
 
-    const dist = (a) => Math.hypot(a.x - local.x, a.y - local.y);
+    const dist = a => Math.hypot(a.x - local.x, a.y - local.y);
     // Um caído sempre aparece, mesmo fora dos mais próximos: alguém precisa ir erguê-lo.
-    const downed = allies.filter((a) => a.dead)
+    const downed = allies
+      .filter(a => a.dead)
       .sort((a, b) => dist(a) - dist(b))
       .slice(0, this.maxDowned);
-    const downedIds = new Set(downed.map((a) => a.id));
+    const downedIds = new Set(downed.map(a => a.id));
 
-    const living = allies.filter((a) => !a.dead && !downedIds.has(a.id))
+    const living = allies
+      .filter(a => !a.dead && !downedIds.has(a.id))
       .sort((a, b) => dist(a) - dist(b));
 
-    const keep = this.current
-      .map((id) => living.find((a) => a.id === id))
-      .filter(Boolean);
+    const keep = this.current.map(id => living.find(a => a.id === id)).filter(Boolean);
 
     let shown;
     if (keep.length < this.limit || this.sinceReorder >= this.reorderDelay) {
@@ -54,7 +54,7 @@ export class AllyRail {
       // aliados na mesma distância trocariam de lugar a cada quadro.
       if (this.sinceReorder >= this.reorderDelay && shown.length === this.limit) {
         const pior = shown[shown.length - 1];
-        const fora = living.find((a) => !shown.includes(a));
+        const fora = living.find(a => !shown.includes(a));
         if (fora && dist(fora) < dist(pior) - this.hysteresis) {
           shown[shown.length - 1] = fora;
         }
@@ -65,7 +65,7 @@ export class AllyRail {
       shown = keep.slice(0, this.limit);
     }
 
-    this.current = shown.map((a) => a.id);
+    this.current = shown.map(a => a.id);
     const extra = allies.length - shown.length - downed.length;
     return { shown, downed, extra: Math.max(0, extra) };
   }

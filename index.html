@@ -1,233 +1,390 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<!-- Sem interactive-widget de proposito: resizes-content encolhe a viewport de layout com o teclado aberto, o que faz o breakpoint de max-height 460px (styles.css:489) disparar e sumir com o #log justamente enquanto a pessoa digita. O deslocamento do chat vem de --kb, medido por visualViewport em js/main.js. -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0b0910">
-<meta name="description" content="Shadowfall: Ashen Realms — RPG de ação isométrico co-op para até 10, direto no navegador.">
-<title>Shadowfall — Ashen Realms</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@400;700;900&family=Alegreya+Sans:wght@400;500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0910'/><path d='M16 4l4 8 8 4-8 4-4 8-4-8-8-4 8-4z' fill='%23ff7a2f'/></svg>">
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Sem interactive-widget de proposito: resizes-content encolhe a viewport de layout com o teclado aberto, o que faz o breakpoint de max-height 460px (styles.css:489) disparar e sumir com o #log justamente enquanto a pessoa digita. O deslocamento do chat vem de --kb, medido por visualViewport em js/main.js. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b0910" />
+    <meta
+      name="description"
+      content="Shadowfall: Ashen Realms — RPG de ação isométrico co-op para até 10, direto no navegador."
+    />
+    <title>Shadowfall — Ashen Realms</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@400;700;900&family=Alegreya+Sans:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "web-vitals": "https://esm.sh/web-vitals@4.2.4"
+        }
+      }
+    </script>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0910'/><path d='M16 4l4 8 8 4-8 4-4 8-4-8-8-4 8-4z' fill='%23ff7a2f'/></svg>"
+    />
+  </head>
+  <body>
+    <!-- ============ MENU ============ -->
+    <div id="menu" class="screen">
+      <div class="menu-inner">
+        <header class="brand">
+          <p class="eyebrow">Masmorra infinita · co-op até 10</p>
+          <h1>Shadowfall</h1>
+          <p class="subtitle">Ashen Realms</p>
+        </header>
 
-<!-- ============ MENU ============ -->
-<div id="menu" class="screen">
-  <div class="menu-inner">
-    <header class="brand">
-      <p class="eyebrow">Masmorra infinita · co-op até 10</p>
-      <h1>Shadowfall</h1>
-      <p class="subtitle">Ashen Realms</p>
-    </header>
+        <div class="menu-body">
+          <label class="field">
+            <span>Seu nome</span>
+            <input
+              id="nameInput"
+              type="text"
+              maxlength="14"
+              placeholder="Herói"
+              autocomplete="off"
+            />
+          </label>
 
-    <div class="menu-body">
-      <label class="field">
-        <span>Seu nome</span>
-        <input id="nameInput" type="text" maxlength="14" placeholder="Herói" autocomplete="off">
-      </label>
+          <div class="field">
+            <span>Vocação</span>
+            <div id="vocGrid" class="voc-grid"></div>
+          </div>
 
-      <div class="field">
-        <span>Vocação</span>
-        <div id="vocGrid" class="voc-grid"></div>
-      </div>
+          <div id="vocDetail" class="voc-detail"></div>
 
-      <div id="vocDetail" class="voc-detail"></div>
+          <div class="menu-actions">
+            <button id="btnSolo" class="btn btn-ghost">Jogar sozinho</button>
+            <button id="btnHost" class="btn btn-primary">Criar sala</button>
+            <button id="btnRefugeMenu" class="btn btn-ghost">Visitar Refúgio</button>
+          </div>
 
-      <div class="menu-actions">
-        <button id="btnSolo" class="btn btn-ghost">Jogar sozinho</button>
-        <button id="btnHost" class="btn btn-primary">Criar sala</button>
-      </div>
+          <div class="join-row">
+            <input
+              id="codeInput"
+              type="text"
+              maxlength="4"
+              placeholder="CÓDIGO"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button id="btnJoin" class="btn btn-ghost">Entrar na sala</button>
+          </div>
 
-      <div class="join-row">
-        <input id="codeInput" type="text" maxlength="4" placeholder="CÓDIGO" autocomplete="off" spellcheck="false">
-        <button id="btnJoin" class="btn btn-ghost">Entrar na sala</button>
-      </div>
+          <p id="menuStatus" class="menu-status"></p>
+        </div>
 
-      <p id="menuStatus" class="menu-status"></p>
-    </div>
-
-    <footer class="menu-foot">
-      <span><b>1–4</b> magias</span><span><b>Q</b> vida</span><span><b>E</b> mana</span>
-      <span><b>WASD</b> ou clique para andar</span><span><b>Tab</b> mochila</span>
-    </footer>
-  </div>
-</div>
-
-<!-- ============ SALA DE ESPERA ============ -->
-<div id="lobby" class="screen hidden">
-  <div class="menu-inner narrow">
-    <header class="brand">
-      <p class="eyebrow">Sala aberta</p>
-      <h1 id="lobbyCode">----</h1>
-      <p class="subtitle">Passe esse código para quem vai jogar</p>
-    </header>
-    <div class="lobby-head">
-      <span class="roster-section">Jogadores</span>
-      <div class="chips">
-        <span class="chip capacity-counter" id="lobbyCount">1/10</span>
-        <span class="chip lock-badge hidden" id="lobbyLock">Trancada</span>
-      </div>
-    </div>
-    <div class="lobby-list" id="lobbyList"></div>
-    <div class="menu-actions">
-      <button id="btnCopyLink" class="btn btn-ghost">Copiar link do convite</button>
-      <button id="btnLock" class="btn btn-ghost hidden">Trancar sala</button>
-      <button id="btnStart" class="btn btn-primary">Descer para a masmorra</button>
-    </div>
-    <p class="menu-status" id="lobbyStatus">Aguardando…</p>
-  </div>
-</div>
-
-<!-- ============ FILA DE ENTRADA ============ -->
-<div id="queue" class="screen hidden">
-  <div class="menu-inner narrow">
-    <header class="brand">
-      <p class="eyebrow" id="queueEyebrow">Você está na fila</p>
-      <h1 class="queue-floor" id="queueFloor">Andar 1</h1>
-      <p class="subtitle" id="queueSub">Você entra quando o grupo descer para o próximo andar.</p>
-    </header>
-    <div class="lobby-head">
-      <span class="roster-section">Sua posição</span>
-      <div class="chips"><span class="chip capacity-counter" id="queuePos">—</span></div>
-    </div>
-    <div class="queue-scroll" id="queueScroll">
-      <div class="queue-section">Jogando agora</div>
-      <div class="lobby-list" id="queuePlaying"></div>
-      <div class="queue-section">Na fila</div>
-      <div class="lobby-list" id="queueWaiting"></div>
-    </div>
-    <div class="field hidden" id="queueVocField">
-      <span>Trocar vocação</span>
-      <div id="queueVocGrid" class="voc-grid"></div>
-    </div>
-    <div class="menu-actions">
-      <button id="btnQueueVoc" class="btn btn-ghost">Trocar vocação</button>
-      <button id="btnQueueLeave" class="btn btn-ghost">Desistir</button>
-    </div>
-    <p class="menu-status" id="queueStatus"></p>
-  </div>
-</div>
-
-<!-- ============ JOGO ============ -->
-<div id="game" class="hidden">
-  <canvas id="canvas"></canvas>
-
-  <!-- HUD topo esquerdo -->
-  <div id="hudLeft">
-    <div class="plaque self" id="selfPlaque">
-      <div class="plaque-head">
-        <span class="voc-chip" id="selfVoc">EK</span>
-        <span class="plaque-name" id="selfName">Herói</span>
-        <span class="plaque-level" id="selfLevel">Nv 1</span>
-      </div>
-      <div class="bar hp"><i id="barHp"></i><b id="txtHp">0/0</b></div>
-      <div class="bar mp"><i id="barMp"></i><b id="txtMp">0/0</b></div>
-      <div class="bar xp"><i id="barXp"></i></div>
-    </div>
-    <div id="partyList"></div>
-  </div>
-
-  <!-- HUD topo direito -->
-  <div id="hudRight">
-    <canvas id="minimap" width="164" height="164"></canvas>
-    <div class="chips">
-      <span class="chip" id="floorChip">Andar 1</span>
-      <span class="chip gold" id="goldChip">0</span>
-      <span class="chip room hidden" id="roomChip">----</span>
-      <span class="chip capacity-counter hidden" id="crewChip">1/10</span>
-      <span class="chip lock-badge hidden" id="crewLock">Trancada</span>
-      <span class="chip ping hidden" id="pingChip">--</span>
-    </div>
-  </div>
-
-  <!-- Barra do chefe -->
-  <div id="bossBar" class="hidden">
-    <span id="bossName">Chefe</span>
-    <div class="bar boss"><i id="barBoss"></i></div>
-  </div>
-
-  <!-- Aviso de andar / eventos -->
-  <div id="banner" class="hidden"><b id="bannerTitle"></b><span id="bannerSub"></span></div>
-
-  <!-- Registro -->
-  <div id="log"></div>
-
-  <!-- Barra de habilidades -->
-  <div id="actionBar">
-    <div class="slots" id="skillSlots"></div>
-    <div class="slots potions">
-      <button class="slot potion" data-pot="hp"><i class="glyph-hp"></i><b id="potHp">0</b><span class="key">Q</span></button>
-      <button class="slot potion" data-pot="mp"><i class="glyph-mp"></i><b id="potMp">0</b><span class="key">E</span></button>
-      <button class="slot bag" id="btnBag"><i class="glyph-bag"></i><span class="key">Tab</span></button>
-      <button class="slot chat" id="btnChat" aria-label="Conversar com o grupo"><i class="glyph-chat"></i></button>
-    </div>
-  </div>
-
-  <!-- Contagem coletiva do portal -->
-  <div id="portalHold" class="hidden">
-    <span class="ph-count">0/0 no portal</span>
-    <div class="bar"><i></i></div>
-    <span class="ph-missing"></span>
-  </div>
-
-  <!-- Joystick (toque) -->
-  <div id="stick" class="hidden"><i></i></div>
-
-  <!-- Mochila -->
-  <div id="bag" class="panel hidden">
-    <div class="panel-head">
-      <h2>Mochila</h2>
-      <button id="btnCloseBag" class="x">✕</button>
-    </div>
-    <div class="bag-cols">
-      <div class="equip-col" id="equipCol"></div>
-      <div>
-        <div class="inv-grid" id="invGrid"></div>
-        <div class="stat-block" id="statBlock"></div>
-        <button id="btnSell" class="btn btn-ghost small">Vender itens comuns e raros</button>
+        <footer class="menu-foot">
+          <span><b>1–4</b> magias</span><span><b>Q</b> vida</span><span><b>E</b> mana</span>
+          <span><b>WASD</b> ou clique para andar</span><span><b>Tab</b> mochila</span>
+        </footer>
       </div>
     </div>
-  </div>
 
-  <!-- Sala em partida -->
-  <div id="roster" class="panel hidden">
-    <div class="panel-head">
-      <h2 id="rosterTitle">Sala</h2>
-      <span class="chip capacity-counter" id="rosterCount">1/10</span>
-      <button id="btnCloseRoster" class="x">✕</button>
+    <!-- ============ REFÚGIO ============ -->
+    <!-- A navegação nasce antes do conteúdo: checkpoint, bestiário e contratos
+         entram nas próximas etapas sem misturar suas regras com sala ou partida. -->
+    <div
+      id="refuge"
+      class="screen hidden"
+      aria-labelledby="refugeTitle"
+      aria-describedby="refugeSubtitle"
+    >
+      <div class="menu-inner narrow">
+        <header class="brand">
+          <p class="eyebrow">Entre expedições</p>
+          <h1 id="refugeTitle" tabindex="-1">Refúgio</h1>
+          <p id="refugeSubtitle" class="subtitle">Prepare a próxima descida</p>
+        </header>
+        <section class="refuge-section" aria-labelledby="refugeCheckpointTitle">
+          <h2 id="refugeCheckpointTitle">Checkpoints</h2>
+          <dl class="refuge-checkpoints">
+            <div>
+              <dt>Maior checkpoint pessoal</dt>
+              <dd id="refugePersonalCheckpoint">Andar 1</dd>
+            </div>
+            <div id="refugeCommonCheckpointRow" class="hidden">
+              <dt>Maior checkpoint comum</dt>
+              <dd id="refugeCommonCheckpoint">Andar 1</dd>
+            </div>
+            <div>
+              <dt>Próxima run</dt>
+              <dd id="refugeSelectedCheckpoint">Andar 1</dd>
+            </div>
+          </dl>
+          <p id="refugeCheckpointHint" class="refuge-hint"></p>
+        </section>
+        <section class="refuge-section" aria-labelledby="refugeBestiaryTitle">
+          <h2 id="refugeBestiaryTitle">Bestiário</h2>
+          <p id="refugeBestiarySummary" class="refuge-hint"></p>
+          <p id="refugeBestiaryEmpty" class="refuge-empty hidden"></p>
+          <ul id="refugeBestiaryList" class="refuge-bestiary-list"></ul>
+        </section>
+        <section class="refuge-section" aria-labelledby="refugeContractsTitle">
+          <h2 id="refugeContractsTitle">Contratos diários</h2>
+          <p id="refugeContractsSummary" class="refuge-hint"></p>
+          <p
+            id="refugeContractsStatus"
+            class="refuge-status"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          ></p>
+          <p id="refugeContractsEmpty" class="refuge-empty hidden"></p>
+          <ul id="refugeContractsList" class="refuge-contract-list"></ul>
+        </section>
+        <div class="menu-actions">
+          <button id="btnLeaveRefuge" class="btn btn-ghost" type="button">Voltar</button>
+        </div>
+      </div>
     </div>
-    <div class="lock-row"><button id="btnRosterLock" class="btn btn-ghost small hidden">Trancar sala</button></div>
-    <p class="roster-hint hidden" id="rosterHint">Com a sala trancada, ninguém novo entra, mesmo havendo vaga.</p>
-    <div class="roster-section">Em partida</div>
-    <div class="roster-list" id="rosterList"></div>
-    <div class="roster-section hidden" id="rosterQueueLabel">Na fila</div>
-    <div class="roster-list hidden" id="rosterQueue"></div>
-  </div>
 
-  <!-- Morte -->
-  <div id="deathOverlay" class="overlay hidden">
-    <h2>Você tombou</h2>
-    <p id="deathHint">Um aliado pode reerguer você ficando por perto.</p>
-    <button id="btnRespawn" class="btn btn-primary" disabled>Voltar ao início do andar</button>
-  </div>
+    <!-- ============ SALA DE ESPERA ============ -->
+    <div id="lobby" class="screen hidden">
+      <div class="menu-inner narrow">
+        <header class="brand">
+          <p class="eyebrow">Sala aberta</p>
+          <h1 id="lobbyCode">----</h1>
+          <p class="subtitle">Passe esse código para quem vai jogar</p>
+        </header>
+        <div class="lobby-head">
+          <span class="roster-section">Jogadores</span>
+          <div class="chips">
+            <span class="chip capacity-counter" id="lobbyCount">1/10</span>
+            <span class="chip lock-badge hidden" id="lobbyLock">Trancada</span>
+          </div>
+        </div>
+        <div class="lobby-list" id="lobbyList"></div>
+        <label class="field checkpoint-field" id="checkpointField">
+          <span>Checkpoint da run</span>
+          <select id="startFloorSelect" aria-label="Checkpoint da run"></select>
+          <small id="checkpointHint">Maior checkpoint desbloqueado por todo o grupo.</small>
+        </label>
+        <div class="menu-actions">
+          <button id="btnCopyLink" class="btn btn-ghost">Copiar link do convite</button>
+          <button id="btnLock" class="btn btn-ghost hidden">Trancar sala</button>
+          <button id="btnStart" class="btn btn-primary">Descer para a masmorra</button>
+        </div>
+        <div class="menu-actions">
+          <button id="btnRefugeLobby" class="btn btn-ghost" type="button">Visitar Refúgio</button>
+        </div>
+        <p class="menu-status" id="lobbyStatus">Aguardando…</p>
+      </div>
+    </div>
 
-  <!-- Queda do host: reconectando (âmbar) ou encerrada (vermelho) -->
-  <div id="dropOverlay" class="overlay hidden">
-    <h2 id="dropTitle">Conexão instável</h2>
-    <p id="dropText">Tentando reconectar ao host…</p>
-    <div class="bar reconnect-bar" id="dropBarWrap"><i id="dropBar"></i></div>
-    <p class="saved-note hidden" id="dropSaved">◈ Seu progresso foi salvo.</p>
-    <button id="btnLeave" class="btn btn-ghost">Sair agora</button>
-  </div>
+    <!-- ============ FILA DE ENTRADA ============ -->
+    <div id="queue" class="screen hidden">
+      <div class="menu-inner narrow">
+        <header class="brand">
+          <p class="eyebrow" id="queueEyebrow">Você está na fila</p>
+          <h1 class="queue-floor" id="queueFloor">Andar 1</h1>
+          <p class="subtitle" id="queueSub">
+            Você entra quando o grupo descer para o próximo andar.
+          </p>
+        </header>
+        <div class="lobby-head">
+          <span class="roster-section">Sua posição</span>
+          <div class="chips"><span class="chip capacity-counter" id="queuePos">—</span></div>
+        </div>
+        <div class="queue-scroll" id="queueScroll">
+          <div class="queue-section">Jogando agora</div>
+          <div class="lobby-list" id="queuePlaying"></div>
+          <div class="queue-section">Na fila</div>
+          <div class="lobby-list" id="queueWaiting"></div>
+        </div>
+        <div class="field hidden" id="queueVocField">
+          <span>Trocar vocação</span>
+          <div id="queueVocGrid" class="voc-grid"></div>
+        </div>
+        <div class="menu-actions">
+          <button id="btnQueueVoc" class="btn btn-ghost">Trocar vocação</button>
+          <button id="btnQueueLeave" class="btn btn-ghost">Desistir</button>
+        </div>
+        <p class="menu-status" id="queueStatus"></p>
+      </div>
+    </div>
 
-  <div id="tooltip" class="hidden"></div>
-</div>
+    <!-- ============ JOGO ============ -->
+    <div id="game" class="hidden">
+      <canvas id="canvas"></canvas>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script type="module" src="js/main.js"></script>
-</body>
+      <!-- HUD topo esquerdo -->
+      <div id="hudLeft">
+        <div class="plaque self" id="selfPlaque">
+          <div class="plaque-head">
+            <span class="voc-chip" id="selfVoc">EK</span>
+            <span class="plaque-name" id="selfName">Herói</span>
+            <span class="plaque-level" id="selfLevel">Nv 1</span>
+          </div>
+          <div class="bar hp"><i id="barHp"></i><b id="txtHp">0/0</b></div>
+          <div class="bar mp"><i id="barMp"></i><b id="txtMp">0/0</b></div>
+          <div class="bar xp"><i id="barXp"></i></div>
+        </div>
+        <div id="partyList"></div>
+      </div>
+
+      <!-- HUD topo direito -->
+      <div id="hudRight">
+        <canvas id="minimap" width="164" height="164"></canvas>
+        <div class="chips">
+          <span class="chip" id="floorChip">Andar 1</span>
+          <span class="chip gold" id="goldChip">0</span>
+          <span class="chip room hidden" id="roomChip">----</span>
+          <span class="chip capacity-counter hidden" id="crewChip">1/10</span>
+          <span class="chip lock-badge hidden" id="crewLock">Trancada</span>
+          <span class="chip ping hidden" id="pingChip">--</span>
+          <!-- P2-03: P2-04 só alimentará este nó; a marcação já comunica o
+               estado inicial sem inventar um segundo canal de rede. -->
+          <div
+            id="connectionIndicator"
+            class="connection-indicator is-connecting"
+            role="status"
+            tabindex="0"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label="Conectando. Aguarde a sala responder."
+          >
+            <span class="connection-indicator-icon" aria-hidden="true">◌</span>
+            <span class="connection-indicator-copy">
+              <b id="connectionState">Conectando</b>
+              <span id="connectionText">Aguarde a sala responder.</span>
+            </span>
+            <span id="connectionLatency" class="connection-indicator-latency hidden"></span>
+          </div>
+          <button
+            id="audioChip"
+            class="chip"
+            type="button"
+            aria-label="Abrir controles de áudio"
+            aria-controls="audioPanel"
+            aria-expanded="false"
+          >
+            Som
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra do chefe -->
+      <div id="bossBar" class="hidden">
+        <span id="bossName">Chefe</span>
+        <div class="bar boss"><i id="barBoss"></i></div>
+      </div>
+
+      <!-- Aviso de andar / eventos -->
+      <div id="banner" class="hidden"><b id="bannerTitle"></b><span id="bannerSub"></span></div>
+
+      <!-- Registro -->
+      <div id="log"></div>
+
+      <!-- Barra de habilidades -->
+      <div id="actionBar">
+        <div class="slots" id="skillSlots"></div>
+        <div class="slots potions">
+          <button class="slot potion" data-pot="hp">
+            <i class="glyph-hp"></i><b id="potHp">0</b><span class="key">Q</span>
+          </button>
+          <button class="slot potion" data-pot="mp">
+            <i class="glyph-mp"></i><b id="potMp">0</b><span class="key">E</span>
+          </button>
+          <button class="slot bag" id="btnBag">
+            <i class="glyph-bag"></i><span class="key">Tab</span>
+          </button>
+          <button class="slot chat" id="btnChat" aria-label="Conversar com o grupo">
+            <i class="glyph-chat"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Contagem coletiva do portal -->
+      <div id="portalHold" class="hidden">
+        <span class="ph-count">0/0 no portal</span>
+        <div class="bar"><i></i></div>
+        <span class="ph-missing"></span>
+      </div>
+
+      <!-- Joystick (toque) -->
+      <div id="stick" class="hidden"><i></i></div>
+
+      <!-- Mochila -->
+      <div id="bag" class="panel hidden">
+        <div class="panel-head">
+          <h2>Mochila</h2>
+          <button id="btnCloseBag" class="x">✕</button>
+        </div>
+        <div class="bag-cols">
+          <div class="equip-col" id="equipCol"></div>
+          <div>
+            <div class="inv-grid" id="invGrid"></div>
+            <div class="stat-block" id="statBlock"></div>
+            <button id="btnSell" class="btn btn-ghost small">Vender itens comuns e raros</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sala em partida -->
+      <div id="roster" class="panel hidden">
+        <div class="panel-head">
+          <h2 id="rosterTitle">Sala</h2>
+          <span class="chip capacity-counter" id="rosterCount">1/10</span>
+          <button id="btnCloseRoster" class="x">✕</button>
+        </div>
+        <div class="lock-row">
+          <button id="btnRosterLock" class="btn btn-ghost small hidden">Trancar sala</button>
+        </div>
+        <p class="roster-hint hidden" id="rosterHint">
+          Com a sala trancada, ninguém novo entra, mesmo havendo vaga.
+        </p>
+        <div class="roster-section">Em partida</div>
+        <div class="roster-list" id="rosterList"></div>
+        <div class="roster-section hidden" id="rosterQueueLabel">Na fila</div>
+        <div class="roster-list hidden" id="rosterQueue"></div>
+      </div>
+
+      <!-- Controles de áudio: o estado e os eventos são ligados na composição. -->
+      <div id="audioPanel" class="panel hidden" aria-labelledby="audioTitle">
+        <div class="panel-head">
+          <h2 id="audioTitle">Som</h2>
+          <button id="btnCloseAudio" class="x" type="button" aria-label="Fechar controles de áudio">
+            ✕
+          </button>
+        </div>
+        <div class="audio-controls">
+          <label for="audioMusic">Música</label>
+          <input id="audioMusic" type="range" min="0" max="1" step="0.01" value="0.5" />
+          <label for="audioSfx">Efeitos</label>
+          <input id="audioSfx" type="range" min="0" max="1" step="0.01" value="0.7" />
+          <button id="btnAudioMute" type="button" aria-pressed="false">Som ligado</button>
+        </div>
+      </div>
+
+      <!-- Morte -->
+      <div id="deathOverlay" class="overlay hidden">
+        <h2>Você tombou</h2>
+        <p id="deathHint">Um aliado pode reerguer você ficando por perto.</p>
+        <button id="btnRespawn" class="btn btn-primary" disabled>Voltar ao início do andar</button>
+      </div>
+
+      <!-- Queda do host: reconectando (âmbar) ou encerrada (vermelho) -->
+      <div id="dropOverlay" class="overlay hidden">
+        <h2 id="dropTitle">Conexão instável</h2>
+        <p id="dropText">Tentando reconectar ao host…</p>
+        <div class="bar reconnect-bar" id="dropBarWrap"><i id="dropBar"></i></div>
+        <p class="saved-note hidden" id="dropSaved">◈ Seu progresso foi salvo.</p>
+        <button id="btnLeave" class="btn btn-ghost">Sair agora</button>
+      </div>
+
+      <div id="tooltip" class="hidden"></div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script type="module" src="js/main.js"></script>
+  </body>
 </html>

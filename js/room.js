@@ -12,15 +12,17 @@ export class Room {
     this.max = max;
     this.locked = false;
     this.started = false;
-    this.players = new Map();   // id -> entry (lobby ou em partida)
-    this.queue = [];            // entradas esperando a virada de andar
+    this.players = new Map(); // id -> entry (lobby ou em partida)
+    this.queue = []; // entradas esperando a virada de andar
   }
 
   // O teto conta quem está jogando MAIS quem espera na fila.
-  get count() { return this.players.size + this.queue.length; }
+  get count() {
+    return this.players.size + this.queue.length;
+  }
 
   canAccept(id) {
-    if (this.players.has(id) || this.queue.some((e) => e.id === id)) return { ok: true };
+    if (this.players.has(id) || this.queue.some(e => e.id === id)) return { ok: true };
     if (this.locked) return { ok: false, reason: REFUSE_LOCKED };
     if (this.count >= this.max) return { ok: false, reason: REFUSE_FULL };
     return { ok: true };
@@ -42,20 +44,28 @@ export class Room {
 
   update(id, patch) {
     const p = this.players.get(id);
-    if (p) { Object.assign(p, patch); return p; }
-    const q = this.queue.find((e) => e.id === id);
-    if (q) { Object.assign(q, patch); return q; }
+    if (p) {
+      Object.assign(p, patch);
+      return p;
+    }
+    const q = this.queue.find(e => e.id === id);
+    if (q) {
+      Object.assign(q, patch);
+      return q;
+    }
     return null;
   }
 
   remove(id) {
     const had = this.players.delete(id);
     const before = this.queue.length;
-    this.queue = this.queue.filter((e) => e.id !== id);
+    this.queue = this.queue.filter(e => e.id !== id);
     return had || this.queue.length !== before;
   }
 
-  has(id) { return this.players.has(id) || this.queue.some((e) => e.id === id); }
+  has(id) {
+    return this.players.has(id) || this.queue.some(e => e.id === id);
+  }
 
   // Host primeiro, depois ordem de chegada.
   list() {
@@ -63,11 +73,13 @@ export class Room {
     return all.sort((a, b) => (b.isHost ? 1 : 0) - (a.isHost ? 1 : 0));
   }
 
-  queueList() { return this.queue.slice(); }
+  queueList() {
+    return this.queue.slice();
+  }
 
   // 1º, 2º, … na fila. Zero quando não está na fila.
   positionOf(id) {
-    const i = this.queue.findIndex((e) => e.id === id);
+    const i = this.queue.findIndex(e => e.id === id);
     return i === -1 ? 0 : i + 1;
   }
 
@@ -79,5 +91,8 @@ export class Room {
     return entering;
   }
 
-  setLocked(v) { this.locked = !!v; return this.locked; }
+  setLocked(v) {
+    this.locked = !!v;
+    return this.locked;
+  }
 }

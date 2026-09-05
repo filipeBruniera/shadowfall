@@ -1,14 +1,31 @@
-import { VOCATIONS, VOC_LIST, RARITY, EQUIP_SLOTS, SLOT_LABEL, ITEM_BASES, xpForLevel } from './data.js';
+import {
+  VOCATIONS,
+  VOC_LIST,
+  RARITY,
+  EQUIP_SLOTS,
+  SLOT_LABEL,
+  ITEM_BASES,
+  xpForLevel,
+} from './data.js';
 import { drawGlyph } from './render.js';
 import { AllyRail, directionArrow } from './allyrail.js';
-import { EMBER_LINK_FAR, PORTAL_HOLD, CHAT_LOG_LINES, LOG_MAX_LINES, LOG_LINE_HEIGHT, KEYBOARD_MAX_FRACTION } from './balance.js';
+import { ConnectionStatus } from './connection.js';
+import {
+  EMBER_LINK_FAR,
+  PORTAL_HOLD,
+  CHAT_LOG_LINES,
+  LOG_MAX_LINES,
+  LOG_LINE_HEIGHT,
+  KEYBOARD_MAX_FRACTION,
+} from './balance.js';
 
-export const el = (id) => document.getElementById(id);
+export const el = id => document.getElementById(id);
 
 const WEAPON_GLYPH = { knight: 'sword', paladin: 'bow', sorcerer: 'wand', druid: 'rod' };
 
 export function showScreen(name) {
   el('menu').classList.toggle('hidden', name !== 'menu');
+  el('refuge').classList.toggle('hidden', name !== 'refuge');
   el('lobby').classList.toggle('hidden', name !== 'lobby');
   el('queue').classList.toggle('hidden', name !== 'queue');
   el('game').classList.toggle('hidden', name !== 'game');
@@ -54,13 +71,22 @@ export function buildVocationCards(onPick, gridId = 'vocGrid', respectLock = tru
     card.style.setProperty('--vc', V.color);
     card.dataset.voc = id;
     const cv = document.createElement('canvas');
-    cv.width = 40; cv.height = 40;
+    cv.width = 40;
+    cv.height = 40;
     const cx = cv.getContext('2d');
     drawGlyph(cx, WEAPON_GLYPH[id], 20, 20, 1.35, V.color);
     card.appendChild(cv);
-    const b = document.createElement('b'); b.textContent = V.name; card.appendChild(b);
-    const i = document.createElement('i'); i.textContent = V.tag; card.appendChild(i);
-    card.onclick = () => { if (respectLock && vocLocked) return; selectVocation(id); onPick(id); };
+    const b = document.createElement('b');
+    b.textContent = V.name;
+    card.appendChild(b);
+    const i = document.createElement('i');
+    i.textContent = V.tag;
+    card.appendChild(i);
+    card.onclick = () => {
+      if (respectLock && vocLocked) return;
+      selectVocation(id);
+      onPick(id);
+    };
     grid.appendChild(card);
   }
 }
@@ -76,14 +102,18 @@ export function lockVocation(v) {
     c.classList.toggle('locked', vocLocked);
   }
 }
-export function isVocationLocked() { return vocLocked; }
+export function isVocationLocked() {
+  return vocLocked;
+}
 
 export function selectVocation(id) {
-  for (const c of document.querySelectorAll('.voc-card')) c.classList.toggle('on', c.dataset.voc === id);
+  for (const c of document.querySelectorAll('.voc-card'))
+    c.classList.toggle('on', c.dataset.voc === id);
   if (!el('vocDetail')) return;
   const V = VOCATIONS[id];
-  el('vocDetail').innerHTML = `<b>${V.name}</b> — ${V.blurb}<br>`
-    + V.skills.map((s) => `<span style="color:${V.color}">${s.icon}</span> ${s.name}`).join(' · ');
+  el('vocDetail').innerHTML =
+    `<b>${V.name}</b> — ${V.blurb}<br>` +
+    V.skills.map(s => `<span style="color:${V.color}">${s.icon}</span> ${s.name}`).join(' · ');
 }
 
 // ---------- Registro / avisos ----------
@@ -144,6 +174,74 @@ export function alturaTeclado(vv, alturaLayout) {
   return Math.max(0, Math.min(Math.round(ocupado), Math.round(teto)));
 }
 
+// ---------- Indicador de conexão ----------
+// A projeção fica na UI, sem observar PeerJS ou SessionGuard. P2-04 só precisa
+// entregar o estado puro de connection.js para renderConnectionIndicator(), o
+// que impede que o HUD crie uma segunda interpretação dos sinais de rede.
+const CONNECTION_PRESENTATION = Object.freeze({
+  [ConnectionStatus.CONNECTING]: {
+    icon: '◌',
+    title: 'Conectando',
+    text: 'Aguarde a sala responder.',
+  },
+  [ConnectionStatus.STABLE]: {
+    icon: '●',
+    title: 'Conectado',
+    text: 'Conexão estável.',
+  },
+  [ConnectionStatus.UNSTABLE]: {
+    icon: '!',
+    title: 'Conexão instável',
+    text: 'Ações podem demorar. Aguarde um instante.',
+  },
+  [ConnectionStatus.RECONNECTING]: {
+    icon: '↻',
+    title: 'Reconectando',
+    text: 'Tentando voltar à sala. Aguarde.',
+  },
+});
+
+function connectionLatency(value) {
+  if (value == null || value === '') return null;
+  const latency = Number(value);
+  return Number.isFinite(latency) && latency >= 0 ? Math.round(latency) : null;
+}
+
+// Contrato puro para teste e para qualquer chamador futuro: texto completo,
+// símbolo e classe seguem do mesmo status; `latency` só aparece se a amostra é
+// válida, portanto um handshake não finge uma precisão que ainda não existe.
+export function connectionIndicatorPresentation(state) {
+  const status = CONNECTION_PRESENTATION[state?.status]
+    ? state.status
+    : ConnectionStatus.CONNECTING;
+  const base = CONNECTION_PRESENTATION[status];
+  const latencyMs = connectionLatency(state?.latencyMs);
+  const latency = latencyMs == null ? null : `≈ ${latencyMs} ms`;
+  return {
+    status,
+    icon: base.icon,
+    title: base.title,
+    text: base.text,
+    latency,
+    ariaLabel: [base.title, latency, base.text].filter(Boolean).join('. '),
+  };
+}
+
+export function renderConnectionIndicator(state) {
+  const view = connectionIndicatorPresentation(state);
+  const indicator = el('connectionIndicator');
+  if (!indicator) return view;
+  indicator.className = `connection-indicator is-${view.status}`;
+  indicator.setAttribute('aria-label', view.ariaLabel);
+  indicator.querySelector('.connection-indicator-icon').textContent = view.icon;
+  el('connectionState').textContent = view.title;
+  el('connectionText').textContent = view.text;
+  const latency = el('connectionLatency');
+  latency.textContent = view.latency || '';
+  latency.classList.toggle('hidden', !view.latency);
+  return view;
+}
+
 export function buildSkillBar(voc, onCast) {
   const V = VOCATIONS[voc];
   const box = el('skillSlots');
@@ -154,9 +252,16 @@ export function buildSkillBar(voc, onCast) {
     b.style.setProperty('--sc', V.color);
     b.dataset.key = s.key;
     b.innerHTML = `<span class="key">${i + 1}</span><span class="icon">${s.icon}</span><span class="cost">${s.mana}</span>`;
-    b.onpointerdown = (e) => { e.preventDefault(); onCast(s.key); };
-    b.onpointerenter = (e) => showTooltip(e, `<div class="tt-name" style="color:${V.color}">${s.icon} ${s.name}</div>`
-      + `<div class="tt-slot">${s.mana} mana · ${s.cd}s de recarga</div>${s.desc}`);
+    b.onpointerdown = e => {
+      e.preventDefault();
+      onCast(s.key);
+    };
+    b.onpointerenter = e =>
+      showTooltip(
+        e,
+        `<div class="tt-name" style="color:${V.color}">${s.icon} ${s.name}</div>` +
+          `<div class="tt-slot">${s.mana} mana · ${s.cd}s de recarga</div>${s.desc}`
+      );
     b.onpointerleave = hideTooltip;
     box.appendChild(b);
   });
@@ -166,11 +271,15 @@ export function updateSkillBar(local) {
   if (!local) return;
   const V = VOCATIONS[local.voc];
   for (const b of document.querySelectorAll('.slot.skill')) {
-    const s = V.skills.find((x) => x.key === b.dataset.key);
+    const s = V.skills.find(x => x.key === b.dataset.key);
     const cd = local.skillCd?.[b.dataset.key] || 0;
     let overlay = b.querySelector('.cd');
     if (cd > 0.05) {
-      if (!overlay) { overlay = document.createElement('span'); overlay.className = 'cd'; b.appendChild(overlay); }
+      if (!overlay) {
+        overlay = document.createElement('span');
+        overlay.className = 'cd';
+        b.appendChild(overlay);
+      }
       overlay.textContent = cd >= 1 ? Math.ceil(cd) : cd.toFixed(1);
     } else if (overlay) overlay.remove();
     b.classList.toggle('nomana', local.mp < s.mana);
@@ -205,13 +314,13 @@ export function updateHUD(view, local, st, dt = 0) {
 
   // Grupo: no máximo 3 aliados no trilho, mais os caídos, mais a linha de excedente.
   const list = el('partyList');
-  const mates = view.players.filter((p) => p.id !== local.id);
+  const mates = view.players.filter(p => p.id !== local.id);
   const { shown, downed, extra } = rail.select(local, mates, dt);
   const visible = [...downed, ...shown];
   // O minimapa precisa saber quem já tem barra para desenhar o resto diferente.
-  view.railIds = visible.map((m) => m.id);
+  view.railIds = visible.map(m => m.id);
 
-  const wanted = visible.map((m) => m.id).join('|');
+  const wanted = visible.map(m => m.id).join('|');
   if (list.dataset.ids !== wanted) {
     list.dataset.ids = wanted;
     list.innerHTML = '';
@@ -232,7 +341,7 @@ export function updateHUD(view, local, st, dt = 0) {
   }
   for (const d of list.children) {
     if (!d.dataset.pid) continue;
-    const m = visible.find((x) => x.id === d.dataset.pid);
+    const m = visible.find(x => x.id === d.dataset.pid);
     if (!m) continue;
     d.querySelector('.plaque-name').textContent = m.name;
     d.querySelector('.plaque-level').textContent = 'Nv ' + m.level;
@@ -249,7 +358,9 @@ export function updateHUD(view, local, st, dt = 0) {
   }
 
   // Chefe
-  const boss = view.monsters.find((m) => m.isBoss && m.hp > 0 && Math.hypot(m.x - local.x, m.y - local.y) < 18);
+  const boss = view.monsters.find(
+    m => m.isBoss && m.hp > 0 && Math.hypot(m.x - local.x, m.y - local.y) < 18
+  );
   el('bossBar').classList.toggle('hidden', !boss);
   if (boss) {
     el('bossName').textContent = bossBarLabel(boss);
@@ -267,15 +378,21 @@ export function bossBarLabel(boss) {
 
 export function updateDeathOverlay(local) {
   const ov = el('deathOverlay');
-  if (!local || !local.dead) { ov.classList.add('hidden'); return; }
+  if (!local || !local.dead) {
+    ov.classList.add('hidden');
+    return;
+  }
   ov.classList.remove('hidden');
   const btn = el('btnRespawn');
   const canRespawn = local.deathTimer >= 5;
   btn.disabled = !canRespawn;
-  btn.textContent = canRespawn ? 'Voltar ao início do andar' : `Aguarde ${Math.ceil(5 - local.deathTimer)}s`;
-  el('deathHint').textContent = local.reviveProg > 0
-    ? `Sendo reerguido… ${Math.round((local.reviveProg / 3.5) * 100)}%`
-    : 'Um aliado pode reerguer você ficando por perto.';
+  btn.textContent = canRespawn
+    ? 'Voltar ao início do andar'
+    : `Aguarde ${Math.ceil(5 - local.deathTimer)}s`;
+  el('deathHint').textContent =
+    local.reviveProg > 0
+      ? `Sendo reerguido… ${Math.round((local.reviveProg / 3.5) * 100)}%`
+      : 'Um aliado pode reerguer você ficando por perto.';
 }
 
 // ---------- Mochila ----------
@@ -287,16 +404,18 @@ export function renderBag(player, handlers) {
     const row = document.createElement('div');
     row.className = 'equip-slot';
     const cv = document.createElement('canvas');
-    cv.width = 30; cv.height = 30;
+    cv.width = 30;
+    cv.height = 30;
     if (it) drawGlyph(cv.getContext('2d'), it.glyph, 15, 15, 1, RARITY[it.rarity].color);
     row.appendChild(cv);
     const txt = document.createElement('div');
-    txt.innerHTML = `<div class="lbl">${SLOT_LABEL[slot]}</div>`
-      + `<div class="nm ${it ? 'r-' + it.rarity : ''}">${it ? it.name : '—'}</div>`;
+    txt.innerHTML =
+      `<div class="lbl">${SLOT_LABEL[slot]}</div>` +
+      `<div class="nm ${it ? 'r-' + it.rarity : ''}">${it ? it.name : '—'}</div>`;
     row.appendChild(txt);
     if (it) {
       row.onclick = () => handlers.unequip(slot);
-      row.onpointerenter = (e) => showTooltip(e, itemHtml(it, player, 'Clique para tirar'));
+      row.onpointerenter = e => showTooltip(e, itemHtml(it, player, 'Clique para tirar'));
       row.onpointerleave = hideTooltip;
     }
     equipCol.appendChild(row);
@@ -309,12 +428,17 @@ export function renderBag(player, handlers) {
     cell.className = 'inv-slot' + (it ? ' r-' + it.rarity : '');
     if (it) {
       const cv = document.createElement('canvas');
-      cv.width = 40; cv.height = 40;
+      cv.width = 40;
+      cv.height = 40;
       drawGlyph(cv.getContext('2d'), it.glyph, 20, 20, 1.1, RARITY[it.rarity].color);
       cell.appendChild(cv);
       cell.onclick = () => handlers.use(i);
-      cell.oncontextmenu = (e) => { e.preventDefault(); handlers.drop(i); };
-      cell.onpointerenter = (e) => showTooltip(e, itemHtml(it, player, 'Clique para equipar · botão direito descarta'));
+      cell.oncontextmenu = e => {
+        e.preventDefault();
+        handlers.drop(i);
+      };
+      cell.onpointerenter = e =>
+        showTooltip(e, itemHtml(it, player, 'Clique para equipar · botão direito descarta'));
       cell.onpointerleave = hideTooltip;
     }
     grid.appendChild(cell);
@@ -322,15 +446,20 @@ export function renderBag(player, handlers) {
 
   const st = handlers.stats();
   el('statBlock').innerHTML = [
-    ['Ataque', Math.round(st.atk)], ['Defesa', Math.round(st.def)], ['Magia', Math.round(st.ml)],
-    ['Velocidade', st.speed.toFixed(1)], ['Crítico', Math.round(st.crit * 100) + '%'],
+    ['Ataque', Math.round(st.atk)],
+    ['Defesa', Math.round(st.def)],
+    ['Magia', Math.round(st.ml)],
+    ['Velocidade', st.speed.toFixed(1)],
+    ['Crítico', Math.round(st.crit * 100) + '%'],
     ['Roubo de vida', Math.round(st.leech * 100) + '%'],
-  ].map(([k, v]) => `<div>${k} <b>${v}</b></div>`).join('');
+  ]
+    .map(([k, v]) => `<div>${k} <b>${v}</b></div>`)
+    .join('');
 }
 
 function itemHtml(it, player, hint) {
   const R = RARITY[it.rarity];
-  const base = ITEM_BASES.find((b) => b.id === it.baseId);
+  const base = ITEM_BASES.find(b => b.id === it.baseId);
   let h = `<div class="tt-name r-${it.rarity}">${it.name}</div>`;
   h += `<div class="tt-slot">${SLOT_LABEL[it.slot] || it.slot} · ${R.name} · nível ${it.ilvl}</div>`;
   const rows = [];
@@ -342,8 +471,9 @@ function itemHtml(it, player, hint) {
   if (it.speed) rows.push(`+${it.speed} velocidade`);
   if (it.crit) rows.push(`+${Math.round(it.crit * 100)}% crítico`);
   if (it.leech) rows.push(`+${Math.round(it.leech * 100)}% roubo de vida`);
-  h += rows.map((r) => `<div class="tt-stat">${r}</div>`).join('');
-  if (it.affixes?.length) h += `<div class="tt-affix">${it.affixes.map((a) => a.name).join(' · ')}</div>`;
+  h += rows.map(r => `<div class="tt-stat">${r}</div>`).join('');
+  if (it.affixes?.length)
+    h += `<div class="tt-affix">${it.affixes.map(a => a.name).join(' · ')}</div>`;
   if (base?.forVoc && !base.forVoc.includes(player.voc)) {
     h += `<div class="tt-warn">Sua vocação não usa este item.</div>`;
   }
@@ -356,14 +486,17 @@ export function showTooltip(e, html) {
   tt.innerHTML = html;
   tt.classList.remove('hidden');
   const r = tt.getBoundingClientRect();
-  let x = e.clientX + 14, y = e.clientY + 14;
+  let x = e.clientX + 14,
+    y = e.clientY + 14;
   if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
   if (y + r.height > innerHeight - 8) y = innerHeight - r.height - 8;
   tt.style.left = x + 'px';
   tt.style.top = y + 'px';
 }
 
-export function hideTooltip() { el('tooltip').classList.add('hidden'); }
+export function hideTooltip() {
+  el('tooltip').classList.add('hidden');
+}
 
 // Uma linha de jogador, usada no lobby, no painel de moderação e na fila.
 // `actions` recebe [{label, cls, onClick}] e só é montado para o host.
@@ -424,7 +557,12 @@ export function confirmInline(row, label, onYes, timeout = 5000) {
   if (!box) return;
   const original = box.innerHTML;
   let done = false;
-  const restore = () => { if (done) return; done = true; clearTimeout(timer); box.innerHTML = original; };
+  const restore = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    box.innerHTML = original;
+  };
   const timer = setTimeout(restore, timeout);
 
   box.innerHTML = '';
@@ -434,7 +572,11 @@ export function confirmInline(row, label, onYes, timeout = 5000) {
   const yes = document.createElement('button');
   yes.className = 'btn small yes';
   yes.textContent = 'Sim';
-  yes.onclick = () => { done = true; clearTimeout(timer); onYes(); };
+  yes.onclick = () => {
+    done = true;
+    clearTimeout(timer);
+    onYes();
+  };
   const no = document.createElement('button');
   no.className = 'btn small';
   no.textContent = 'Não';
@@ -456,9 +598,11 @@ export function renderLobby(players, isHost, { max = 10, locked = false } = {}) 
   el('lobbyLock').classList.toggle('hidden', !locked);
   list.classList.toggle('grown', players.length > 5);
 
-  const others = players.filter((p) => !p.isHost);
+  const others = players.filter(p => !p.isHost);
   if (!others.length) {
-    list.appendChild(rosterRow(players[0] || { id: 'host', name: '—', voc: 'knight', isHost: true }));
+    list.appendChild(
+      rosterRow(players[0] || { id: 'host', name: '—', voc: 'knight', isHost: true })
+    );
     const empty = document.createElement('div');
     empty.className = 'lobby-row empty';
     empty.textContent = 'Ninguém chegou ainda. O link está na sua mão.';
@@ -497,9 +641,15 @@ export function renderRosterPanel(players, queue, { isHost, locked, max, code, o
     }
     for (const p of list) {
       // O host nunca pode expulsar a si mesmo.
-      const actions = isHost && !p.isHost
-        ? [{ label: 'Expulsar', onClick: (row) => confirmInline(row, 'Expulsar?', () => onKick(p.id)) }]
-        : [];
+      const actions =
+        isHost && !p.isHost
+          ? [
+              {
+                label: 'Expulsar',
+                onClick: row => confirmInline(row, 'Expulsar?', () => onKick(p.id)),
+              },
+            ]
+          : [];
       target.appendChild(rosterRow(p, { actions }));
     }
   };
@@ -548,7 +698,9 @@ export function showEnded(title, text, saved) {
   el('btnLeave').className = 'btn btn-primary';
 }
 
-export function hideDrop() { el('dropOverlay').classList.add('hidden'); }
+export function hideDrop() {
+  el('dropOverlay').classList.add('hidden');
+}
 
 // ---------- Contagem coletiva do portal ----------
 // Só existe quando o portal está aberto e alguém está em cima. Com 0 aliados
@@ -562,12 +714,19 @@ export function updatePortalHold(view, local) {
   const armed = view.portalReady === view.portalTotal;
   box.classList.toggle('armed', armed);
   box.querySelector('.ph-count').textContent = `${view.portalReady}/${view.portalTotal} no portal`;
-  box.querySelector('.bar i').style.width = Math.min(100, ((view.portalHold || 0) / PORTAL_HOLD) * 100) + '%';
+  box.querySelector('.bar i').style.width =
+    Math.min(100, ((view.portalHold || 0) / PORTAL_HOLD) * 100) + '%';
 
-  const missing = view.players.filter((p) => !p.dead && !p.onPortal && p.id !== local?.id);
+  const missing = view.players.filter(p => !p.dead && !p.onPortal && p.id !== local?.id);
   const falta = box.querySelector('.ph-missing');
   if (armed) falta.textContent = 'Descendo…';
-  else if (view.portalTotal - view.portalReady <= 2 && missing.length) falta.textContent = 'Faltam ' + missing.slice(0, 2).map((p) => p.name).join(' e ');
+  else if (view.portalTotal - view.portalReady <= 2 && missing.length)
+    falta.textContent =
+      'Faltam ' +
+      missing
+        .slice(0, 2)
+        .map(p => p.name)
+        .join(' e ');
   else falta.textContent = `Faltam ${view.portalTotal - view.portalReady} jogador(es)`;
 }
 

@@ -7,7 +7,8 @@ export const MAP_H = 72;
 // Mesma seed + mesmo andar = mesmo mapa nos dois lados da conexão.
 export function generateMap(seed, floor) {
   const rng = makeRng((seed ^ (floor * 0x9e3779b9)) >>> 0);
-  const w = MAP_W, h = MAP_H;
+  const w = MAP_W,
+    h = MAP_H;
   const tiles = new Uint8Array(w * h);
   const rooms = [];
   const decor = [];
@@ -21,7 +22,10 @@ export function generateMap(seed, floor) {
     const ry = rng.int(3, h - rh - 4);
     let overlaps = false;
     for (const r of rooms) {
-      if (rx < r.x + r.w + 3 && rx + rw + 3 > r.x && ry < r.y + r.h + 3 && ry + rh + 3 > r.y) { overlaps = true; break; }
+      if (rx < r.x + r.w + 3 && rx + rw + 3 > r.x && ry < r.y + r.h + 3 && ry + rh + 3 > r.y) {
+        overlaps = true;
+        break;
+      }
     }
     if (overlaps) continue;
     rooms.push({ x: rx, y: ry, w: rw, h: rh, cx: rx + (rw >> 1), cy: ry + (rh >> 1) });
@@ -40,11 +44,30 @@ export function generateMap(seed, floor) {
 
   // Corredores em L ligando salas consecutivas + alguns atalhos.
   const link = (a, b) => {
-    let x = a.cx, y = a.cy;
+    let x = a.cx,
+      y = a.cy;
     const horizFirst = rng.chance(0.5);
-    const stepX = () => { while (x !== b.cx) { carve(x, y, T.FLOOR); carve(x, y + 1, T.FLOOR); x += x < b.cx ? 1 : -1; } };
-    const stepY = () => { while (y !== b.cy) { carve(x, y, T.FLOOR); carve(x + 1, y, T.FLOOR); y += y < b.cy ? 1 : -1; } };
-    if (horizFirst) { stepX(); stepY(); } else { stepY(); stepX(); }
+    const stepX = () => {
+      while (x !== b.cx) {
+        carve(x, y, T.FLOOR);
+        carve(x, y + 1, T.FLOOR);
+        x += x < b.cx ? 1 : -1;
+      }
+    };
+    const stepY = () => {
+      while (y !== b.cy) {
+        carve(x, y, T.FLOOR);
+        carve(x + 1, y, T.FLOOR);
+        y += y < b.cy ? 1 : -1;
+      }
+    };
+    if (horizFirst) {
+      stepX();
+      stepY();
+    } else {
+      stepY();
+      stepX();
+    }
     carve(b.cx, b.cy, T.FLOOR);
   };
   for (let i = 1; i < rooms.length; i++) link(rooms[i - 1], rooms[i]);
@@ -57,7 +80,10 @@ export function generateMap(seed, floor) {
       let near = false;
       for (let dy = -1; dy <= 1 && !near; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-          if (tiles[(y + dy) * w + (x + dx)] === T.FLOOR) { near = true; break; }
+          if (tiles[(y + dy) * w + (x + dx)] === T.FLOOR) {
+            near = true;
+            break;
+          }
         }
       }
       if (near) tiles[y * w + x] = T.WALL;
@@ -70,7 +96,10 @@ export function generateMap(seed, floor) {
   let bestDist = -1;
   for (const r of rooms) {
     const d = Math.abs(r.cx - spawnRoom.cx) + Math.abs(r.cy - spawnRoom.cy);
-    if (d > bestDist) { bestDist = d; bossRoom = r; }
+    if (d > bestDist) {
+      bestDist = d;
+      bossRoom = r;
+    }
   }
 
   for (const r of rooms) {
@@ -81,7 +110,8 @@ export function generateMap(seed, floor) {
       const isLava = rng.chance(0.55 + floor * 0.03);
       const px = rng.int(r.x + 2, r.x + r.w - 4);
       const py = rng.int(r.y + 2, r.y + r.h - 4);
-      const pw = rng.int(2, 4), ph = rng.int(2, 3);
+      const pw = rng.int(2, 4),
+        ph = rng.int(2, 3);
       for (let y = py; y < py + ph; y++) {
         for (let x = px; x < px + pw; x++) {
           if (tiles[y * w + x] === T.FLOOR) tiles[y * w + x] = isLava ? T.LAVA : T.WATER;
@@ -89,12 +119,14 @@ export function generateMap(seed, floor) {
       }
     } else if (roll < 0.4) {
       for (let i = 0; i < rng.int(4, 10); i++) {
-        const x = rng.int(r.x + 1, r.x + r.w - 2), y = rng.int(r.y + 1, r.y + r.h - 2);
+        const x = rng.int(r.x + 1, r.x + r.w - 2),
+          y = rng.int(r.y + 1, r.y + r.h - 2);
         if (tiles[y * w + x] === T.FLOOR) tiles[y * w + x] = T.GRASS;
       }
     } else if (roll < 0.52) {
       for (let i = 0; i < rng.int(2, 5); i++) {
-        const x = rng.int(r.x + 1, r.x + r.w - 2), y = rng.int(r.y + 1, r.y + r.h - 2);
+        const x = rng.int(r.x + 1, r.x + r.w - 2),
+          y = rng.int(r.y + 1, r.y + r.h - 2);
         if (tiles[y * w + x] === T.FLOOR) tiles[y * w + x] = T.RUBBLE;
       }
     }
@@ -102,8 +134,10 @@ export function generateMap(seed, floor) {
     // Braseiros nos cantos: viram fonte de luz no render.
     if (rng.chance(0.6)) {
       const corners = [
-        [r.x + 1, r.y + 1], [r.x + r.w - 2, r.y + 1],
-        [r.x + 1, r.y + r.h - 2], [r.x + r.w - 2, r.y + r.h - 2],
+        [r.x + 1, r.y + 1],
+        [r.x + r.w - 2, r.y + 1],
+        [r.x + 1, r.y + r.h - 2],
+        [r.x + r.w - 2, r.y + r.h - 2],
       ];
       for (const [bx, by] of corners) {
         if (rng.chance(0.5) && tiles[by * w + bx] === T.FLOOR) {
@@ -142,9 +176,11 @@ export function buildFlowField(map, sources) {
   const { w, h } = map;
   const dist = new Int16Array(w * h).fill(-1);
   const queue = new Int32Array(w * h);
-  let head = 0, tail = 0;
+  let head = 0,
+    tail = 0;
   for (const s of sources) {
-    const sx = Math.floor(s.x), sy = Math.floor(s.y);
+    const sx = Math.floor(s.x),
+      sy = Math.floor(s.y);
     if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
     const idx = sy * w + sx;
     if (dist[idx] !== -1) continue;
@@ -175,15 +211,28 @@ export function buildFlowField(map, sources) {
 
 // A* curtinho, usado só pelo clique-para-andar do jogador local.
 export function findPath(map, sx, sy, tx, ty, maxNodes = 4000) {
-  sx = Math.floor(sx); sy = Math.floor(sy); tx = Math.floor(tx); ty = Math.floor(ty);
+  sx = Math.floor(sx);
+  sy = Math.floor(sy);
+  tx = Math.floor(tx);
+  ty = Math.floor(ty);
   if (!walkable(map, tx, ty)) return null;
   if (sx === tx && sy === ty) return [];
   const { w } = map;
-  const startIdx = sy * w + sx, goalIdx = ty * w + tx;
+  const startIdx = sy * w + sx,
+    goalIdx = ty * w + tx;
   const came = new Map();
   const gScore = new Map([[startIdx, 0]]);
   const open = [{ idx: startIdx, f: 0 }];
-  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ];
   let nodes = 0;
   while (open.length && nodes++ < maxNodes) {
     open.sort((a, b) => a.f - b.f);
@@ -198,10 +247,12 @@ export function findPath(map, sx, sy, tx, ty, maxNodes = 4000) {
       }
       return path;
     }
-    const cx = cur.idx % w, cy = Math.floor(cur.idx / w);
+    const cx = cur.idx % w,
+      cy = Math.floor(cur.idx / w);
     const cg = gScore.get(cur.idx) ?? Infinity;
     for (const [dx, dy] of dirs) {
-      const nx = cx + dx, ny = cy + dy;
+      const nx = cx + dx,
+        ny = cy + dy;
       if (!walkable(map, nx, ny)) continue;
       if (dx && dy && (!walkable(map, cx + dx, cy) || !walkable(map, cx, cy + dy))) continue;
       const nIdx = ny * w + nx;

@@ -13,7 +13,9 @@ export class ActionQueue {
     this.dropped = 0;
   }
 
-  get size() { return this.items.length; }
+  get size() {
+    return this.items.length;
+  }
 
   // Enfileira e devolve a ação já com id.
   push(act) {
@@ -30,16 +32,20 @@ export class ActionQueue {
   }
 
   // Tudo que ainda não foi confirmado. Reenviado a cada pacote de input.
-  toSend() { return this.items; }
+  toSend() {
+    return this.items;
+  }
 
   // O host confirma pelo maior id que já processou.
   confirm(lastAct) {
     if (!Number.isFinite(lastAct)) return 0;
     const before = this.items.length;
-    this.items = this.items.filter((a) => a.id > lastAct);
+    this.items = this.items.filter(a => a.id > lastAct);
     return before - this.items.length;
   }
 
   // Troca de andar e reconexão zeram a fila: o que não foi confirmado não vale mais.
-  clear() { this.items.length = 0; }
+  clear() {
+    this.items.length = 0;
+  }
 }

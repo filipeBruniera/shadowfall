@@ -7,25 +7,48 @@ import * as Save from '../js/save.js';
 let failures = 0;
 function check(label, cond, extra = '') {
   if (cond) console.log(`  ok  ${label}`);
-  else { console.log(`  FAIL ${label} ${extra}`); failures++; }
+  else {
+    console.log(`  FAIL ${label} ${extra}`);
+    failures++;
+  }
 }
 
 console.log('\n== queda do host ==');
 {
-  let retries = 0, ended = 0, reconnecting = 0;
+  let retries = 0,
+    ended = 0,
+    reconnecting = 0;
   const g = new SessionGuard({
-    window: 12, retryEvery: 3,
-    onReconnecting: () => { reconnecting++; },
-    onRetry: () => { retries++; },
-    onEnded: () => { ended++; },
+    window: 12,
+    retryEvery: 3,
+    onReconnecting: () => {
+      reconnecting++;
+    },
+    onRetry: () => {
+      retries++;
+    },
+    onEnded: () => {
+      ended++;
+    },
   });
 
   g.hostLost();
-  check('queda: perda momentânea entra em reconexão, não encerra', g.state === RECONNECTING && ended === 0);
+  check(
+    'queda: perda momentânea entra em reconexão, não encerra',
+    g.state === RECONNECTING && ended === 0
+  );
 
   for (let i = 0; i < 5; i++) g.tick(1);
-  check('queda: tenta reconectar dentro da janela', retries >= 1 && g.state === RECONNECTING, `retries ${retries}`);
-  check('queda: a tela de reconexão é atualizada a cada tick', reconnecting >= 5, `updates ${reconnecting}`);
+  check(
+    'queda: tenta reconectar dentro da janela',
+    retries >= 1 && g.state === RECONNECTING,
+    `retries ${retries}`
+  );
+  check(
+    'queda: a tela de reconexão é atualizada a cada tick',
+    reconnecting >= 5,
+    `updates ${reconnecting}`
+  );
 
   for (let i = 0; i < 20; i++) g.tick(1);
   check('queda: esgotado o prazo, a sessão encerra', g.state === ENDED);
@@ -45,9 +68,16 @@ console.log('\n== queda do host ==');
 }
 {
   let ended = 0;
-  const g = new SessionGuard({ onEnded: () => { ended++; } });
+  const g = new SessionGuard({
+    onEnded: () => {
+      ended++;
+    },
+  });
   g.endExpected('Partida encerrada', 'O host encerrou a partida.');
-  check('saída do host: aviso deliberado encerra sem tentar reconectar', g.state === ENDED && ended === 1);
+  check(
+    'saída do host: aviso deliberado encerra sem tentar reconectar',
+    g.state === ENDED && ended === 1
+  );
   g.endExpected('outra', 'coisa');
   check('saída do host: encerrar duas vezes não duplica o aviso', ended === 1);
 }
@@ -63,25 +93,44 @@ console.log('\n== expulsão ==');
 
   room.remove('g1');
   removePlayer(G, 'g1');
-  check('expulsão: peer removido sai da simulação e da lista',
-    !room.has('g1') && !G.players.g1 && room.count === 1);
+  check(
+    'expulsão: peer removido sai da simulação e da lista',
+    !room.has('g1') && !G.players.g1 && room.count === 1
+  );
   check('expulsão: os demais continuam na partida', !!G.players.host && room.has('host'));
 
   // O host nunca é alvo: a interface não oferece a ação para a própria linha.
-  const kickable = room.list().filter((p) => !p.isHost).map((p) => p.id);
+  const kickable = room
+    .list()
+    .filter(p => !p.isHost)
+    .map(p => p.id);
   check('expulsão: host não pode expulsar a si mesmo', !kickable.includes('host'));
 }
 {
   const st = Save.memoryStorage();
-  Save.setStorage(st); Save.resetWarnings();
-  const saved = Save.writeSave({
-    voc: 'druid', name: 'Marina', level: 9, xp: 900, gold: 77,
-    equip: {}, inv: [], potions: { hp: 3, mp: 2 },
-  }, 5);
-  check('expulsão: progresso do expulso é gravado antes da saída',
-    saved === true && JSON.parse(st.getItem('sf-save-druid')).level === 9);
-  check('queda: progresso do convidado é gravado antes de encerrar',
-    Save.loadSave('druid').gold === 77);
+  Save.setStorage(st);
+  Save.resetWarnings();
+  const saved = Save.writeSave(
+    {
+      voc: 'druid',
+      name: 'Marina',
+      level: 9,
+      xp: 900,
+      gold: 77,
+      equip: {},
+      inv: [],
+      potions: { hp: 3, mp: 2 },
+    },
+    5
+  );
+  check(
+    'expulsão: progresso do expulso é gravado antes da saída',
+    saved === true && JSON.parse(st.getItem('sf-save-druid')).level === 9
+  );
+  check(
+    'queda: progresso do convidado é gravado antes de encerrar',
+    Save.loadSave('druid').gold === 77
+  );
 }
 
 console.log('\n== limpeza de sessão ==');
@@ -94,11 +143,15 @@ console.log('\n== limpeza de sessão ==');
   room.started = true;
 
   const novo = new Room();
-  check('sessão: sala nova nasce vazia, destrancada e não iniciada',
-    novo.count === 0 && !novo.locked && !novo.started && novo.list().length === 0);
+  check(
+    'sessão: sala nova nasce vazia, destrancada e não iniciada',
+    novo.count === 0 && !novo.locked && !novo.started && novo.list().length === 0
+  );
 
   const g = new SessionGuard();
-  g.hostLost(); g.tick(1); g.reset();
+  g.hostLost();
+  g.tick(1);
+  g.reset();
   check('sessão: o guardião volta a live depois do reset', g.state === LIVE);
 }
 

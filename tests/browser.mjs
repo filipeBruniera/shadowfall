@@ -4,7 +4,8 @@ import puppeteer from 'puppeteer';
 // para decidir a origem do toque — reexportados por mobile-helpers.mjs, que os
 // lê por namespace para o portão de RF-03 não morrer no link do módulo.
 // INV_SIZE fecha a mochila cheia de UI-04.
-import { INV_SIZE } from '../js/balance.js';
+import { DAILY_CONTRACT_SEED, INV_SIZE } from '../js/balance.js';
+import { generateDailyContracts } from '../js/contracts.js';
 import {
   VIEWPORT_MOBILE, VIEWPORT_SMALL, VIEWPORT_DESKTOP, ALTURAS_UI03, ALVO_MIN, SLOT_LADO, BARRA_LARGURA,
   TOUCH_STICK_ZONE, TOUCH_STICK_RADIUS, LOG_MAX_LINES, CHAT_MAX_LEN,
@@ -15,6 +16,37 @@ import {
 const URL = process.env.URL || 'http://localhost:8099/index.html';
 const CHROME = process.env.CHROME || '/usr/bin/google-chrome';
 const OUT = process.env.OUT || '/tmp/shadowfall-shots';
+const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '';
+// Tolerância de subpixel compartilhada pelas medições de painel e HUD: o
+// translate/anti-aliasing do navegador pode devolver uma borda 0,3px fora.
+const TOL = 0.5;
+
+async function newSmokePage(scope) {
+  const page = await scope.newPage();
+  // Preview protegido continua fechado ao público: o segredo oficial só entra
+  // na navegação principal e a Vercel grava o cookie para seus subrecursos.
+  // Aplicá-lo aos CDNs de fonte e PeerJS provocaria preflight CORS indevido.
+  if (BYPASS_SECRET) {
+    await page.setRequestInterception(true);
+    page.on('request', request => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+        request.continue({ headers: {
+          ...request.headers(),
+          'x-vercel-protection-bypass': BYPASS_SECRET,
+          'x-vercel-set-bypass-cookie': 'true',
+        } });
+        return;
+      }
+      request.continue();
+    });
+  }
+  return page;
+}
+
+async function openSmokePage(page) {
+  await page.goto(URL, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.waitForFunction(() => !!window.__SF, { timeout: 20000 });
+}
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -23,7 +55,7 @@ const browser = await puppeteer.launch({
   args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=swiftshader', '--enable-webgl', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'],
 });
 
-const page = await browser.newPage();
+const page = await newSmokePage(browser);
 await page.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
 
 const errors = [];
@@ -35,9 +67,1045 @@ page.on('requestfailed', (r) => {
   if (!u.includes('fonts.g') && !u.includes('peerjs')) errors.push('REQFAIL: ' + u + ' ' + r.failure()?.errorText);
 });
 
-await page.goto(URL, { waitUntil: 'networkidle2', timeout: 30000 });
+await page.evaluateOnNewDocument(() => {
+  const probe = { contexts: 0, resumes: 0, layerCalls: 0, tracks: 0, stoppedTracks: 0, errors: 0 };
+  window.__audioProbe = probe;
+  class FakeGain {
+    constructor() {
+      this.gain = {
+        value: 1,
+        setTargetAtTime() {},
+        linearRampToValueAtTime() {},
+        setValueAtTime() {},
+        exponentialRampToValueAtTime() {},
+      };
+    }
+    connect() {}
+  }
+  class FakeOscillator {
+    constructor() {
+      this.frequency = { value: 0 };
+    }
+    connect() {}
+    start() { probe.tracks++; }
+    stop() { probe.stoppedTracks++; }
+  }
+  class FakeAudioContext {
+    constructor() {
+      probe.contexts++;
+      this.state = 'suspended';
+      this.currentTime = 0;
+      this.destination = {};
+    }
+    createGain() { return new FakeGain(); }
+    createOscillator() { return new FakeOscillator(); }
+    resume() {
+      probe.resumes++;
+      this.state = 'running';
+      return Promise.resolve();
+    }
+  }
+  window.AudioContext = FakeAudioContext;
+  window.webkitAudioContext = undefined;
+  addEventListener('error', () => { probe.errors++; });
+  addEventListener('unhandledrejection', () => { probe.errors++; });
+});
+
+await openSmokePage(page);
 await new Promise((r) => setTimeout(r, 600));
 await page.screenshot({ path: `${OUT}/01-menu.png` });
+
+const audioAntesDoGesto = await page.evaluate(() => ({ ...window.__audioProbe }));
+await page.evaluate(() => {
+  const original = window.__SF.audio.unlock;
+  window.__SF.audio.unlock = () => {
+    window.__audioProbe.layerCalls++;
+    return original();
+  };
+});
+
+// P0-01: o smoke fecha o contrato que só existe no DOM do lobby. O contexto
+// separado impede que o save de progresso fabricado para esta medição altere a
+// partida solo que cobre o restante deste roteiro.
+async function medirCheckpointDoLobby() {
+  const context = await browser.createBrowserContext();
+  const lobby = await newSmokePage(context);
+  await lobby.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  await lobby.evaluateOnNewDocument(() => {
+    localStorage.setItem('sf-save-knight', JSON.stringify({
+      v: 3,
+      voc: 'knight',
+      name: 'Veterano',
+      totalXp: 0,
+      level: 1,
+      xp: 0,
+      gold: 0,
+      floor: 10,
+      potions: { hp: 4, mp: 4 },
+      items: [],
+    }));
+  });
+  try {
+    await openSmokePage(lobby);
+    await lobby.click('.voc-card[data-voc="knight"]');
+    await lobby.type('#nameInput', 'Veterano');
+    await lobby.click('#btnHost');
+    await lobby.waitForFunction(
+      () => document.querySelectorAll('#startFloorSelect option').length === 4,
+      { timeout: 20000 }
+    );
+
+    const inicial = await lobby.evaluate(() => {
+      const select = document.getElementById('startFloorSelect');
+      return {
+        opcoes: [...select.options].map(option => option.value),
+        selecionado: select.value,
+        disabled: select.disabled,
+      };
+    });
+    if (JSON.stringify(inicial.opcoes) !== JSON.stringify(['1', '4', '7', '10'])) {
+      errors.push(`CHECKPOINT: opções do roster profundo = ${JSON.stringify(inicial.opcoes)}, esperado ["1","4","7","10"]`);
+    }
+    if (inicial.selecionado !== '10') {
+      errors.push(`CHECKPOINT: padrão = andar ${inicial.selecionado}, esperado maior checkpoint comum 10`);
+    }
+    if (inicial.disabled) errors.push('CHECKPOINT: host recebeu seletor desabilitado');
+
+    await lobby.select('#startFloorSelect', '4');
+    // Trancar a sala chama renderRoster(), que recria as <option>s. A escolha
+    // manual deve sobreviver a essa atualização, não apenas ao evento change.
+    await lobby.click('#btnLock');
+    const manual = await lobby.evaluate(() => document.getElementById('startFloorSelect').value);
+    if (manual !== '4') {
+      errors.push(`CHECKPOINT: escolha manual anterior foi perdida após renderizar o roster (${manual})`);
+    }
+  } catch (error) {
+    errors.push(`CHECKPOINT: não consegui medir o lobby — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirCheckpointDoLobby();
+
+// P3D-02: o Refúgio não é uma segunda sala. Ele só troca a superfície entre
+// runs, conserva a sessão de host/convidado em espera e não pode esconder uma
+// partida que tenha começado enquanto a pessoa estava navegando.
+async function medirEntradaDoRefugio() {
+  const hostContext = await browser.createBrowserContext();
+  const guestContext = await browser.createBrowserContext();
+  const host = await newSmokePage(hostContext);
+  const guest = await newSmokePage(guestContext);
+  const pageErrors = [];
+  host.on('pageerror', error => pageErrors.push(`host: ${error.message}`));
+  guest.on('pageerror', error => pageErrors.push(`convidado: ${error.message}`));
+  await host.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  await guest.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  const saveComAndar = (voc, floor) => ({
+    v: 3,
+    voc,
+    name: voc === 'knight' ? 'Guardião' : 'Visitante',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 0,
+    floor,
+    potions: { hp: 4, mp: 4 },
+    items: [],
+  });
+  await host.evaluateOnNewDocument((save) => {
+    localStorage.setItem('sf-save-knight', JSON.stringify(save));
+  }, saveComAndar('knight', 14));
+  await guest.evaluateOnNewDocument((save) => {
+    localStorage.setItem('sf-save-druid', JSON.stringify(save));
+  }, saveComAndar('druid', 8));
+
+  const visible = (page, id) => page.evaluate((target) => {
+    const element = document.getElementById(target);
+    return !!element && !element.classList.contains('hidden');
+  }, id);
+
+  try {
+    await openSmokePage(host);
+    await host.click('#btnRefugeMenu');
+    const solo = await host.evaluate(() => ({
+      refuge: !document.getElementById('refuge').classList.contains('hidden'),
+      menu: document.getElementById('menu').classList.contains('hidden'),
+      started: window.__SF.started,
+      role: window.__SF.role,
+      pessoal: document.getElementById('refugePersonalCheckpoint').textContent.trim(),
+      comumOculto: document.getElementById('refugeCommonCheckpointRow').classList.contains('hidden'),
+      proxima: document.getElementById('refugeSelectedCheckpoint').textContent.trim(),
+    }));
+    await host.click('#btnLeaveRefuge');
+    const soloVoltou = await visible(host, 'menu');
+    if (
+      !solo.refuge ||
+      !solo.menu ||
+      solo.started ||
+      solo.role !== 'solo' ||
+      solo.pessoal !== 'Andar 13' ||
+      !solo.comumOculto ||
+      solo.proxima !== 'Andar 13' ||
+      !soloVoltou
+    ) {
+      errors.push(`REFÚGIO: entrada solo não voltou ao menu — ${JSON.stringify({ solo, soloVoltou })}`);
+    }
+
+    await host.click('.voc-card[data-voc="knight"]');
+    await host.type('#nameInput', 'Guardião');
+    await host.click('#btnHost');
+    await host.waitForFunction(() => !document.getElementById('lobby').classList.contains('hidden'), { timeout: 20000 });
+    const code = await host.$eval('#lobbyCode', element => element.textContent.trim());
+
+    await openSmokePage(guest);
+    await guest.click('.voc-card[data-voc="druid"]');
+    await guest.type('#nameInput', 'Visitante');
+    await guest.type('#codeInput', code);
+    await guest.click('#btnJoin');
+    await guest.waitForFunction(() => !document.getElementById('lobby').classList.contains('hidden'), { timeout: 20000 });
+    await host.waitForFunction(() => document.getElementById('lobbyCount').textContent.trim() === '2/10', { timeout: 20000 });
+    await host.select('#startFloorSelect', '4');
+    await guest.waitForFunction(() => window.__SF.startFloor === 4, { timeout: 20000 });
+
+    await host.click('#btnRefugeLobby');
+    await guest.click('#btnRefugeLobby');
+    const emRefugio = await Promise.all([host, guest].map(page => page.evaluate(() => ({
+      refuge: !document.getElementById('refuge').classList.contains('hidden'),
+      lobby: document.getElementById('lobby').classList.contains('hidden'),
+      started: window.__SF.started,
+      role: window.__SF.role,
+      jogadores: window.__SF.room.list().length,
+      pessoal: document.getElementById('refugePersonalCheckpoint').textContent.trim(),
+      comum: document.getElementById('refugeCommonCheckpoint').textContent.trim(),
+      comumVisivel: !document.getElementById('refugeCommonCheckpointRow').classList.contains('hidden'),
+      proxima: document.getElementById('refugeSelectedCheckpoint').textContent.trim(),
+    }))));
+    await host.click('#btnLeaveRefuge');
+    await guest.click('#btnLeaveRefuge');
+    const voltouAoLobby = await Promise.all([visible(host, 'lobby'), visible(guest, 'lobby')]);
+    if (
+      emRefugio.some(state => !state.refuge || !state.lobby || state.started || state.jogadores !== 2) ||
+      emRefugio[0].role !== 'host' ||
+      emRefugio[1].role !== 'guest' ||
+      emRefugio[0].pessoal !== 'Andar 13' ||
+      emRefugio[1].pessoal !== 'Andar 7' ||
+      emRefugio.some(state => state.comum !== 'Andar 7' || !state.comumVisivel || state.proxima !== 'Andar 4') ||
+      voltouAoLobby.some(state => !state)
+    ) {
+      errors.push(`REFÚGIO: sala em espera foi alterada — ${JSON.stringify({ emRefugio, voltouAoLobby })}`);
+    }
+
+    // A fila é um estado de transição do protocolo: mesmo um click disparado
+    // por script não pode trocar sua tela enquanto o host a está atualizando.
+    const filaProtegida = await guest.evaluate(() => {
+      window.__SF.queued = true;
+      document.getElementById('btnRefugeLobby').click();
+      const state = {
+        refuge: !document.getElementById('refuge').classList.contains('hidden'),
+        lobby: !document.getElementById('lobby').classList.contains('hidden'),
+      };
+      window.__SF.queued = false;
+      return state;
+    });
+    if (filaProtegida.refuge || !filaProtegida.lobby) {
+      errors.push(`REFÚGIO: a fila foi escondida por abertura indevida — ${JSON.stringify(filaProtegida)}`);
+    }
+
+    await host.click('#btnStart');
+    await host.waitForFunction(() => window.__SF.started && !document.getElementById('game').classList.contains('hidden'), { timeout: 20000 });
+    await guest.waitForFunction(() => window.__SF.started && !document.getElementById('game').classList.contains('hidden'), { timeout: 20000 });
+    // O botão oculto ainda recebe um click programático: a guarda precisa
+    // proteger a partida pelo estado, não só pela visibilidade da tela.
+    await host.evaluate(() => document.getElementById('btnRefugeMenu').click());
+    const durantePartida = await host.evaluate(() => ({
+      refuge: !document.getElementById('refuge').classList.contains('hidden'),
+      game: !document.getElementById('game').classList.contains('hidden'),
+      started: window.__SF.started,
+    }));
+    if (durantePartida.refuge || !durantePartida.game || !durantePartida.started) {
+      errors.push(`REFÚGIO: abertura interferiu na partida — ${JSON.stringify(durantePartida)}`);
+    }
+
+    await host.evaluate(() => document.getElementById('btnLeave').click());
+    await host.waitForFunction(() => !window.__SF.started && !document.getElementById('menu').classList.contains('hidden'), { timeout: 10000 });
+    await guest.waitForFunction(() => window.__SF.expected && !window.__SF.started, { timeout: 10000 });
+    // Encerramento esperado também chega por mensagem; o botão oculto continua
+    // invocável pelo DOM, então a guarda precisa preservar o aviso de saída.
+    const aposEncerrar = await guest.evaluate(() => {
+      document.getElementById('btnRefugeMenu').click();
+      return {
+        refuge: !document.getElementById('refuge').classList.contains('hidden'),
+        game: !document.getElementById('game').classList.contains('hidden'),
+        ended: !document.getElementById('dropOverlay').classList.contains('hidden'),
+        started: window.__SF.started,
+        expected: window.__SF.expected,
+      };
+    });
+    if (aposEncerrar.refuge || !aposEncerrar.game || !aposEncerrar.ended || aposEncerrar.started || !aposEncerrar.expected) {
+      errors.push(`REFÚGIO: sessão encerrada não preservou o aviso seguro — ${JSON.stringify(aposEncerrar)}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir a entrada e saída — ${error.message}`);
+  } finally {
+    await guestContext.close();
+    await hostContext.close();
+  }
+}
+
+await medirEntradaDoRefugio();
+
+// P3D-04: o Refúgio recebe o save normalizado e só materializa as revelações
+// que o view-model liberou. O contexto isolado impede que essas mortes
+// fabricadas contaminem o roteiro cooperativo já em execução.
+async function medirBestiarioDoRefugio() {
+  const context = await browser.createBrowserContext();
+  const refuge = await newSmokePage(context);
+  const pageErrors = [];
+  refuge.on('pageerror', error => pageErrors.push(error.message));
+  await refuge.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  const save = (kills) => ({
+    v: 4,
+    voc: 'knight',
+    name: 'Cronista',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 0,
+    floor: 1,
+    potions: { hp: 4, mp: 4 },
+    items: [],
+    bestiary: { kills },
+    contracts: { day: '', progress: {}, claimed: [] },
+  });
+
+  async function abrir(kills) {
+    await refuge.evaluateOnNewDocument((nextSave) => {
+      localStorage.setItem('sf-save-knight', JSON.stringify(nextSave));
+    }, save(kills));
+    await openSmokePage(refuge);
+    await refuge.click('#btnRefugeMenu');
+    return refuge.evaluate(() => ({
+      summary: document.getElementById('refugeBestiarySummary').textContent.trim(),
+      empty: document.getElementById('refugeBestiaryEmpty').textContent.trim(),
+      emptyVisible: !document.getElementById('refugeBestiaryEmpty').classList.contains('hidden'),
+      rows: [...document.querySelectorAll('#refugeBestiaryList > li')].map(row => row.textContent.trim()),
+    }));
+  }
+
+  try {
+    const vazio = await abrir({ removido: 100, rat: -1 });
+    const conhecido = await abrir({ rat: 25, ferumbras: 100, removido: 999 });
+    const rato = conhecido.rows.find(row => row.startsWith('Rato Podre')) || '';
+    const chefe = conhecido.rows.find(row => row.includes('100 derrotas')) || '';
+    const desconhecido = conhecido.rows.find(row => row.startsWith('Criatura desconhecida')) || '';
+    if (
+      vazio.summary !== '0 de 16 tipos identificados.' ||
+      vazio.empty !== 'Nenhuma criatura registrada.' ||
+      !vazio.emptyVisible ||
+      vazio.rows.length !== 16 ||
+      vazio.rows.some(row => !row.includes('Criatura desconhecida') || row.includes('Rato Podre'))
+    ) {
+      errors.push(`REFÚGIO: bestiário vazio vazou ou não ficou legível — ${JSON.stringify(vazio)}`);
+    }
+    if (
+      conhecido.summary !== '2 de 16 tipos identificados.' ||
+      conhecido.emptyVisible ||
+      !rato.includes('25 derrotas') ||
+      !rato.includes('Estudado') ||
+      !rato.includes('Elemento') ||
+      rato.includes('Vida') ||
+      !chefe.includes('Dominado') ||
+      !chefe.includes('Vida') ||
+      !desconhecido.includes('Tipo desconhecido · 0 derrotas · Desconhecido') ||
+      desconhecido.includes('Rato Podre')
+    ) {
+      errors.push(`REFÚGIO: tiers ou revelações do bestiário não respeitaram o view-model — ${JSON.stringify({ conhecido, rato, chefe, desconhecido })}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: bestiário gerou erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir o bestiário — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirBestiarioDoRefugio();
+
+// P3D-05: a composição usa somente a recompensa que o domínio recompõe para
+// o dia UTC. O segundo clique e a recarga consultam o storage já marcado,
+// provando que o botão não duplica ouro nem poções fora de uma run.
+async function medirContratosDoRefugio() {
+  const context = await browser.createBrowserContext();
+  const refuge = await newSmokePage(context);
+  const pageErrors = [];
+  refuge.on('pageerror', error => pageErrors.push(error.message));
+  await refuge.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  const day = new Date().toISOString().slice(0, 10);
+  const contracts = generateDailyContracts(DAILY_CONTRACT_SEED, day);
+  const first = contracts[0];
+  const save = {
+    v: 4,
+    voc: 'knight',
+    name: 'Cobrador',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 17,
+    floor: 6,
+    potions: { hp: 2, mp: 3 },
+    items: [],
+    bestiary: { kills: {} },
+    contracts: {
+      day,
+      progress: { [first.id]: first.objective.amount },
+      claimed: [],
+    },
+  };
+
+  try {
+    await refuge.evaluateOnNewDocument((nextSave) => {
+      if (!localStorage.getItem('sf-save-knight'))
+        localStorage.setItem('sf-save-knight', JSON.stringify(nextSave));
+    }, save);
+    await openSmokePage(refuge);
+    await refuge.click('#btnRefugeMenu');
+    const before = await refuge.evaluate(() => ({
+      summary: document.getElementById('refugeContractsSummary').textContent.trim(),
+      empty: !document.getElementById('refugeContractsEmpty').classList.contains('hidden'),
+      entries: [...document.querySelectorAll('#refugeContractsList > li')].map(entry => ({
+        text: entry.textContent.trim(),
+        action: entry.querySelector('button')?.textContent.trim(),
+        disabled: entry.querySelector('button')?.disabled,
+      })),
+    }));
+    await refuge.click(`#refugeContractsList button[data-contract-id="${first.id}"]`);
+    const afterClaim = await refuge.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem('sf-save-knight'));
+      const action = document.querySelector('#refugeContractsList button');
+      return { save, action: action?.textContent.trim(), disabled: action?.disabled };
+    });
+    await refuge.evaluate(() => document.querySelector('#refugeContractsList button')?.click());
+    const afterSecondClick = await refuge.evaluate(() => localStorage.getItem('sf-save-knight'));
+    await refuge.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+    await refuge.click('#btnRefugeMenu');
+    const afterReload = await refuge.evaluate(() => ({
+      save: JSON.parse(localStorage.getItem('sf-save-knight')),
+      action: document.querySelector('#refugeContractsList button')?.textContent.trim(),
+      disabled: document.querySelector('#refugeContractsList button')?.disabled,
+    }));
+    const potionKind = first.reward.potion.kind;
+    const expectedPotions = Math.min(8, save.potions[potionKind] + first.reward.potion.amount);
+    if (
+      before.summary !== `Contratos de ${day}.` ||
+      before.empty ||
+      before.entries.length !== 3 ||
+      !before.entries[0].text.includes(`${first.objective.amount} de ${first.objective.amount} derrotas`) ||
+      before.entries[0].action !== 'Resgatar recompensa' ||
+      before.entries[0].disabled ||
+      afterClaim.save.gold !== save.gold + first.reward.gold ||
+      afterClaim.save.potions[potionKind] !== expectedPotions ||
+      JSON.stringify(afterClaim.save.contracts.claimed) !== JSON.stringify([first.id]) ||
+      afterClaim.action !== 'Resgatado' ||
+      !afterClaim.disabled ||
+      afterSecondClick !== JSON.stringify(afterClaim.save) ||
+      afterReload.save.gold !== afterClaim.save.gold ||
+      afterReload.save.potions[potionKind] !== afterClaim.save.potions[potionKind] ||
+      JSON.stringify(afterReload.save.contracts) !== JSON.stringify(afterClaim.save.contracts) ||
+      afterReload.action !== 'Resgatado' ||
+      !afterReload.disabled
+    ) {
+      errors.push(`REFÚGIO: contratos não exibiram ou resgataram de forma idempotente — ${JSON.stringify({ before, afterClaim, afterReload })}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: contratos geraram erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir contratos — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirContratosDoRefugio();
+
+// P3D-10: os três painéis do Refúgio são projeções do mesmo save durável. O
+// cenário grava o resgate pela ação real da interface e só então recarrega a
+// página; assim não confunde nós ainda vivos no DOM com estado restaurado do
+// localStorage.
+async function medirReloadDoRefugio() {
+  const context = await browser.createBrowserContext();
+  const refuge = await newSmokePage(context);
+  const pageErrors = [];
+  refuge.on('pageerror', error => pageErrors.push(error.message));
+  await refuge.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  const day = new Date().toISOString().slice(0, 10);
+  const contracts = generateDailyContracts(DAILY_CONTRACT_SEED, day);
+  const first = contracts[0];
+  const save = {
+    v: 4,
+    voc: 'knight',
+    name: 'Memorialista',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 17,
+    floor: 11,
+    potions: { hp: 2, mp: 3 },
+    items: [],
+    bestiary: { kills: { rat: 25, ferumbras: 100 } },
+    contracts: {
+      day,
+      progress: { [first.id]: first.objective.amount },
+      claimed: [],
+    },
+  };
+
+  const snapshot = () => refuge.evaluate(() => {
+    const contractRows = [...document.querySelectorAll('#refugeContractsList > li')].map(item => {
+      const action = item.querySelector('button');
+      return {
+        id: action?.dataset.contractId ?? '',
+        text: item.textContent.trim(),
+        action: action?.textContent.trim() ?? '',
+        disabled: !!action?.disabled,
+      };
+    });
+    return {
+      checkpoint: {
+        personal: document.getElementById('refugePersonalCheckpoint').textContent.trim(),
+        selected: document.getElementById('refugeSelectedCheckpoint').textContent.trim(),
+        hint: document.getElementById('refugeCheckpointHint').textContent.trim(),
+      },
+      bestiary: {
+        summary: document.getElementById('refugeBestiarySummary').textContent.trim(),
+        rows: [...document.querySelectorAll('#refugeBestiaryList > li')].map(row => row.textContent.trim()),
+      },
+      contracts: {
+        summary: document.getElementById('refugeContractsSummary').textContent.trim(),
+        rows: contractRows,
+      },
+      persisted: JSON.parse(localStorage.getItem('sf-save-knight')),
+    };
+  });
+
+  try {
+    await refuge.evaluateOnNewDocument((nextSave) => {
+      if (!localStorage.getItem('sf-save-knight'))
+        localStorage.setItem('sf-save-knight', JSON.stringify(nextSave));
+    }, save);
+    await openSmokePage(refuge);
+    await refuge.click('#btnRefugeMenu');
+    const beforeClaim = await snapshot();
+    await refuge.click(`#refugeContractsList button[data-contract-id="${first.id}"]`);
+    const beforeReload = await snapshot();
+
+    await refuge.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+    await refuge.click('#btnRefugeMenu');
+    const afterReload = await snapshot();
+    const firstBefore = beforeClaim.contracts.rows.find(row => row.id === first.id);
+    const firstSaved = beforeReload.contracts.rows.find(row => row.id === first.id);
+    const firstRestored = afterReload.contracts.rows.find(row => row.id === first.id);
+    const ratBefore = beforeClaim.bestiary.rows.find(row => row.startsWith('Rato Podre')) || '';
+    const bossBefore = beforeClaim.bestiary.rows.find(row => row.includes('100 derrotas')) || '';
+    const expectedPotion = Math.min(8, save.potions[first.reward.potion.kind] + first.reward.potion.amount);
+    const restored =
+      afterReload.checkpoint.personal === 'Andar 10' &&
+      afterReload.checkpoint.selected === 'Andar 10' &&
+      afterReload.checkpoint.hint === 'A próxima run solo usará o andar 10.' &&
+      afterReload.bestiary.summary === '2 de 16 tipos identificados.' &&
+      JSON.stringify(afterReload.bestiary.rows) === JSON.stringify(beforeReload.bestiary.rows) &&
+      afterReload.contracts.summary === `Contratos de ${day}.` &&
+      JSON.stringify(afterReload.contracts.rows) === JSON.stringify(beforeReload.contracts.rows) &&
+      JSON.stringify(afterReload.persisted) === JSON.stringify(beforeReload.persisted);
+    if (
+      beforeClaim.checkpoint.personal !== 'Andar 10' ||
+      beforeClaim.checkpoint.selected !== 'Andar 10' ||
+      !ratBefore.includes('25 derrotas') || !ratBefore.includes('Estudado') ||
+      !bossBefore.includes('Dominado') ||
+      firstBefore?.action !== 'Resgatar recompensa' || firstBefore.disabled ||
+      firstSaved?.action !== 'Resgatado' || !firstSaved.disabled ||
+      beforeReload.persisted.floor !== 11 ||
+      beforeReload.persisted.bestiary?.kills?.rat !== 25 ||
+      beforeReload.persisted.bestiary?.kills?.ferumbras !== 100 ||
+      JSON.stringify(beforeReload.persisted.contracts?.claimed) !== JSON.stringify([first.id]) ||
+      beforeReload.persisted.gold !== save.gold + first.reward.gold ||
+      beforeReload.persisted.potions?.[first.reward.potion.kind] !== expectedPotion ||
+      firstRestored?.action !== 'Resgatado' || !firstRestored.disabled ||
+      !restored
+    ) {
+      errors.push(`REFÚGIO: reload não restaurou checkpoint, bestiário e contrato resgatado — ${JSON.stringify({ beforeClaim, beforeReload, afterReload })}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: reload gerou erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir reload — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirReloadDoRefugio();
+
+// P3D-06: o Refúgio é uma tela de consulta entre runs. A abertura anuncia o
+// contexto pelo título, Tab percorre somente ações disponíveis na ordem do DOM
+// e Escape/Voltar devolvem o foco ao botão que abriu a tela, sem criar trap.
+async function medirAcessibilidadeDoRefugio() {
+  const context = await browser.createBrowserContext();
+  const refuge = await newSmokePage(context);
+  const pageErrors = [];
+  refuge.on('pageerror', error => pageErrors.push(error.message));
+  await refuge.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  const day = new Date().toISOString().slice(0, 10);
+  const contracts = generateDailyContracts(DAILY_CONTRACT_SEED, day);
+  const first = contracts[0];
+  const save = {
+    v: 4,
+    voc: 'knight',
+    name: 'Tecladista',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 0,
+    floor: 4,
+    potions: { hp: 4, mp: 4 },
+    items: [],
+    bestiary: { kills: {} },
+    contracts: { day, progress: { [first.id]: first.objective.amount }, claimed: [] },
+  };
+
+  try {
+    await refuge.evaluateOnNewDocument((nextSave) => {
+      localStorage.setItem('sf-save-knight', JSON.stringify(nextSave));
+    }, save);
+    await openSmokePage(refuge);
+    await refuge.focus('#btnRefugeMenu');
+    await refuge.keyboard.press('Enter');
+    const opened = await refuge.evaluate(() => {
+      const screen = document.getElementById('refuge');
+      const title = document.getElementById('refugeTitle');
+      title.focus({ focusVisible: true });
+      const css = getComputedStyle(title);
+      return {
+        visible: !screen.classList.contains('hidden'),
+        active: document.activeElement?.id,
+        labelledBy: screen.getAttribute('aria-labelledby'),
+        describedBy: screen.getAttribute('aria-describedby'),
+        titleTabIndex: title.tabIndex,
+        headings: [...screen.querySelectorAll('h1, h2')].map(node => node.textContent.trim()),
+        checkpointText: document.querySelector('.refuge-checkpoints').textContent.trim(),
+        contractText: document.querySelector('#refugeContractsList').textContent.trim(),
+        status: {
+          role: document.getElementById('refugeContractsStatus').getAttribute('role'),
+          live: document.getElementById('refugeContractsStatus').getAttribute('aria-live'),
+          atomic: document.getElementById('refugeContractsStatus').getAttribute('aria-atomic'),
+        },
+        focus: { outline: css.outlineStyle, width: parseFloat(css.outlineWidth), shadow: css.boxShadow },
+      };
+    });
+    await refuge.keyboard.press('Tab');
+    const firstTab = await refuge.evaluate(() => ({
+      id: document.activeElement?.id,
+      contractId: document.activeElement?.dataset?.contractId,
+    }));
+    await refuge.keyboard.press('Tab');
+    const secondTab = await refuge.evaluate(() => document.activeElement?.id);
+    await refuge.keyboard.press('Escape');
+    const escaped = await refuge.evaluate(() => ({
+      refugeHidden: document.getElementById('refuge').classList.contains('hidden'),
+      menuVisible: !document.getElementById('menu').classList.contains('hidden'),
+      active: document.activeElement?.id,
+    }));
+    await refuge.keyboard.press('Enter');
+    await refuge.click('#btnLeaveRefuge');
+    const returned = await refuge.evaluate(() => ({
+      refugeHidden: document.getElementById('refuge').classList.contains('hidden'),
+      active: document.activeElement?.id,
+    }));
+    const hasVisibleFocus = !((opened.focus.outline === 'none' || opened.focus.width < 1) && opened.focus.shadow === 'none');
+    const textNotOnlyColor =
+      opened.checkpointText.includes('Maior checkpoint pessoal') &&
+      opened.checkpointText.includes('Próxima run') &&
+      opened.contractText.includes('Concluído') &&
+      opened.contractText.includes('Recompensa:') &&
+      opened.contractText.includes('Resgatar recompensa');
+    if (
+      !opened.visible ||
+      opened.active !== 'refugeTitle' ||
+      opened.labelledBy !== 'refugeTitle' ||
+      opened.describedBy !== 'refugeSubtitle' ||
+      opened.titleTabIndex !== -1 ||
+      !opened.headings.includes('Checkpoints') ||
+      !opened.headings.includes('Bestiário') ||
+      !opened.headings.includes('Contratos diários') ||
+      opened.status.role !== 'status' || opened.status.live !== 'polite' || opened.status.atomic !== 'true' ||
+      !hasVisibleFocus ||
+      firstTab.contractId !== first.id ||
+      secondTab !== 'btnLeaveRefuge' ||
+      !escaped.refugeHidden || !escaped.menuVisible || escaped.active !== 'btnRefugeMenu' ||
+      !returned.refugeHidden || returned.active !== 'btnRefugeMenu' ||
+      !textNotOnlyColor
+    ) {
+      errors.push(`REFÚGIO: teclado ou acessibilidade fora do contrato — ${JSON.stringify({ opened, firstTab, secondTab, escaped, returned, textNotOnlyColor })}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: teclado gerou erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir teclado e acessibilidade — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirAcessibilidadeDoRefugio();
+
+// P3D-07: a tela inicial do Refúgio inclui as dezesseis entradas ainda
+// desconhecidas e os três contratos do dia. Em 1440x900 essa composição comum
+// precisa caber inteira, sem converter o canvas fixo em scroll global nem
+// deixar painéis se atravessarem; o bestiário detalhado continua podendo rolar
+// dentro da própria tela quando houver conteúdo excepcionalmente longo.
+async function medirLayoutDesktopDoRefugio() {
+  const context = await browser.createBrowserContext();
+  const refuge = await newSmokePage(context);
+  const pageErrors = [];
+  refuge.on('pageerror', error => pageErrors.push(error.message));
+  await refuge.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  const save = {
+    v: 4,
+    voc: 'knight',
+    name: 'Cartógrafo',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 0,
+    floor: 1,
+    potions: { hp: 8, mp: 6 },
+    items: [],
+    bestiary: { kills: {} },
+    contracts: null,
+  };
+
+  try {
+    await refuge.evaluateOnNewDocument((nextSave) => {
+      localStorage.setItem('sf-save-knight', JSON.stringify(nextSave));
+    }, save);
+    await openSmokePage(refuge);
+    await refuge.click('#btnRefugeMenu');
+    await refuge.screenshot({ path: `${OUT}/29-refugio-desktop-1440x900.png` });
+    const layout = await refuge.evaluate(() => {
+      const screen = document.getElementById('refuge');
+      const box = (node) => {
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+      };
+      const blocks = [...document.querySelectorAll('#refuge > .menu-inner > *')].map(box);
+      const overlaps = [];
+      for (let a = 0; a < blocks.length; a++) {
+        for (let b = a + 1; b < blocks.length; b++) {
+          if (
+            Math.max(blocks[a].left, blocks[b].left) < Math.min(blocks[a].right, blocks[b].right) &&
+            Math.max(blocks[a].top, blocks[b].top) < Math.min(blocks[a].bottom, blocks[b].bottom)
+          ) {
+            overlaps.push([a, b]);
+          }
+        }
+      }
+      const back = box(document.getElementById('btnLeaveRefuge'));
+      return {
+        screen: { scrollHeight: screen.scrollHeight, clientHeight: screen.clientHeight },
+        document: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight },
+        viewport: { width: innerWidth, height: innerHeight },
+        blocks,
+        overlaps,
+        back,
+      };
+    });
+    const allInside = layout.blocks.every(block =>
+      block.left >= -TOL && block.right <= layout.viewport.width + TOL &&
+      block.top >= -TOL && block.bottom <= layout.viewport.height + TOL
+    );
+    const backReachable =
+      layout.back.left >= -TOL && layout.back.right <= layout.viewport.width + TOL &&
+      layout.back.top >= -TOL && layout.back.bottom <= layout.viewport.height + TOL;
+    if (
+      layout.screen.scrollHeight > layout.screen.clientHeight + TOL ||
+      layout.document.width > layout.viewport.width + TOL ||
+      layout.document.height > layout.viewport.height + TOL ||
+      !allInside || !backReachable || layout.overlaps.length
+    ) {
+      errors.push(`REFÚGIO: layout desktop não cabe sem scroll ou sobreposição — ${JSON.stringify(layout)}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: layout desktop gerou erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir layout desktop — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirLayoutDesktopDoRefugio();
+
+// P3D-08: em 390x844 o conteúdo normal do Refúgio excede uma viewport alta,
+// então a rolagem precisa ficar explicitamente na própria tela. Os dois
+// resgates e Voltar são as únicas ações dessa superfície e devem continuar
+// alcançáveis pelo centro de um alvo de toque completo, sem overflow lateral.
+async function medirLayoutMobileAltoDoRefugio() {
+  const context = await browser.createBrowserContext();
+  const refuge = await newSmokePage(context);
+  const pageErrors = [];
+  refuge.on('pageerror', error => pageErrors.push(error.message));
+  await refuge.setViewport(VIEWPORT_MOBILE);
+  const day = new Date().toISOString().slice(0, 10);
+  const contracts = generateDailyContracts(DAILY_CONTRACT_SEED, day);
+  const save = {
+    v: 4,
+    voc: 'knight',
+    name: 'Andarilha',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 0,
+    floor: 4,
+    potions: { hp: 8, mp: 6 },
+    items: [],
+    bestiary: { kills: {} },
+    contracts: { day, progress: {}, claimed: [] },
+  };
+
+  try {
+    await refuge.evaluateOnNewDocument((nextSave) => {
+      localStorage.setItem('sf-save-knight', JSON.stringify(nextSave));
+    }, save);
+    await openSmokePage(refuge);
+    await refuge.click('#btnRefugeMenu');
+    await refuge.screenshot({ path: `${OUT}/30-refugio-mobile-390x844-topo.png` });
+    const layout = await refuge.evaluate(() => {
+      const screen = document.getElementById('refuge');
+      const box = (node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+      };
+      const targets = [...document.querySelectorAll('#refugeContractsList button, #btnLeaveRefuge')];
+      const top = {
+        scrollTop: screen.scrollTop,
+        scrollHeight: screen.scrollHeight,
+        clientHeight: screen.clientHeight,
+        scrollWidth: screen.scrollWidth,
+        clientWidth: screen.clientWidth,
+        overflowX: getComputedStyle(screen).overflowX,
+        overflowY: getComputedStyle(screen).overflowY,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth,
+        targets: targets.map(box),
+      };
+      screen.scrollTop = screen.scrollHeight;
+      const bottom = {
+        scrollTop: screen.scrollTop,
+        maxScrollTop: screen.scrollHeight - screen.clientHeight,
+        back: box(document.getElementById('btnLeaveRefuge')),
+      };
+      const center = {
+        x: bottom.back.left + bottom.back.width / 2,
+        y: bottom.back.top + bottom.back.height / 2,
+      };
+      const hit = document.elementFromPoint(center.x, center.y);
+      return {
+        top,
+        bottom,
+        backHit: hit?.id ?? '',
+        viewport: { width: innerWidth, height: innerHeight },
+      };
+    });
+    await refuge.screenshot({ path: `${OUT}/31-refugio-mobile-390x844-fim.png` });
+    const targetsAreTouchable = layout.top.targets.length === contracts.length + 1 &&
+      layout.top.targets.every(target => target.width >= ALVO_MIN && target.height >= ALVO_MIN);
+    const verticalScrollIsIntentional =
+      layout.top.scrollHeight > layout.top.clientHeight + TOL &&
+      layout.top.scrollTop === 0 &&
+      layout.bottom.scrollTop >= layout.bottom.maxScrollTop - TOL &&
+      layout.top.overflowY === 'auto' && layout.top.overflowX === 'hidden';
+    const noHorizontalOverflow =
+      layout.top.scrollWidth <= layout.top.clientWidth + TOL &&
+      layout.top.documentWidth <= layout.viewport.width + TOL;
+    const backReachable =
+      layout.bottom.back.left >= -TOL && layout.bottom.back.right <= layout.viewport.width + TOL &&
+      layout.bottom.back.top >= -TOL && layout.bottom.back.bottom <= layout.viewport.height + TOL &&
+      layout.backHit === 'btnLeaveRefuge';
+    if (!targetsAreTouchable || !verticalScrollIsIntentional || !noHorizontalOverflow || !backReachable) {
+      errors.push(`REFÚGIO: layout mobile alto fora do contrato — ${JSON.stringify(layout)}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: layout mobile alto gerou erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir layout mobile alto — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirLayoutMobileAltoDoRefugio();
+
+// P3D-09: 360x640 é a viewport de toque curta do projeto. O conteúdo completo
+// não precisa caber de uma vez, mas cada ação precisa entrar por inteiro na
+// janela ao usar a rolagem da própria tela ou a navegação por foco; medir só o
+// rodapé esconderia um contrato inalcançável no meio da lista longa.
+async function medirLayoutMobileCurtoDoRefugio() {
+  const context = await browser.createBrowserContext();
+  const refuge = await newSmokePage(context);
+  const pageErrors = [];
+  refuge.on('pageerror', error => pageErrors.push(error.message));
+  await refuge.setViewport(VIEWPORT_SMALL);
+  const day = new Date().toISOString().slice(0, 10);
+  const contracts = generateDailyContracts(DAILY_CONTRACT_SEED, day);
+  const progress = Object.fromEntries(contracts.map(contract => [contract.id, contract.objective.amount]));
+  const save = {
+    v: 4,
+    voc: 'knight',
+    name: 'Viajante',
+    totalXp: 0,
+    level: 1,
+    xp: 0,
+    gold: 0,
+    floor: 4,
+    potions: { hp: 8, mp: 6 },
+    items: [],
+    bestiary: { kills: {} },
+    contracts: { day, progress, claimed: [] },
+  };
+
+  try {
+    await refuge.evaluateOnNewDocument((nextSave) => {
+      localStorage.setItem('sf-save-knight', JSON.stringify(nextSave));
+    }, save);
+    await openSmokePage(refuge);
+    await refuge.click('#btnRefugeMenu');
+    await refuge.screenshot({ path: `${OUT}/32-refugio-mobile-360x640-topo.png` });
+    const layout = await refuge.evaluate(() => {
+      const screen = document.getElementById('refuge');
+      const box = (node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          id: node.id || node.dataset.contractId || '',
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+      };
+      const targets = [...document.querySelectorAll('#refugeContractsList button, #btnLeaveRefuge')];
+      const top = {
+        scrollTop: screen.scrollTop,
+        scrollHeight: screen.scrollHeight,
+        clientHeight: screen.clientHeight,
+        scrollWidth: screen.scrollWidth,
+        clientWidth: screen.clientWidth,
+        overflowX: getComputedStyle(screen).overflowX,
+        overflowY: getComputedStyle(screen).overflowY,
+        documentWidth: document.documentElement.scrollWidth,
+      };
+      const reachable = targets.map(target => {
+        target.focus();
+        target.scrollIntoView({ block: 'center' });
+        const targetBox = box(target);
+        const center = {
+          x: targetBox.left + targetBox.width / 2,
+          y: targetBox.top + targetBox.height / 2,
+        };
+        return {
+          ...targetBox,
+          focused: document.activeElement === target,
+          hit: document.elementFromPoint(center.x, center.y)?.id ||
+            document.elementFromPoint(center.x, center.y)?.dataset.contractId || '',
+        };
+      });
+      screen.scrollTop = screen.scrollHeight;
+      const bottom = {
+        scrollTop: screen.scrollTop,
+        maxScrollTop: screen.scrollHeight - screen.clientHeight,
+        back: box(document.getElementById('btnLeaveRefuge')),
+      };
+      return {
+        top,
+        bottom,
+        reachable,
+        viewport: { width: innerWidth, height: innerHeight },
+      };
+    });
+    await refuge.screenshot({ path: `${OUT}/33-refugio-mobile-360x640-fim.png` });
+    const controlsTouchAndFocus = layout.reachable.length === contracts.length + 1 &&
+      layout.reachable.every(target =>
+        target.width >= ALVO_MIN && target.height >= ALVO_MIN && target.focused &&
+        target.left >= -TOL && target.right <= layout.viewport.width + TOL &&
+        target.top >= -TOL && target.bottom <= layout.viewport.height + TOL &&
+        target.hit === target.id
+      );
+    const intentionalScroll =
+      layout.top.scrollHeight > layout.top.clientHeight + TOL &&
+      layout.top.scrollTop === 0 &&
+      layout.top.overflowY === 'auto' && layout.top.overflowX === 'hidden' &&
+      layout.bottom.scrollTop >= layout.bottom.maxScrollTop - TOL;
+    const noHorizontalOverflow =
+      layout.top.scrollWidth <= layout.top.clientWidth + TOL &&
+      layout.top.documentWidth <= layout.viewport.width + TOL;
+    if (!controlsTouchAndFocus || !intentionalScroll || !noHorizontalOverflow) {
+      errors.push(`REFÚGIO: layout mobile curto deixou controle inalcançável — ${JSON.stringify(layout)}`);
+    }
+    if (pageErrors.length) errors.push(`REFÚGIO: layout mobile curto gerou erro de página — ${pageErrors.join(' · ')}`);
+  } catch (error) {
+    errors.push(`REFÚGIO: não consegui medir layout mobile curto — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirLayoutMobileCurtoDoRefugio();
+
+async function medirFallbackDeAudio() {
+  const context = await browser.createBrowserContext();
+  const fallback = await newSmokePage(context);
+  const pageErrors = [];
+  fallback.on('pageerror', error => pageErrors.push(error.message));
+  await fallback.setViewport({ width: 1440, height: 860, deviceScaleFactor: 1 });
+  await fallback.evaluateOnNewDocument(() => {
+    const probe = { attempts: 0, errors: 0 };
+    window.__audioFallback = probe;
+    class BrokenAudioContext {
+      constructor() {
+        probe.attempts++;
+        throw new Error('AudioContext indisponível');
+      }
+    }
+    window.AudioContext = BrokenAudioContext;
+    window.webkitAudioContext = undefined;
+    addEventListener('error', () => { probe.errors++; });
+    addEventListener('unhandledrejection', () => { probe.errors++; });
+  });
+  try {
+    await openSmokePage(fallback);
+    await fallback.click('.voc-card[data-voc="knight"]');
+    await fallback.type('#nameInput', 'Silencioso');
+    await fallback.click('#btnSolo');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const result = await fallback.evaluate(() => ({
+      ...window.__audioFallback,
+      started: window.__SF?.started === true,
+    }));
+    if (result.attempts !== 1 || result.errors !== 0 || !result.started || pageErrors.length) {
+      errors.push(`ÁUDIO: fallback não preservou a partida — ${JSON.stringify({ result, pageErrors })}`);
+    }
+  } catch (error) {
+    errors.push(`ÁUDIO: não consegui medir fallback sem Web Audio — ${error.message}`);
+  } finally {
+    await context.close();
+  }
+}
+
+await medirFallbackDeAudio();
 
 // escolhe druida e entra sozinho
 await page.click('.voc-card[data-voc="druid"]');
@@ -48,6 +1116,259 @@ await page.screenshot({ path: `${OUT}/02-menu-voc.png` });
 await page.click('#btnSolo');
 await new Promise((r) => setTimeout(r, 1500));
 await page.screenshot({ path: `${OUT}/03-game-start.png` });
+
+const audioDepoisDasInteracoes = await page.evaluate(() => ({ ...window.__audioProbe }));
+if (
+  audioAntesDoGesto.contexts !== 0 ||
+  audioAntesDoGesto.resumes !== 0 ||
+  audioDepoisDasInteracoes.layerCalls !== 1 ||
+  audioDepoisDasInteracoes.contexts !== 1 ||
+  audioDepoisDasInteracoes.resumes !== 1 ||
+  audioDepoisDasInteracoes.tracks !== 2 ||
+  audioDepoisDasInteracoes.stoppedTracks !== 0 ||
+  audioDepoisDasInteracoes.errors !== 0
+) {
+  errors.push('ÁUDIO: gesto não destravou uma única vez sem erro — '
+    + JSON.stringify({ audioAntesDoGesto, audioDepoisDasInteracoes }));
+}
+
+// P1D-10: o mesmo caminho que a pessoa usa para retornar ao menu precisa
+// encerrar a fonte atual antes de uma segunda partida criar a próxima. O botão
+// só fica visível durante a queda; dispará-lo aqui preserva o handler real sem
+// transformar a suíte em uma simulação de rede.
+await page.evaluate(() => document.getElementById('btnLeave').click());
+await new Promise((r) => setTimeout(r, 200));
+const audioDepoisDaSaida = await page.evaluate(() => ({
+  ...window.__audioProbe,
+  started: window.__SF.started,
+}));
+await page.click('#btnSolo');
+await new Promise((r) => setTimeout(r, 400));
+const audioDepoisDeRecriar = await page.evaluate(() => ({
+  ...window.__audioProbe,
+  started: window.__SF.started,
+}));
+if (
+  audioDepoisDaSaida.started !== false ||
+  audioDepoisDaSaida.tracks !== 2 ||
+  audioDepoisDaSaida.stoppedTracks !== 2 ||
+  audioDepoisDeRecriar.started !== true ||
+  audioDepoisDeRecriar.tracks !== 4 ||
+  audioDepoisDeRecriar.stoppedTracks !== 2
+) {
+  errors.push('ÁUDIO: saída e recriação deixaram a fonte de sessão inconsistente — '
+    + JSON.stringify({ audioDepoisDaSaida, audioDepoisDeRecriar }));
+}
+
+// P1D-12: a etapa só declara o contrato do DOM. O comportamento fica para as
+// próximas etapas, mas a marcação precisa nascer no jogo, fechada e navegável.
+const controlesDeAudio = await page.evaluate(() => {
+  const game = document.getElementById('game');
+  const panel = document.getElementById('audioPanel');
+  const chip = document.getElementById('audioChip');
+  const music = document.getElementById('audioMusic');
+  const sfx = document.getElementById('audioSfx');
+  const mute = document.getElementById('btnAudioMute');
+  const close = document.getElementById('btnCloseAudio');
+  return {
+    withinGame: !!game && !!panel && game.contains(panel) && game.contains(chip),
+    hidden: panel?.classList.contains('hidden'),
+    chip: chip && {
+      type: chip.type,
+      label: chip.getAttribute('aria-label'),
+      controls: chip.getAttribute('aria-controls'),
+      expanded: chip.getAttribute('aria-expanded'),
+    },
+    music: music && { type: music.type, min: music.min, max: music.max, step: music.step, value: music.value },
+    sfx: sfx && { type: sfx.type, min: sfx.min, max: sfx.max, step: sfx.step, value: sfx.value },
+    mute: mute && { text: mute.textContent, pressed: mute.getAttribute('aria-pressed') },
+    close: close?.getAttribute('aria-label'),
+    labels: ['audioMusic', 'audioSfx'].every(id => document.querySelector(`label[for="${id}"]`)),
+  };
+});
+if (
+  !controlesDeAudio.withinGame ||
+  !controlesDeAudio.hidden ||
+  controlesDeAudio.chip?.type !== 'button' ||
+  controlesDeAudio.chip?.label !== 'Abrir controles de áudio' ||
+  controlesDeAudio.chip?.controls !== 'audioPanel' ||
+  controlesDeAudio.chip?.expanded !== 'false' ||
+  JSON.stringify(controlesDeAudio.music) !== JSON.stringify({ type: 'range', min: '0', max: '1', step: '0.01', value: '0.5' }) ||
+  JSON.stringify(controlesDeAudio.sfx) !== JSON.stringify({ type: 'range', min: '0', max: '1', step: '0.01', value: '0.7' }) ||
+  controlesDeAudio.mute?.text !== 'Som ligado' ||
+  controlesDeAudio.mute?.pressed !== 'false' ||
+  controlesDeAudio.close !== 'Fechar controles de áudio' ||
+  !controlesDeAudio.labels
+) {
+  errors.push('ÁUDIO: marcação inicial dos controles inválida — ' + JSON.stringify(controlesDeAudio));
+}
+
+// P1D-14: os controles atualizam a camada já em partida, persistem cada ajuste
+// e fecham pelo mesmo estado acessível que o chip abre. O contador de fontes é
+// lido antes/depois para garantir que ganho não recria a faixa ambiente.
+const controlesAudioAtivos = await page.evaluate(() => ({ tracks: window.__audioProbe.tracks }));
+await page.click('#audioChip');
+const preferenciasAudioSalvas = await page.evaluate(() => {
+  const change = (id, value) => {
+    const input = document.getElementById(id);
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return JSON.parse(localStorage.getItem('sf-audio'));
+  };
+  const music = change('audioMusic', '0.23');
+  const sfx = change('audioSfx', '0.61');
+  document.getElementById('btnAudioMute').click();
+  const muted = JSON.parse(localStorage.getItem('sf-audio'));
+  return { music, sfx, muted };
+});
+const controlesAudioDepois = await page.evaluate(() => {
+  const panel = document.getElementById('audioPanel');
+  const chip = document.getElementById('audioChip');
+  const mute = document.getElementById('btnAudioMute');
+  return {
+    tracks: window.__audioProbe.tracks,
+    panelHidden: panel.classList.contains('hidden'),
+    expanded: chip.getAttribute('aria-expanded'),
+    music: document.getElementById('audioMusic').value,
+    sfx: document.getElementById('audioSfx').value,
+    mute: { text: mute.textContent, pressed: mute.getAttribute('aria-pressed') },
+    saved: JSON.parse(localStorage.getItem('sf-audio')),
+  };
+});
+await page.click('#btnCloseAudio');
+const controlesAudioFechados = await page.evaluate(() => ({
+  hidden: document.getElementById('audioPanel').classList.contains('hidden'),
+  expanded: document.getElementById('audioChip').getAttribute('aria-expanded'),
+}));
+if (
+  controlesAudioDepois.tracks !== controlesAudioAtivos.tracks ||
+  controlesAudioDepois.panelHidden ||
+  controlesAudioDepois.expanded !== 'true' ||
+  controlesAudioDepois.music !== '0.23' ||
+  controlesAudioDepois.sfx !== '0.61' ||
+  controlesAudioDepois.mute.text !== 'Som desligado' ||
+  controlesAudioDepois.mute.pressed !== 'true' ||
+  JSON.stringify(preferenciasAudioSalvas.music) !== JSON.stringify({ v: 1, muted: false, music: 0.23, sfx: 0.7 }) ||
+  JSON.stringify(preferenciasAudioSalvas.sfx) !== JSON.stringify({ v: 1, muted: false, music: 0.23, sfx: 0.61 }) ||
+  JSON.stringify(preferenciasAudioSalvas.muted) !== JSON.stringify({ v: 1, muted: true, music: 0.23, sfx: 0.61 }) ||
+  JSON.stringify(controlesAudioDepois.saved) !== JSON.stringify({ v: 1, muted: true, music: 0.23, sfx: 0.61 }) ||
+  !controlesAudioFechados.hidden ||
+  controlesAudioFechados.expanded !== 'false'
+) {
+  errors.push('ÁUDIO: controles não atualizaram ganhos, painel ou persistência — '
+    + JSON.stringify({ controlesAudioAtivos, preferenciasAudioSalvas, controlesAudioDepois, controlesAudioFechados }));
+}
+
+// P1D-15: M alterna o mudo pelo mesmo caminho do controle, mas campos de
+// formulário, chat e qualquer combinação de modificador mantêm a tecla livre.
+await page.keyboard.press('m');
+const atalhoMDesmutado = await page.evaluate(() => {
+  const mute = document.getElementById('btnAudioMute');
+  return {
+    text: mute.textContent,
+    pressed: mute.getAttribute('aria-pressed'),
+    saved: JSON.parse(localStorage.getItem('sf-audio')),
+  };
+});
+await page.keyboard.press('m');
+const atalhoMMutado = await page.evaluate(() => {
+  const mute = document.getElementById('btnAudioMute');
+  return {
+    text: mute.textContent,
+    pressed: mute.getAttribute('aria-pressed'),
+    saved: JSON.parse(localStorage.getItem('sf-audio')),
+  };
+});
+
+await page.click('#audioChip');
+await page.focus('#audioMusic');
+await page.keyboard.press('m');
+const atalhoMNoRange = await page.evaluate(() => ({
+  active: document.activeElement?.id,
+  pressed: document.getElementById('btnAudioMute').getAttribute('aria-pressed'),
+  saved: JSON.parse(localStorage.getItem('sf-audio')),
+}));
+
+await page.click('#btnCloseAudio');
+await page.click('#canvas');
+await page.keyboard.press('Enter');
+await page.keyboard.press('m');
+const atalhoMNoChat = await page.evaluate(() => ({
+  chatting: window.__SF.chatting,
+  value: document.getElementById('chatInput')?.value,
+  pressed: document.getElementById('btnAudioMute').getAttribute('aria-pressed'),
+  saved: JSON.parse(localStorage.getItem('sf-audio')),
+}));
+await page.keyboard.press('Escape');
+const chatFechadoPeloEscape = await page.evaluate(() => window.__SF.chatting);
+
+await page.click('#canvas');
+for (const modifier of ['Control', 'Alt', 'Meta', 'Shift']) {
+  await page.keyboard.down(modifier);
+  await page.keyboard.press('m');
+  await page.keyboard.up(modifier);
+}
+const atalhoMComModificadores = await page.evaluate(() => ({
+  pressed: document.getElementById('btnAudioMute').getAttribute('aria-pressed'),
+  saved: JSON.parse(localStorage.getItem('sf-audio')),
+}));
+const audioMudoSalvo = { v: 1, muted: true, music: 0.23, sfx: 0.61 };
+if (
+  atalhoMDesmutado.text !== 'Som ligado' ||
+  atalhoMDesmutado.pressed !== 'false' ||
+  JSON.stringify(atalhoMDesmutado.saved) !== JSON.stringify({ ...audioMudoSalvo, muted: false }) ||
+  atalhoMMutado.text !== 'Som desligado' ||
+  atalhoMMutado.pressed !== 'true' ||
+  JSON.stringify(atalhoMMutado.saved) !== JSON.stringify(audioMudoSalvo) ||
+  atalhoMNoRange.active !== 'audioMusic' ||
+  atalhoMNoRange.pressed !== 'true' ||
+  JSON.stringify(atalhoMNoRange.saved) !== JSON.stringify(audioMudoSalvo) ||
+  !atalhoMNoChat.chatting ||
+  atalhoMNoChat.value !== 'm' ||
+  atalhoMNoChat.pressed !== 'true' ||
+  JSON.stringify(atalhoMNoChat.saved) !== JSON.stringify(audioMudoSalvo) ||
+  chatFechadoPeloEscape ||
+  atalhoMComModificadores.pressed !== 'true' ||
+  JSON.stringify(atalhoMComModificadores.saved) !== JSON.stringify(audioMudoSalvo)
+) {
+  errors.push('ÁUDIO: atalho M não respeitou mudo, foco editável ou modificadores — '
+    + JSON.stringify({
+      atalhoMDesmutado,
+      atalhoMMutado,
+      atalhoMNoRange,
+      atalhoMNoChat,
+      chatFechadoPeloEscape,
+      atalhoMComModificadores,
+  }));
+}
+
+await medirIndicadorConexao(page, '1440x860');
+
+// P1D-11: o simulador já usa `pendingEvents` como fronteira entre o estado puro
+// e a composição. Injetar o lote ali mantém o caminho real hostTick →
+// applyEvent → áudio, inclusive os retornos precoces que não têm FX na tela.
+async function entregarEventoDeAudio(ev, minTracks) {
+  await page.evaluate((evento) => window.__SF.G.pendingEvents.push(evento), ev);
+  await page.waitForFunction((minimo) => window.__audioProbe.tracks >= minimo, { timeout: 5000 }, minTracks);
+}
+
+const baseAudioEventos = await page.evaluate(() => ({ ...window.__audioProbe }));
+try {
+  await entregarEventoDeAudio({ t: 'bossEngage', hardcore: 1, boss: 1 }, baseAudioEventos.tracks + 2);
+  await entregarEventoDeAudio({ t: 'fx', k: 'death', boss: 1, x: 0, y: 0, c: '#fff' }, baseAudioEventos.tracks + 4);
+  await entregarEventoDeAudio({ t: 'bossEngage', hardcore: 1, boss: 1 }, baseAudioEventos.tracks + 6);
+  await page.evaluate(() => { window.__SF.G.pendingFloor = true; });
+  await page.waitForFunction((minimo) => window.__audioProbe.tracks >= minimo, { timeout: 5000 }, baseAudioEventos.tracks + 8);
+  await entregarEventoDeAudio({ t: 'bossEngage', hardcore: 1, boss: 1 }, baseAudioEventos.tracks + 10);
+  await entregarEventoDeAudio({ t: 'bossDisengage', hardcore: 1, boss: 1 }, baseAudioEventos.tracks + 12);
+  const audioDepoisDosEventos = await page.evaluate(() => ({ ...window.__audioProbe }));
+  if (audioDepoisDosEventos.stoppedTracks < baseAudioEventos.stoppedTracks + 12) {
+    errors.push('ÁUDIO: luta não retornou à ambiente pelos quatro fins — '
+      + JSON.stringify({ baseAudioEventos, audioDepoisDosEventos }));
+  }
+} catch (error) {
+  errors.push(`ÁUDIO: não consegui atravessar os eventos de luta pela composição — ${error.message}`);
+}
 
 // anda um pouco e ataca
 for (const key of ['KeyD', 'KeyS']) {
@@ -159,9 +1480,128 @@ const fps = await page.evaluate(() => new Promise((res) => {
 // Gutter de painel praticado em styles.css:161 e styles.css:372; a altura útil
 // de UI-04 é innerHeight menos ele duas vezes.
 const GUTTER = 12;
-// Tolerância de subpixel: getBoundingClientRect devolve fração e o painel é
-// centrado por translate(-50%, -50%), então o topo de 12 vira 11,7 sem defeito.
-const TOL = 0.5;
+
+// P2-05 roda as mesmas transições puras que a composição usa, mas entrega cada
+// mudança ao renderizador do HUD real. Assim não forja mensagem PeerJS nem cria
+// uma porta de depuração de produção só para o browser medir o DOM acessível.
+async function medirIndicadorConexao(page, ctx) {
+  const m = await page.evaluate(async () => {
+    const [connection, ui, balance] = await Promise.all([
+      import(new URL('js/connection.js', location.href).href),
+      import(new URL('js/ui.js', location.href).href),
+      import(new URL('js/balance.js', location.href).href),
+    ]);
+    const indicator = document.getElementById('connectionIndicator');
+    const ler = (state) => ({
+      state: { ...state },
+      className: indicator.className,
+      title: document.getElementById('connectionState').textContent,
+      text: document.getElementById('connectionText').textContent,
+      latency: document.getElementById('connectionLatency').textContent,
+      latencyHidden: document.getElementById('connectionLatency').classList.contains('hidden'),
+      icon: indicator.querySelector('.connection-indicator-icon').textContent,
+      ariaLabel: indicator.getAttribute('aria-label'),
+      role: indicator.getAttribute('role'),
+      live: indicator.getAttribute('aria-live'),
+      atomic: indicator.getAttribute('aria-atomic'),
+      iconHidden: indicator.querySelector('.connection-indicator-icon').getAttribute('aria-hidden'),
+    });
+    const signal = (state, type, latencyMs) => connection.applyConnectionSignal(
+      state,
+      latencyMs == null ? { type } : { type, latencyMs },
+      ui.renderConnectionIndicator
+    );
+
+    let state = connection.createConnectionState();
+    ui.renderConnectionIndicator(state);
+    const connecting = ler(state);
+
+    state = signal(state, connection.ConnectionSignal.OPENING);
+    state = signal(state, connection.ConnectionSignal.OPEN);
+    state = signal(state, connection.ConnectionSignal.ACK, 47.6);
+    const stable = ler(state);
+
+    for (let i = 0; i < balance.CONNECTION_UNSTABLE_ACK_WINDOW - 1; i++) {
+      state = signal(state, connection.ConnectionSignal.ACK, balance.CONNECTION_UNSTABLE_RTT_MS);
+    }
+    const beforeUnstable = ler(state);
+    state = signal(state, connection.ConnectionSignal.ACK, balance.CONNECTION_UNSTABLE_RTT_MS);
+    const unstable = ler(state);
+    state = signal(state, connection.ConnectionSignal.ACK, balance.CONNECTION_UNSTABLE_RTT_MS - 1);
+    const unstableMiddle = ler(state);
+    state = signal(state, connection.ConnectionSignal.LOST);
+    const reconnecting = ler(state);
+
+    state = signal(state, connection.ConnectionSignal.REJOINED);
+    for (let i = 0; i < balance.CONNECTION_UNSTABLE_ACK_WINDOW; i++) {
+      state = signal(state, connection.ConnectionSignal.ACK, balance.CONNECTION_UNSTABLE_RTT_MS);
+    }
+    for (let i = 0; i < balance.CONNECTION_RECOVERY_ACK_WINDOW - 1; i++) {
+      state = signal(state, connection.ConnectionSignal.ACK, balance.CONNECTION_RECOVERY_RTT_MS);
+    }
+    const recoveryPending = ler(state);
+    state = signal(state, connection.ConnectionSignal.ACK, balance.CONNECTION_RECOVERY_RTT_MS);
+    const recovered = ler(state);
+
+    indicator.focus({ focusVisible: true });
+    const css = getComputedStyle(indicator);
+    const rect = indicator.getBoundingClientRect();
+    return {
+      connecting, stable, beforeUnstable, unstable, unstableMiddle, reconnecting, recoveryPending, recovered,
+      focus: {
+        active: document.activeElement === indicator,
+        tabIndex: indicator.tabIndex,
+        outline: css.outlineStyle,
+        outlineWidth: parseFloat(css.outlineWidth),
+        shadow: css.boxShadow,
+      },
+      rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
+      innerWidth,
+      innerHeight,
+      windows: {
+        unstable: balance.CONNECTION_UNSTABLE_ACK_WINDOW,
+        recovery: balance.CONNECTION_RECOVERY_ACK_WINDOW,
+      },
+    };
+  });
+
+  const states = [m.connecting, m.stable, m.unstable, m.reconnecting];
+  const names = states.map(({ title }) => title);
+  const semantica = states.every(({ role, live, atomic, iconHidden, ariaLabel, title, text }) =>
+    role === 'status' && live === 'polite' && atomic === 'true' && iconHidden === 'true' &&
+    ariaLabel.includes(title) && ariaLabel.includes(text)
+  );
+  const textoDistinto = new Set(names).size === 4 && new Set(states.map(({ text }) => text)).size === 4;
+  const classes = [
+    [m.connecting, 'is-connecting'],
+    [m.stable, 'is-stable'],
+    [m.unstable, 'is-unstable'],
+    [m.reconnecting, 'is-reconnecting'],
+  ].every(([view, classe]) => view.className.includes(classe));
+  const rtt =
+    m.connecting.latencyHidden && !m.connecting.latency &&
+    !m.stable.latencyHidden && m.stable.latency === '≈ 48 ms' &&
+    !m.unstable.latencyHidden && m.unstable.latency === '≈ 280 ms' &&
+    !m.reconnecting.latencyHidden && m.reconnecting.latency === '≈ 279 ms';
+  const hysteresis =
+    m.beforeUnstable.state.status === 'stable' &&
+    m.beforeUnstable.state.slowAcks === m.windows.unstable - 1 &&
+    m.unstable.state.status === 'unstable' &&
+    m.unstableMiddle.state.status === 'unstable' &&
+    m.unstableMiddle.state.healthyAcks === 0 &&
+    m.recoveryPending.state.status === 'unstable' &&
+    m.recoveryPending.state.healthyAcks === m.windows.recovery - 1 &&
+    m.recovered.state.status === 'stable' &&
+    m.recovered.state.healthyAcks === 0;
+  const foco = m.focus.active && m.focus.tabIndex === 0 &&
+    !((m.focus.outline === 'none' || m.focus.outlineWidth < 1) && m.focus.shadow === 'none');
+  const dentroDaTela = m.rect.width > 0 && m.rect.height > 0 &&
+    m.rect.left >= -TOL && m.rect.top >= -TOL &&
+    m.rect.right <= m.innerWidth + TOL && m.rect.bottom <= m.innerHeight + TOL;
+  if (!semantica || !textoDistinto || !classes || !rtt || !hysteresis || !foco || !dentroDaTela) {
+    errors.push(`CONEXÃO: ${ctx} indicador sem contrato visual/acessível — ${JSON.stringify(m)}`);
+  }
+}
 
 // As viewports moram em mobile-helpers.mjs porque tests/multipeer.mjs mede as
 // mesmas caixas. O par pequeno é contrato de RF-02a: se o módulo compartilhado
@@ -188,11 +1628,11 @@ const zonas = new Map();
 const aberturas = new Map();
 async function abrirToque(viewport) {
   const ctx = `${viewport.width}x${viewport.height}`;
-  const p = await browser.newPage();
+  const p = await newSmokePage(browser);
   await p.setViewport(viewport);
   await installHelpers(p);
   p.on('pageerror', (e) => errors.push(`PAGEERROR ${ctx}: ${e.message}`));
-  await p.goto(URL, { waitUntil: 'networkidle2' });
+  await openSmokePage(p);
   await new Promise((r) => setTimeout(r, 600));
   if (!(await p.evaluate(() => matchMedia('(pointer: coarse)').matches))) {
     errors.push(`TOQUE: ${ctx} não ativou "pointer: coarse" — a medição cairia no CSS de desktop`);
@@ -494,6 +1934,97 @@ async function medirMochila(page, ctx) {
   await new Promise((r) => setTimeout(r, 300));
 }
 
+// P1D-13: o CSS do painel é verificável antes de existir a ligação de clique
+// da P1D-14. Abrir por classe isola a geometria e deixa claro que não estamos
+// testando persistência, mudo ou atalho nesta etapa.
+async function medirAudioLayout(page, ctx, modo) {
+  const m = await page.evaluate(() => {
+    const panel = document.getElementById('audioPanel');
+    const chip = document.getElementById('audioChip');
+    const rect = (el) => {
+      if (!el || getComputedStyle(el).display === 'none') return null;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0
+        ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
+        : null;
+    };
+    const intersects = (a, b) => a && b &&
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0;
+    const originalHidden = panel.classList.contains('hidden');
+    panel.classList.remove('hidden');
+    const panelRect = rect(panel);
+    const center = panelRect && {
+      x: panelRect.left + panelRect.width / 2,
+      y: panelRect.top + panelRect.height / 2,
+    };
+    const atCenter = center && document.elementFromPoint(center.x, center.y);
+    const combat = ['#stick', '#actionBar', '#bossBar', '#portalHold']
+      .map((sel) => ({ sel, rect: rect(document.querySelector(sel)) }))
+      .filter(({ rect: box }) => box);
+    const overlaps = combat.filter(({ rect: box }) => intersects(panelRect, box)).map(({ sel }) => sel);
+    const focus = ['audioChip', 'audioMusic', 'audioSfx', 'btnAudioMute', 'btnCloseAudio'].map((id) => {
+      const el = document.getElementById(id);
+      // `focus()` programático não satisfaz :focus-visible no Chromium: isso
+      // imita clique de mouse, não navegação de teclado. A opção pede o mesmo
+      // indicador que Tab expõe sem depender da ordem global de tabulação.
+      el.focus({ focusVisible: true });
+      const cs = getComputedStyle(el);
+      return {
+        id,
+        outline: cs.outlineStyle,
+        outlineWidth: parseFloat(cs.outlineWidth),
+        shadow: cs.boxShadow,
+      };
+    });
+    const controls = ['audioMusic', 'audioSfx', 'btnAudioMute', 'btnCloseAudio'].map((id) => ({ id, rect: rect(document.getElementById(id)) }));
+    const chipStyle = getComputedStyle(chip);
+    const result = {
+      innerWidth,
+      innerHeight,
+      chip: rect(chip),
+      panel: panelRect,
+      centerInPanel: !!atCenter && panel.contains(atCenter),
+      overlaps,
+      controls,
+      focus,
+      chipStyle: { color: chipStyle.color, backgroundImage: chipStyle.backgroundImage, borderColor: chipStyle.borderColor },
+    };
+    if (originalHidden) panel.classList.add('hidden');
+    return result;
+  });
+  const box = (r) => r ? `${r.width.toFixed(1)}x${r.height.toFixed(1)} em ${r.left.toFixed(1)},${r.top.toFixed(1)}` : 'ausente';
+  if (!m.chip || !m.panel) {
+    errors.push(`ÁUDIO: ${ctx} não conseguiu medir ${!m.chip ? '#audioChip' : '#audioPanel'}`);
+    return;
+  }
+  if (m.panel.left < -TOL || m.panel.top < GUTTER - TOL || m.panel.right > m.innerWidth + TOL || m.panel.bottom > m.innerHeight - GUTTER + TOL) {
+    errors.push(`ÁUDIO: ${ctx} #audioPanel sai da viewport útil — ${box(m.panel)} em ${m.innerWidth}x${m.innerHeight}`);
+  }
+  if (!m.centerInPanel || m.overlaps.length) {
+    errors.push(`ÁUDIO: ${ctx} #audioPanel cobre o combate — ${JSON.stringify({ centerInPanel: m.centerInPanel, overlaps: m.overlaps })}`);
+  }
+  if (m.chipStyle.color === 'rgba(0, 0, 0, 0)' || m.chipStyle.backgroundImage === 'none' || m.chipStyle.borderColor === 'rgba(0, 0, 0, 0)') {
+    errors.push(`ÁUDIO: ${ctx} #audioChip perdeu contraste próprio — ${JSON.stringify(m.chipStyle)}`);
+  }
+  const semFoco = m.focus.filter(({ outline, outlineWidth, shadow }) =>
+    (outline === 'none' || outlineWidth < 1) && shadow === 'none');
+  if (semFoco.length) {
+    errors.push(`ÁUDIO: ${ctx} ${semFoco.map(({ id }) => '#' + id).join(', ')} não tem foco visível`);
+  }
+  if (modo === 'toque') {
+    const pequenos = [{ id: 'audioChip', rect: m.chip }, ...m.controls]
+      .filter(({ rect }) => !rect || rect.width < ALVO_MIN || rect.height < ALVO_MIN)
+      .map(({ id, rect }) => `${id} ${box(rect)}`);
+    if (pequenos.length) {
+      errors.push(`TOQUE: ${ctx} controles de áudio abaixo de ${ALVO_MIN}x${ALVO_MIN} — ${pequenos.join(' · ')}`);
+    }
+  }
+  await page.evaluate(() => document.getElementById('audioPanel').classList.remove('hidden'));
+  await page.screenshot({ path: `${OUT}/13-audio-${ctx}.png` });
+  await page.evaluate(() => document.getElementById('audioPanel').classList.add('hidden'));
+}
+
 // UI-01 AC 2 e UI-02: o slot é 48x48 em qualquer largura de toque e a barra
 // derivada tem 102px; nenhum par de slots se sobrepõe.
 async function medirBarra(page, ctx) {
@@ -718,11 +2249,11 @@ async function medirAbertura(page, ctx, modo) {
 // UI-04 AC 4 saírem da mesma execução dos casos de toque, sem novo boot.
 async function abrirMouse() {
   const ctx = `${VIEWPORT_DESKTOP.width}x${VIEWPORT_DESKTOP.height}`;
-  const p = await browser.newPage();
+  const p = await newSmokePage(browser);
   await p.setViewport(VIEWPORT_DESKTOP);
   await installHelpers(p);
   p.on('pageerror', (e) => errors.push(`PAGEERROR ${ctx}: ${e.message}`));
-  await p.goto(URL, { waitUntil: 'networkidle2' });
+  await openSmokePage(p);
   await new Promise((r) => setTimeout(r, 600));
   if (await p.evaluate(() => matchMedia('(pointer: coarse)').matches)) {
     errors.push(`ABERTURA: ${ctx} ativou "pointer: coarse" — a passagem de mouse mediria o CSS de toque`);
@@ -1299,11 +2830,13 @@ async function medirLog(page, ctx, modo = 'toque') {
 for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
   const ctx = `${viewport.width}x${viewport.height}`;
   const mob = await abrirToque(viewport);
+  await medirIndicadorConexao(mob, ctx);
   // Antes de qualquer caso que empurre linha no #log: a âncora de RF-02 é a
   // primeira linha da partida e o teto de CHAT_LOG_LINES roda o resto para fora.
   await medirAbertura(mob, ctx, 'toque');
   await medirTeclas(mob, ctx, 'toque');
   await medirToque(mob, ctx);
+  await medirAudioLayout(mob, ctx, 'toque');
   // Cedo na partida de propósito: o paladino solo sobrevive tranquilo aos
   // primeiros segundos, e updatePickup() ignora jogador morto.
   await encherMochila(mob, ctx);
@@ -1335,13 +2868,46 @@ for (const viewport of [VIEWPORT_MOBILE, VIEWPORT_SMALL]) {
 // alvos de toque: viewport própria, aba própria, mesma execução.
 const CTX_MOUSE = `${VIEWPORT_DESKTOP.width}x${VIEWPORT_DESKTOP.height}`;
 const mouse = await abrirMouse();
+await medirIndicadorConexao(mouse, CTX_MOUSE);
 await medirAbertura(mouse, CTX_MOUSE, 'mouse');
 await medirTeclas(mouse, CTX_MOUSE, 'mouse');
 await medirBarraMouse(mouse, CTX_MOUSE);
+// P1D-13: a abertura por chip ainda pertence à próxima etapa; aqui o browser
+// revela o painel diretamente para medir apenas a superfície que o CSS entrega.
+await mouse.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+await medirAudioLayout(mouse, '1440x900', 'mouse');
 // UI-04 AC 4: no mouse o #log continua em min(340px, 42vw) por 26vh — a mesma
 // régua de contenção, contra o teto do CSS de desktop, que esta feature não toca.
 await medirLog(mouse, CTX_MOUSE, 'mouse');
 await mouse.close();
+
+// P1D-14: a página nova monta a camada com a preferência salva e espelha esse
+// estado antes de o jogo começar; não é necessário entrar em outra sessão para
+// provar a restauração dos controles.
+await page.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+await new Promise((r) => setTimeout(r, 300));
+const controlesAudioRestaurados = await page.evaluate(() => {
+  const panel = document.getElementById('audioPanel');
+  const mute = document.getElementById('btnAudioMute');
+  return {
+    hidden: panel.classList.contains('hidden'),
+    expanded: document.getElementById('audioChip').getAttribute('aria-expanded'),
+    music: document.getElementById('audioMusic').value,
+    sfx: document.getElementById('audioSfx').value,
+    mute: { text: mute.textContent, pressed: mute.getAttribute('aria-pressed') },
+  };
+});
+if (
+  !controlesAudioRestaurados.hidden ||
+  controlesAudioRestaurados.expanded !== 'false' ||
+  controlesAudioRestaurados.music !== '0.23' ||
+  controlesAudioRestaurados.sfx !== '0.61' ||
+  controlesAudioRestaurados.mute.text !== 'Som desligado' ||
+  controlesAudioRestaurados.mute.pressed !== 'true'
+) {
+  errors.push('ÁUDIO: reload não restaurou o estado persistido nos controles — '
+    + JSON.stringify(controlesAudioRestaurados));
+}
 
 // RF-02 AC 2: a comparação é de igualdade estrita entre as duas linhas medidas
 // nesta mesma execução. Hoje as duas são a mesma string de teclado.

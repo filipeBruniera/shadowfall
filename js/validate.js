@@ -7,13 +7,15 @@ import { RARITY, AFFIXES, EQUIP_SLOTS, ITEM_BASES } from './data.js';
 import { INV_SIZE, POTION_STACK } from './balance.js';
 import { normalizeSave, totalXpFor, levelFromTotalXp } from './save.js';
 
-const AFFIX_BY_ID = Object.fromEntries(AFFIXES.map((a) => [a.id, a]));
-const BASE_BY_ID = Object.fromEntries(ITEM_BASES.map((b) => [b.id, b]));
+const AFFIX_BY_ID = Object.fromEntries(AFFIXES.map(a => [a.id, a]));
+const BASE_BY_ID = Object.fromEntries(ITEM_BASES.map(b => [b.id, b]));
 
 // Teto de nível de item pelo andar alcançado. O chefe dropa com +4 sobre o
 // nível do monstro, então a folga cobre o caso legítimo mais generoso.
 export const ILVL_SLACK = 6;
-export function maxItemLevel(floor) { return Math.max(1, Math.floor(floor) || 1) + ILVL_SLACK; }
+export function maxItemLevel(floor) {
+  return Math.max(1, Math.floor(floor) || 1) + ILVL_SLACK;
+}
 
 // Teto de XP acumulado pelo andar: o que dá para juntar limpando andares com
 // folga larga. Existe para que editar o save não vire nível 400 instantâneo.
@@ -40,7 +42,12 @@ function rescale(item) {
     mp: base.mp ? Math.round(base.mp * scale) : 0,
     speed: base.speed ? +(base.speed * Math.min(1.6, R.mult)).toFixed(2) : 0,
     atkSpeed: base.atkSpeed || 0,
-    crit: 0, leech: 0,
+    crit: 0,
+    leech: 0,
+    cooldown: 0,
+    elemental: 0,
+    statusPower: 0,
+    area: 0,
   };
   // Afixos entram por cima da base, dentro da faixa do próprio tipo.
   for (const a of out.affixes) {
@@ -58,10 +65,15 @@ function rescale(item) {
 
 // Recebe o save cru vindo do convidado e devolve { save, report }.
 // Idempotente: aplicar sobre um save já saneado não muda mais nada.
-export function validateSave(raw, { floor = 1 } = {}) {
+export function validateSave(raw) {
   const report = {
-    levelAdjusted: false, xpCapped: false, itemsDowngraded: 0,
-    itemsDropped: 0, affixesDropped: 0, movedToBag: 0, clamped: [],
+    levelAdjusted: false,
+    xpCapped: false,
+    itemsDowngraded: 0,
+    itemsDropped: 0,
+    affixesDropped: 0,
+    movedToBag: 0,
+    clamped: [],
   };
 
   // normalizeSave já resolve integridade referencial, capacidade e tipos.
@@ -75,13 +87,20 @@ export function validateSave(raw, { floor = 1 } = {}) {
     const base = BASE_BY_ID[r?.base];
     if (r?.loc === 'equipped' && base && r.slot && r.slot !== base.slot) report.movedToBag++;
   }
-  const kept = save.inv.filter(Boolean).length + EQUIP_SLOTS.filter((s) => save.equip[s]).length;
+  const kept = save.inv.filter(Boolean).length + EQUIP_SLOTS.filter(s => save.equip[s]).length;
   report.itemsDropped = Math.max(0, rawItems - kept);
 
   // ---------- Progressão ----------
-  const capXp = maxTotalXp(save.floor > floor ? floor : save.floor);
+  // Integridade é conferida contra o maior andar declarado no próprio save.
+  // O checkpoint da sala não representa a história do personagem e usá-lo
+  // aqui destruía XP e equipamento legítimos ao entrar numa run no andar 1.
+  const capXp = maxTotalXp(save.floor);
   let total = Math.max(0, finite(save.totalXp, 0));
-  if (total > capXp) { total = capXp; report.xpCapped = true; report.clamped.push('totalXp'); }
+  if (total > capXp) {
+    total = capXp;
+    report.xpCapped = true;
+    report.clamped.push('totalXp');
+  }
   const lv = levelFromTotalXp(total);
   report.levelAdjusted = lv.level !== finite(raw?.level, lv.level);
   save.totalXp = total;
@@ -97,19 +116,20 @@ export function validateSave(raw, { floor = 1 } = {}) {
     if (v !== save.potions[k]) report.clamped.push('potions.' + k);
     save.potions[k] = v;
   }
-  save.floor = clamp(Math.floor(finite(save.floor, 1)), 1, Math.max(1, Math.floor(floor) || 1));
+  save.floor = Math.max(1, Math.floor(finite(save.floor, 1)));
 
   // ---------- Itens ----------
-  const ceiling = maxItemLevel(floor);
-  const fix = (it) => {
+  const ceiling = maxItemLevel(save.floor);
+  const fix = it => {
     if (!it) return it;
+    const ilvl = clamp(Math.floor(finite(it.ilvl, 1)), 1, ceiling);
     let out = it;
     if (it.ilvl > ceiling) {
       // Rebaixa em vez de descartar: progresso legítimo não some por causa do teto.
-      out = rescale({ ...it, ilvl: ceiling, affixes: it.affixes.map((a) => ({ ...a })) });
+      out = rescale({ ...it, ilvl, affixes: it.affixes.map(a => ({ ...a })) });
       report.itemsDowngraded++;
     } else {
-      out = rescale({ ...it, affixes: it.affixes.map((a) => ({ ...a })) });
+      out = rescale({ ...it, ilvl, affixes: it.affixes.map(a => ({ ...a })) });
     }
     return out;
   };
@@ -119,14 +139,22 @@ export function validateSave(raw, { floor = 1 } = {}) {
     const it = save.equip[slot];
     if (!it) continue;
     // Slot que não bate com a base vai para a mochila, não fica equipado.
-    if (it.slot !== slot) { save.equip[slot] = null; overflow.push(fix(it)); report.movedToBag++; continue; }
+    if (it.slot !== slot) {
+      save.equip[slot] = null;
+      overflow.push(fix(it));
+      report.movedToBag++;
+      continue;
+    }
     save.equip[slot] = fix(it);
   }
   for (let i = 0; i < save.inv.length; i++) if (save.inv[i]) save.inv[i] = fix(save.inv[i]);
 
   for (const it of overflow) {
     const free = save.inv.indexOf(null);
-    if (free === -1) { report.itemsDropped++; continue; }
+    if (free === -1) {
+      report.itemsDropped++;
+      continue;
+    }
     save.inv[free] = it;
   }
   if (save.inv.length > INV_SIZE) save.inv.length = INV_SIZE;

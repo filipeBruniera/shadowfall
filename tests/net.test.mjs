@@ -1,37 +1,75 @@
 // Testes de rede que rodam sem navegador: fila de ações e idempotência do host.
+import { readFile } from 'node:fs/promises';
 import { ActionQueue } from '../js/actqueue.js';
 import { ACT_QUEUE_MAX } from '../js/balance.js';
 import { createGame, addPlayer, setInput, step, TICK } from '../js/sim.js';
-import { applySnapshot, buildSnapshot, drainEvents, isCriticalEvent, Net, NetMode } from '../js/net.js';
-import { MAX_PLAYERS, AOI_RADIUS, NET_EVENT_CAP, HARDCORE_EVERY, floorPopulation } from '../js/balance.js';
+import {
+  applySnapshot,
+  buildSnapshot,
+  drainEvents,
+  isCriticalEvent,
+  Net,
+  NetMode,
+} from '../js/net.js';
+import {
+  MAX_PLAYERS,
+  AOI_RADIUS,
+  NET_EVENT_CAP,
+  SNAPSHOT_BUDGET_BYTES,
+  HARDCORE_EVERY,
+  floorPopulation,
+} from '../js/balance.js';
 
 let failures = 0;
 function check(label, cond, extra = '') {
   if (cond) console.log(`  ok  ${label}`);
-  else { console.log(`  FAIL ${label} ${extra}`); failures++; }
+  else {
+    console.log(`  FAIL ${label} ${extra}`);
+    failures++;
+  }
 }
 
 console.log('\n== fila de ações ==');
 {
   const q = new ActionQueue();
   for (let i = 0; i < 30; i++) q.push({ k: 'cast', slot: 'Q' });
-  check('ações: fila com 30 pendentes não perde nenhuma', q.size === 30 && q.toSend().length === 30, `size ${q.size}`);
-  check('ações: ids são incrementais e únicos',
-    new Set(q.toSend().map((a) => a.id)).size === 30 && q.toSend()[0].id === 1);
+  check(
+    'ações: fila com 30 pendentes não perde nenhuma',
+    q.size === 30 && q.toSend().length === 30,
+    `size ${q.size}`
+  );
+  check(
+    'ações: ids são incrementais e únicos',
+    new Set(q.toSend().map(a => a.id)).size === 30 && q.toSend()[0].id === 1
+  );
 
   q.confirm(10);
-  check('ações: confirmação limpa só o que o host processou',
-    q.size === 20 && q.toSend()[0].id === 11, `size ${q.size}`);
+  check(
+    'ações: confirmação limpa só o que o host processou',
+    q.size === 20 && q.toSend()[0].id === 11,
+    `size ${q.size}`
+  );
 
   q.clear();
   check('ações: troca de andar zera a fila', q.size === 0);
 }
 {
   let dropped = 0;
-  const q = new ActionQueue({ onDrop: (lost) => { dropped += lost; } });
+  const q = new ActionQueue({
+    onDrop: lost => {
+      dropped += lost;
+    },
+  });
   for (let i = 0; i < ACT_QUEUE_MAX + 5; i++) q.push({ k: 'cast' });
-  check('ações: estouro do teto é sinalizado, nunca silencioso', dropped === 5 && q.size === ACT_QUEUE_MAX, `dropped ${dropped}`);
-  check('ações: o teto descarta as mais antigas, mantendo as recentes', q.toSend()[q.size - 1].id === ACT_QUEUE_MAX + 5);
+  check(
+    'ações: estouro do teto é sinalizado, nunca silencioso',
+    dropped === 5 && q.size === ACT_QUEUE_MAX,
+    `dropped ${dropped}`
+  );
+  check(
+    'ações: o teto descarta as mais antigas, mantendo as recentes',
+    q.toSend()[q.size - 1].id === ACT_QUEUE_MAX + 5
+  );
 }
 
 console.log('\n== idempotência no host ==');
@@ -46,17 +84,29 @@ console.log('\n== idempotência no host ==');
   setInput(G, 'a', { mx: 0, my: 0, acts: [act] });
   setInput(G, 'a', { mx: 0, my: 0, acts: [act] });
   step(G, TICK);
-  check('ações: reenvio do mesmo id não executa duas vezes', p.potions.hp === before - 1, `gastou ${before - p.potions.hp}`);
+  check(
+    'ações: reenvio do mesmo id não executa duas vezes',
+    p.potions.hp === before - 1,
+    `gastou ${before - p.potions.hp}`
+  );
 
   // Reenvio depois de já confirmado.
   setInput(G, 'a', { mx: 0, my: 0, acts: [act] });
   step(G, TICK);
-  check('ações: reenvio de id já processado é ignorado', p.potions.hp === before - 1, `gastou ${before - p.potions.hp}`);
+  check(
+    'ações: reenvio de id já processado é ignorado',
+    p.potions.hp === before - 1,
+    `gastou ${before - p.potions.hp}`
+  );
 
   p.hp = 10;
   setInput(G, 'a', { mx: 0, my: 0, acts: [{ id: 2, k: 'pot', slot: 'hp' }] });
   step(G, TICK);
-  check('ações: id novo continua sendo executado', p.potions.hp === before - 2, `gastou ${before - p.potions.hp}`);
+  check(
+    'ações: id novo continua sendo executado',
+    p.potions.hp === before - 2,
+    `gastou ${before - p.potions.hp}`
+  );
 }
 
 console.log('\n== topologia estrela ==');
@@ -76,8 +126,10 @@ console.log('\n== topologia estrela ==');
   h.conns.set('p1', c1);
   check('topologia: host aceita peer que registrou', h.acceptFrom(c1));
   check('topologia: host descarta peer que não registrou', !h.acceptFrom({ peer: 'p1' }));
-  check('topologia: nenhum convidado abre conexão com outro convidado',
-    typeof n.conns.size === 'number' && n.conns.size === 0);
+  check(
+    'topologia: nenhum convidado abre conexão com outro convidado',
+    typeof n.conns.size === 'number' && n.conns.size === 0
+  );
 }
 
 console.log('\n== mochila remota ==');
@@ -87,7 +139,9 @@ console.log('\n== mochila remota ==');
   const { rollItem } = await import('../js/sim.js');
   // Item garantidamente equipável pela vocação: o assunto aqui é duplicação, não restrição.
   const item = rollItem(G, 3);
-  item.baseId = 'sword'; item.slot = 'weapon'; item.forVoc = null;
+  item.baseId = 'sword';
+  item.slot = 'weapon';
+  item.forVoc = null;
   p.inv[0] = item;
   const antesVer = p.invVer;
 
@@ -99,21 +153,32 @@ console.log('\n== mochila remota ==');
 
   const naMochila = p.inv.filter(Boolean).length;
   const equipados = Object.values(p.equip).filter(Boolean).length;
-  check('mochila remota: ação perdida e reenviada não duplica o item',
-    equipados === 1 && naMochila === 0, `equip ${equipados}, mochila ${naMochila}`);
+  check(
+    'mochila remota: ação perdida e reenviada não duplica o item',
+    equipados === 1 && naMochila === 0,
+    `equip ${equipados}, mochila ${naMochila}`
+  );
   check('mochila remota: a versão do inventário sobe quando o estado muda', p.invVer > antesVer);
 
   // O convidado só enxerga o que o host confirmou.
   const guestView = { inv: null, equip: null };
-  const applyInv = (msg) => { guestView.inv = msg.inv; guestView.equip = msg.equip; };
+  const applyInv = msg => {
+    guestView.inv = msg.inv;
+    guestView.equip = msg.equip;
+  };
   applyInv({ inv: p.inv, equip: p.equip, potions: p.potions });
-  check('mochila remota: visão do convidado converge para o estado do host',
-    guestView.equip.weapon === p.equip.weapon && guestView.inv.filter(Boolean).length === 0);
+  check(
+    'mochila remota: visão do convidado converge para o estado do host',
+    guestView.equip.weapon === p.equip.weapon && guestView.inv.filter(Boolean).length === 0
+  );
 
   const verAntes = p.invVer;
   setInput(G, 'g1', { mx: 0, my: 0, acts: [act] });
   step(G, TICK);
-  check('mochila remota: reenvio já confirmado não gera nova versão de inventário', p.invVer === verAntes);
+  check(
+    'mochila remota: reenvio já confirmado não gera nova versão de inventário',
+    p.invVer === verAntes
+  );
 }
 
 console.log('\n== área de interesse ==');
@@ -122,20 +187,34 @@ console.log('\n== área de interesse ==');
   for (let i = 0; i < MAX_PLAYERS; i++) addPlayer(G, { id: 'p' + i, name: 'P' + i, voc: 'knight' });
   const ps = Object.values(G.players);
   // Espalha o grupo pelo mapa para simular 10 pessoas em salas diferentes.
-  ps.forEach((p, i) => { const r = G.map.rooms[i % G.map.rooms.length]; p.x = r.cx; p.y = r.cy; });
+  ps.forEach((p, i) => {
+    const r = G.map.rooms[i % G.map.rooms.length];
+    p.x = r.cx;
+    p.y = r.cy;
+  });
 
   const viewer = ps[0];
   const cut = buildSnapshot(G, { viewer, aoi: true });
   const whole = buildSnapshot(G, { viewer, aoi: false });
 
-  check('área de interesse: monstro distante não vai no snapshot daquele peer',
-    cut.M.length < whole.M.length, `${cut.M.length} de ${whole.M.length}`);
-  check('área de interesse: nada além do raio entra no pacote',
-    cut.M.every((m) => Math.abs(m.x - viewer.x) < AOI_RADIUS && Math.abs(m.y - viewer.y) < AOI_RADIUS));
-  check('área de interesse: todos os jogadores estão em todo snapshot',
-    cut.P.length === MAX_PLAYERS, `${cut.P.length} jogadores`);
-  check('área de interesse: desligar o corte devolve o comportamento antigo',
-    whole.M.length >= cut.M.length);
+  check(
+    'área de interesse: monstro distante não vai no snapshot daquele peer',
+    cut.M.length < whole.M.length,
+    `${cut.M.length} de ${whole.M.length}`
+  );
+  check(
+    'área de interesse: nada além do raio entra no pacote',
+    cut.M.every(m => Math.abs(m.x - viewer.x) < AOI_RADIUS && Math.abs(m.y - viewer.y) < AOI_RADIUS)
+  );
+  check(
+    'área de interesse: todos os jogadores estão em todo snapshot',
+    cut.P.length === MAX_PLAYERS,
+    `${cut.P.length} jogadores`
+  );
+  check(
+    'área de interesse: desligar o corte devolve o comportamento antigo',
+    whole.M.length >= cut.M.length
+  );
 
   // Entidade que sai do raio some da visão do cliente.
   const view = { playerMap: new Map(), monsterMap: new Map() };
@@ -145,8 +224,11 @@ console.log('\n== área de interesse ==');
   viewer.x = G.map.rooms[G.map.rooms.length - 1].cx;
   viewer.y = G.map.rooms[G.map.rooms.length - 1].cy;
   applySnapshot(view, buildSnapshot(G, { viewer, aoi: true }));
-  check('área de interesse: entidade que sai da área é removida da visão',
-    view.monsterMap.size !== antes || antes === 0, `${antes} -> ${view.monsterMap.size}`);
+  check(
+    'área de interesse: entidade que sai da área é removida da visão',
+    view.monsterMap.size !== antes || antes === 0,
+    `${antes} -> ${view.monsterMap.size}`
+  );
 }
 
 console.log('\n== fila de eventos ==');
@@ -159,12 +241,18 @@ console.log('\n== fila de eventos ==');
   const out = drainEvents(q, NET_EVENT_CAP);
 
   check('eventos: a fila respeita o teto', out.length === NET_EVENT_CAP, `${out.length}`);
-  check('eventos: sob pressão, eventos críticos sobrevivem ao corte',
-    out.filter(isCriticalEvent).length === 3, `${out.filter(isCriticalEvent).length} críticos`);
+  check(
+    'eventos: sob pressão, eventos críticos sobrevivem ao corte',
+    out.filter(isCriticalEvent).length === 3,
+    `${out.filter(isCriticalEvent).length} críticos`
+  );
   check('eventos: a fila é drenada por completo', q.length === 0);
 
   const small = [{ t: 'd' }, { t: 'log' }];
-  check('eventos: abaixo do teto passa tudo, sem reordenar', drainEvents(small, NET_EVENT_CAP).length === 2);
+  check(
+    'eventos: abaixo do teto passa tudo, sem reordenar',
+    drainEvents(small, NET_EVENT_CAP).length === 2
+  );
 
   // RF-08: o nascimento do chefe HARDCORE é anúncio único do andar. Se ele cair
   // no corte da fila, o convidado nunca fica sabendo — e é justamente numa fila
@@ -175,22 +263,127 @@ console.log('\n== fila de eventos ==');
   fila.push({ t: 'log', m: 'Andar 3 — variante HARDCORE', c: 'boss', boss: 1 });
   const saida = drainEvents(fila, NET_EVENT_CAP);
 
-  check('RF-08: bossSpawn com boss: 1 é evento crítico',
-    isCriticalEvent({ t: 'bossSpawn', id: 91, typeId: 'glacier', floor: 3, hardcore: 1, boss: 1 }));
-  check('RF-08: bossSpawn sobrevive a drainEvents com 400 eventos na fila',
-    saida.filter((e) => e.t === 'bossSpawn').length === 1,
-    `${saida.filter((e) => e.t === 'bossSpawn').length} de ${saida.length} entregues`);
-  check('UI-01: a linha HARDCORE do andar sobrevive ao mesmo corte',
-    saida.some((e) => e.t === 'log' && e.m.includes('HARDCORE')));
-  check('RF-08: a saturação não reordena o crítico para fora do teto',
-    saida.length === NET_EVENT_CAP && fila.length === 0, `${saida.length}`);
+  check(
+    'RF-08: bossSpawn com boss: 1 é evento crítico',
+    isCriticalEvent({ t: 'bossSpawn', id: 91, typeId: 'glacier', floor: 3, hardcore: 1, boss: 1 })
+  );
+  check(
+    'RF-08: bossSpawn sobrevive a drainEvents com 400 eventos na fila',
+    saida.filter(e => e.t === 'bossSpawn').length === 1,
+    `${saida.filter(e => e.t === 'bossSpawn').length} de ${saida.length} entregues`
+  );
+  check(
+    'UI-01: a linha HARDCORE do andar sobrevive ao mesmo corte',
+    saida.some(e => e.t === 'log' && e.m.includes('HARDCORE'))
+  );
+  check(
+    'RF-08: a saturação não reordena o crítico para fora do teto',
+    saida.length === NET_EVENT_CAP && fila.length === 0,
+    `${saida.length}`
+  );
+
+  const luta = [
+    { t: 'bossEngage', id: 91, typeId: 'glacier', floor: 3, hardcore: 1, boss: 1 },
+    { t: 'bossDisengage', id: 91, typeId: 'glacier', floor: 3, hardcore: 1, boss: 1 },
+  ];
+  const filaLuta = Array.from({ length: NET_EVENT_CAP + 40 }, () => ({ t: 'd', v: '10' }));
+  filaLuta.push(...luta);
+  const lutaSaida = drainEvents(filaLuta, NET_EVENT_CAP);
+  check(
+    'engajamento: boss: 1 torna início e fim críticos',
+    luta.every(isCriticalEvent),
+    JSON.stringify(luta)
+  );
+  check(
+    'engajamento: início e fim sobrevivem ao corte da fila saturada',
+    luta.every(ev => lutaSaida.some(sent => sent.t === ev.t && sent.id === ev.id)),
+    JSON.stringify(lutaSaida.filter(ev => ev.t.startsWith('boss')))
+  );
+
+  const mainSource = await readFile(new URL('../js/main.js', import.meta.url), 'utf8');
+  const applyEventSource = mainSource.slice(
+    mainSource.indexOf('function applyEvent(ev) {'),
+    mainSource.indexOf(
+      '// ============================================================\n// ENTRADA'
+    )
+  );
+  const hostTickSource = mainSource.slice(
+    mainSource.indexOf('function hostTick() {'),
+    mainSource.indexOf('if (S.G.pendingFloor)')
+  );
+  const fxIndex = applyEventSource.indexOf('handleFxEvent(ev)');
+  check(
+    'engajamento: a composição encaminha início e fim ao snapshot',
+    ['bossEngage', 'bossDisengage'].every(type => hostTickSource.includes(`ev.t === '${type}'`))
+  );
+  check(
+    'engajamento: a composição consome início e fim antes da camada de FX',
+    fxIndex >= 0 &&
+      ['bossEngage', 'bossDisengage'].every(type => {
+        const index = applyEventSource.indexOf(`ev.t === '${type}'`);
+        return index >= 0 && index < fxIndex;
+      })
+  );
+}
+
+console.log('\n== contrato de bytes do engajamento ==');
+{
+  const eventos = [
+    { t: 'bossEngage', id: 91, typeId: 'glacier', floor: 6, hardcore: 1, boss: 1 },
+    { t: 'bossDisengage', id: 91, typeId: 'glacier', floor: 6, hardcore: 1, boss: 1 },
+  ];
+  const bytesPorEvento = eventos.map(ev => JSON.stringify(ev).length);
+  const bytesEventos = fila => fila.reduce((total, ev) => total + JSON.stringify(ev).length, 0);
+  check(
+    'engajamento: cada transição crítica cabe em 128 bytes',
+    bytesPorEvento.every(bytes => bytes <= 128),
+    `${bytesPorEvento.join('B / ')}B`
+  );
+
+  const semTransicao = drainEvents([], NET_EVENT_CAP);
+  check(
+    'engajamento: sem transição não acrescenta nenhum byte de evento',
+    semTransicao.length === 0 && bytesEventos(semTransicao) === 0,
+    `${bytesEventos(semTransicao)}B`
+  );
+
+  // `bossRef` é uma referência de simulação para o dano atrasado de projétil
+  // ou zona. O snapshot só pode levar campos planos para nunca tentar trafegar
+  // o grafo do chefe junto com a visão do convidado.
+  const G = createGame(4242, 6);
+  const viewer = addPlayer(G, { id: 'p1', name: 'Observador', voc: 'knight' });
+  const boss = G.monsters.find(m => m.isBoss);
+  G.projectiles.push({
+    id: 'prova-boss-ref',
+    x: boss.x,
+    y: boss.y,
+    elem: boss.elem,
+    big: true,
+    bossRef: boss,
+  });
+  const snapshot = buildSnapshot(G, { viewer, aoi: false });
+  const snapshotJson = JSON.stringify(snapshot);
+  check(
+    'engajamento: snapshot não serializa bossRef da simulação',
+    !snapshotJson.includes('bossRef'),
+    snapshotJson
+  );
+
+  const bytesTotais = snapshotJson.length + bytesEventos(eventos);
+  console.log(`      snapshot + duas transições: ${bytesTotais}B`);
+  check(
+    'engajamento: snapshot e duas transições respeitam o teto total de 60.000 bytes',
+    bytesTotais <= SNAPSHOT_BUDGET_BYTES,
+    `${bytesTotais}B`
+  );
 }
 
 console.log('\n== custo do host com a sala cheia ==');
 {
   const G = createGame(4242, 6);
   G.groupSize = MAX_PLAYERS;
-  for (let i = 0; i < MAX_PLAYERS; i++) addPlayer(G, { id: 'p' + i, name: 'P' + i, voc: 'sorcerer' });
+  for (let i = 0; i < MAX_PLAYERS; i++)
+    addPlayer(G, { id: 'p' + i, name: 'P' + i, voc: 'sorcerer' });
 
   const t0 = performance.now();
   for (let t = 0; t < 900; t++) {
@@ -198,68 +391,112 @@ console.log('\n== custo do host com a sala cheia ==');
     step(G, TICK);
   }
   const perTick = (performance.now() - t0) / 900;
-  console.log(`      ${G.monsters.length} monstros, ${MAX_PLAYERS} jogadores → ${perTick.toFixed(3)}ms/tick`);
-  check('escala: tick com 10 jogadores e população máxima fica dentro do orçamento de 30Hz',
-    perTick < 4, `${perTick.toFixed(3)}ms`);
+  console.log(
+    `      ${G.monsters.length} monstros, ${MAX_PLAYERS} jogadores → ${perTick.toFixed(3)}ms/tick`
+  );
+  check(
+    'escala: tick com 10 jogadores e população máxima fica dentro do orçamento de 30Hz',
+    perTick < 4,
+    `${perTick.toFixed(3)}ms`
+  );
 
   const viewer = Object.values(G.players)[0];
   const bytesCut = JSON.stringify(buildSnapshot(G, { viewer, aoi: true })).length;
   const bytesWhole = JSON.stringify(buildSnapshot(G, { viewer, aoi: false })).length;
   console.log(`      snapshot: ${bytesCut}B com corte, ${bytesWhole}B sem`);
-  check('escala: tamanho do snapshot com 10 jogadores é registrado e tem teto',
-    bytesCut < 60000, `${bytesCut}B`);
-  check('escala: o corte por área reduz o pacote', bytesCut <= bytesWhole, `${bytesCut} vs ${bytesWhole}`);
+  check(
+    'escala: tamanho do snapshot com 10 jogadores é registrado e tem teto',
+    bytesCut < SNAPSHOT_BUDGET_BYTES,
+    `${bytesCut}B`
+  );
+  check(
+    'escala: o corte por área reduz o pacote',
+    bytesCut <= bytesWhole,
+    `${bytesCut} vs ${bytesWhole}`
+  );
 
   // CT-01 / RNF-03: o campo `hc` é opcional e só existe no chefe do andar
   // HARDCORE. A conta é a mesma de cima — o pacote inteiro, com e sem a chave.
-  const bytesSemChave = (pacote) => JSON.stringify(pacote).replace(/,"hc":1/g, '').length;
-  const chefe = G.monsters.find((m) => m.isBoss);
-  check('RNF-01: o cenário de custo roda mesmo em andar HARDCORE',
-    G.floor % HARDCORE_EVERY === 0 && chefe.hardcore === true, `andar ${G.floor}`);
+  const bytesSemChave = pacote => JSON.stringify(pacote).replace(/,"hc":1/g, '').length;
+  const chefe = G.monsters.find(m => m.isBoss);
+  check(
+    'RNF-01: o cenário de custo roda mesmo em andar HARDCORE',
+    G.floor % HARDCORE_EVERY === 0 && chefe.hardcore === true,
+    `andar ${G.floor}`
+  );
 
   // O pacote medido é o de quem está de fato olhando para o chefe: fora do
   // raio de interesse o chefe nem entra no snapshot, e a conta mediria zero
   // por ausência, não por economia.
-  viewer.x = chefe.x + 1; viewer.y = chefe.y + 1;
+  viewer.x = chefe.x + 1;
+  viewer.y = chefe.y + 1;
   const pacoteHc = buildSnapshot(G, { viewer, aoi: true });
-  const entradaChefe = pacoteHc.M.find((m) => m.b === 1);
-  check('CT-01: o chefe do andar HARDCORE viaja com hc: 1',
-    !!entradaChefe && entradaChefe.hc === 1, JSON.stringify(entradaChefe && { b: entradaChefe.b, hc: entradaChefe.hc }));
-  check('CT-01: nenhum monstro comum carrega a chave hc',
-    pacoteHc.M.filter((m) => m.hc !== undefined).length === 1,
-    `${pacoteHc.M.filter((m) => m.hc !== undefined).length} entradas com hc`);
+  const entradaChefe = pacoteHc.M.find(m => m.b === 1);
+  check(
+    'CT-01: o chefe do andar HARDCORE viaja com hc: 1',
+    !!entradaChefe && entradaChefe.hc === 1,
+    JSON.stringify(entradaChefe && { b: entradaChefe.b, hc: entradaChefe.hc })
+  );
+  check(
+    'CT-01: nenhum monstro comum carrega a chave hc',
+    pacoteHc.M.filter(m => m.hc !== undefined).length === 1,
+    `${pacoteHc.M.filter(m => m.hc !== undefined).length} entradas com hc`
+  );
 
   const deltaHc = JSON.stringify(pacoteHc).length - bytesSemChave(pacoteHc);
   console.log(`      chefe HARDCORE: +${deltaHc}B por pacote`);
-  check('RNF-03: o chefe HARDCORE acrescenta no máximo 8 bytes ao pacote',
-    deltaHc > 0 && deltaHc <= 8, `${deltaHc}B`);
+  check(
+    'RNF-03: o chefe HARDCORE acrescenta no máximo 8 bytes ao pacote',
+    deltaHc > 0 && deltaHc <= 8,
+    `${deltaHc}B`
+  );
 
   // O convidado precisa reconstruir a flag: sem isso a barra do chefe não teria
   // como marcar a variante do lado de quem não é host.
   const visao = { playerMap: new Map(), monsterMap: new Map() };
   applySnapshot(visao, pacoteHc);
-  const chefeVisto = [...visao.monsterMap.values()].find((m) => m.isBoss);
-  check('CT-01: applySnapshot devolve hardcore verdadeiro no lado do convidado',
-    !!chefeVisto && chefeVisto.hardcore === true);
+  const chefeVisto = [...visao.monsterMap.values()].find(m => m.isBoss);
+  check(
+    'CT-01: applySnapshot devolve hardcore verdadeiro no lado do convidado',
+    !!chefeVisto && chefeVisto.hardcore === true
+  );
 
   // Andar não múltiplo de 3: a chave não existe e o custo da feature é zero.
   const Gcomum = createGame(4242, 5);
   Gcomum.groupSize = MAX_PLAYERS;
   const espectador = addPlayer(Gcomum, { id: 'c0', name: 'C', voc: 'sorcerer' });
-  const chefeComum = Gcomum.monsters.find((m) => m.isBoss);
-  espectador.x = chefeComum.x + 1; espectador.y = chefeComum.y + 1;
+  for (let i = 1; i < MAX_PLAYERS; i++)
+    addPlayer(Gcomum, { id: `c${i}`, name: `C${i}`, voc: 'sorcerer' });
+  const chefeComum = Gcomum.monsters.find(m => m.isBoss);
+  espectador.x = chefeComum.x + 1;
+  espectador.y = chefeComum.y + 1;
   const pacoteComum = buildSnapshot(Gcomum, { viewer: espectador, aoi: true });
+  const bytesHc = JSON.stringify(pacoteHc).length;
+  const bytesComum = JSON.stringify(pacoteComum).length;
   const deltaComum = JSON.stringify(pacoteComum).length - bytesSemChave(pacoteComum);
-  check('CT-01: em andar não múltiplo de 3 o chefe não carrega a chave hc',
-    chefeComum.hardcore === false && !JSON.stringify(pacoteComum).includes('"hc"'));
-  check('RNF-03: fora do andar HARDCORE o acréscimo por pacote é exatamente 0 byte',
-    deltaComum === 0, `${deltaComum}B`);
+  console.log(`      snapshot de ${MAX_PLAYERS}: normal ${bytesComum}B · HARDCORE ${bytesHc}B`);
+  check(
+    'escala: snapshots de 10 jogadores normal e HARDCORE respeitam o teto',
+    bytesComum < SNAPSHOT_BUDGET_BYTES && bytesHc < SNAPSHOT_BUDGET_BYTES,
+    `normal ${bytesComum}B · HARDCORE ${bytesHc}B`
+  );
+  check(
+    'CT-01: em andar não múltiplo de 3 o chefe não carrega a chave hc',
+    chefeComum.hardcore === false && !JSON.stringify(pacoteComum).includes('"hc"')
+  );
+  check(
+    'RNF-03: fora do andar HARDCORE o acréscimo por pacote é exatamente 0 byte',
+    deltaComum === 0,
+    `${deltaComum}B`
+  );
 
   const visaoComum = { playerMap: new Map(), monsterMap: new Map() };
   applySnapshot(visaoComum, pacoteComum);
-  const chefeVistoComum = [...visaoComum.monsterMap.values()].find((m) => m.isBoss);
-  check('CT-01: sem a chave o convidado reconstrói hardcore falso, nunca indefinido',
-    !!chefeVistoComum && chefeVistoComum.hardcore === false);
+  const chefeVistoComum = [...visaoComum.monsterMap.values()].find(m => m.isBoss);
+  check(
+    'CT-01: sem a chave o convidado reconstrói hardcore falso, nunca indefinido',
+    !!chefeVistoComum && chefeVistoComum.hardcore === false
+  );
 }
 
 console.log('\n== status do jogador no pacote ==');
@@ -273,31 +510,88 @@ console.log('\n== status do jogador no pacote ==');
   const viewer = p;
 
   const limpo = buildSnapshot(G, { viewer, aoi: true });
-  check('status: sem status ativo a chave não entra no pacote',
-    limpo.P[0].s === undefined, JSON.stringify(limpo.P[0].s));
+  check(
+    'status: sem status ativo a chave não entra no pacote',
+    limpo.P[0].s === undefined,
+    JSON.stringify(limpo.P[0].s)
+  );
 
   p.status.wither = 3.5;
   p.status.freeze = 0.6;
   const pacote = buildSnapshot(G, { viewer, aoi: true });
-  const entrada = pacote.P.find((e) => e.i === 'p1');
-  check('status: com status ativo a chave entra no pacote',
-    !!entrada && Array.isArray(entrada.s), JSON.stringify(entrada && entrada.s));
+  const entrada = pacote.P.find(e => e.i === 'p1');
+  check(
+    'status: com status ativo a chave entra no pacote',
+    !!entrada && Array.isArray(entrada.s),
+    JSON.stringify(entrada && entrada.s)
+  );
 
   const visao = { playerMap: new Map(), monsterMap: new Map() };
   applySnapshot(visao, pacote);
   const visto = visao.playerMap.get('p1');
-  check('status: o convidado reconstrói wither e freeze do jogador',
+  check(
+    'status: o convidado reconstrói wither e freeze do jogador',
     !!visto && visto.status.wither > 0 && visto.status.freeze > 0,
-    JSON.stringify(visto && visto.status));
-  check('status: o que não está ativo volta zerado, nunca indefinido',
+    JSON.stringify(visto && visto.status)
+  );
+  check(
+    'status: o que não está ativo volta zerado, nunca indefinido',
     !!visto && visto.status.burn === 0 && visto.status.poison === 0 && visto.status.stun === 0,
-    JSON.stringify(visto && visto.status));
+    JSON.stringify(visto && visto.status)
+  );
 
   // O custo tem de ser desprezível: a chave só aparece em quem está marcado.
   const delta = JSON.stringify(pacote).length - JSON.stringify(limpo).length;
   console.log(`      status de 1 jogador: +${delta}B no pacote`);
-  check('status: o campo custa no máximo 40 bytes por jogador marcado',
-    delta <= 40, `${delta}B`);
+  check('status: o campo custa no máximo 40 bytes por jogador marcado', delta <= 40, `${delta}B`);
+}
+
+console.log('\n== contrato de elites no snapshot ==');
+{
+  const G = createGame(4242, 4);
+  const viewer = addPlayer(G, { id: 'p1', name: 'Observador', voc: 'knight' });
+  const pacote = buildSnapshot(G, { viewer, aoi: false });
+  const elite = G.monsters.find(monster => monster.elite);
+  const normal = G.monsters.find(monster => !monster.elite);
+  const eliteNoPacote = pacote.M.find(monster => monster.i === elite?.id);
+  const normalNoPacote = pacote.M.find(monster => monster.i === normal?.id);
+  check(
+    'elite: normal não serializa a chave el',
+    !!normalNoPacote && !Object.hasOwn(normalNoPacote, 'el'),
+    JSON.stringify(normalNoPacote)
+  );
+  check(
+    'elite: marcado serializa somente o código el',
+    !!eliteNoPacote && eliteNoPacote.el === elite.elite,
+    JSON.stringify(eliteNoPacote)
+  );
+
+  const view = { playerMap: new Map(), monsterMap: new Map() };
+  applySnapshot(view, pacote);
+  const eliteReconstruido = view.monsterMap.get(elite?.id);
+  const normalReconstruido = view.monsterMap.get(normal?.id);
+  check(
+    'elite: buildSnapshot e applySnapshot preservam o código',
+    eliteReconstruido?.elite === elite.elite && normalReconstruido?.elite === null,
+    JSON.stringify({ elite: eliteReconstruido?.elite, normal: normalReconstruido?.elite })
+  );
+
+  const bytesComElite = JSON.stringify(pacote).length;
+  delete elite.elite;
+  const semElite = buildSnapshot(G, { viewer, aoi: false });
+  const bytesSemElite = JSON.stringify(semElite).length;
+  const delta = bytesComElite - bytesSemElite;
+  console.log(`      elite ${eliteNoPacote.el}: +${delta}B no snapshot (${bytesComElite}B total)`);
+  check(
+    'elite: el acrescenta somente poucos bytes ao monstro marcado',
+    delta > 0 && delta <= 16,
+    `${delta}B`
+  );
+  check(
+    'elite: snapshot com ou sem el respeita o teto permanente',
+    bytesComElite <= SNAPSHOT_BUDGET_BYTES && bytesSemElite <= SNAPSHOT_BUDGET_BYTES,
+    `${bytesComElite}B / ${bytesSemElite}B`
+  );
 }
 
 console.log(failures ? `\n${failures} FALHA(S)\n` : '\nTudo verde.\n');

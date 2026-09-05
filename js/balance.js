@@ -7,6 +7,18 @@
 // ---------- Simulação ----------
 export const TICK_HZ = 30;
 export const TICK = 1 / TICK_HZ;
+// O teto é do trabalho de simulação, não de um quadro completo: desenho e
+// escalonamento do browser pertencem a orçamentos diferentes. O probe executa
+// cada `step()` separadamente, depois de aquecer o JIT, e conserva o maior
+// valor da amostra inteira; não é permitido trocar o máximo por média/percentil.
+export const TICK_BUDGET_MS = 4;
+// O teto do snapshot é contrato da estrela P2P: ele precisa permanecer abaixo
+// de 60 KB tanto na carga normal quanto na variante HARDCORE de sala cheia.
+export const SNAPSHOT_BUDGET_BYTES = 60_000;
+export const TICK_BUDGET_WARMUP_STEPS = 90;
+export const TICK_BUDGET_SAMPLES = 900;
+export const TICK_BUDGET_SEED = 31415;
+export const TICK_BUDGET_FLOORS = [8, 9];
 
 // ---------- Inventário ----------
 export const INV_SIZE = 20;
@@ -17,18 +29,42 @@ export const START_POTIONS = { hp: 8, mp: 6 };
 // ---------- Morte e ressurreição ----------
 export const REVIVE_RADIUS = 1.6;
 export const REVIVE_TIME = 3.5;
-export const REVIVE_DECAY = 0.5;        // fração do dt que a barra perde fora do raio
-export const REVIVE_MAX_HELPERS = 3;    // teto de aliados que aceleram a barra
-export const RESPAWN_DELAY = 5;         // pode renascer sozinho a partir daqui
-export const AUTO_RESPAWN = 30;         // renasce sozinho de qualquer jeito
-export const DEATH_GOLD_LOSS = 0.1;     // 10% do ouro
+export const REVIVE_DECAY = 0.5; // fração do dt que a barra perde fora do raio
+export const REVIVE_MAX_HELPERS = 3; // teto de aliados que aceleram a barra
+export const RESPAWN_DELAY = 5; // pode renascer sozinho a partir daqui
+export const AUTO_RESPAWN = 30; // renasce sozinho de qualquer jeito
+export const DEATH_GOLD_LOSS = 0.1; // 10% do ouro
 export const REVIVE_HP_FRAC = 0.5;
 export const REVIVE_MP_FRAC = 0.4;
 
 // ---------- Progressão ----------
-export const PORTAL_HOLD = 1.5;         // segundos em cima do portal
-export const XP_RADIUS = 26;            // tiles: além disso não recebe XP do abate
-export const FLOOR_RESTORE_FRAC = 0.6;  // HP/MP mínimos ao trocar de andar
+export const PORTAL_HOLD = 1.5; // segundos em cima do portal
+export const XP_RADIUS = 26; // tiles: além disso não recebe XP do abate
+export const FLOOR_RESTORE_FRAC = 0.6; // HP/MP mínimos ao trocar de andar
+
+// ---------- Bestiário ----------
+// Cada marco libera uma camada de informação do tipo derrotado. O tier nunca
+// é persistido: ele é sempre refeito a partir do contador durável.
+export const BESTIARY_TIER_THRESHOLDS = Object.freeze([1, 25, 100]);
+
+// ---------- Contratos diários ----------
+// O limite também protege o bloco compacto do save. A geração consulta o
+// catálogo vivo, então um catálogo menor devolve menos contratos em vez de
+// inventar um objetivo sem criatura correspondente.
+export const DAILY_CONTRACT_LIMIT = 3;
+// A lista diária é comum a todas as runs: a aleatoriedade do mapa nunca pode
+// trocar um objetivo já salvo no mesmo slot durante o dia.
+export const DAILY_CONTRACT_SEED = 0;
+// Objetivos de derrota por tier: os alvos altos compensam a raridade sem
+// obrigar o jogador a caçar um tipo que não existe no conteúdo atual.
+export const CONTRACT_DEFEAT_TARGETS_BY_TIER = Object.freeze([12, 10, 8, 6, 4]);
+// A recompensa é sorteada no intervalo determinístico do dia; progresso e
+// resgate ficam para P3C-04/P3C-05, mas o valor já nasce na fonte de tuning.
+export const CONTRACT_REWARD_GOLD_RANGE = Object.freeze([18, 36]);
+// Todo contrato concluído também devolve uma poção de vida. A composição da
+// recompensa fica fixa e pequena para que o resgate seja reproduzível mesmo
+// quando o jogador recarrega a página antes de abrir o Refúgio.
+export const CONTRACT_REWARD_POTION = Object.freeze({ kind: 'hp', amount: 1 });
 
 // ---------- População do andar ----------
 export const POP_BASE = 62;
@@ -125,6 +161,36 @@ export const HARDCORE_EVERY = 3;
 export const HARDCORE_HP_MULT = 1.75;
 export const HARDCORE_ATK_MULT = 1.45;
 
+// ---------- Elites ----------
+// Uma minoria legível muda o encontro sem multiplicar a população do andar.
+export const ELITE_CHANCE = 0.08;
+export const ELITE_FRENZY_SPEED = 1.28;
+export const ELITE_FRENZY_ATTACK = 0.72;
+export const ELITE_ARMORED_HP = 1.45;
+export const ELITE_ARMORED_DEF = 1.65;
+export const ELITE_VAMPIRIC_LEECH = 0.22;
+
+// ---------- Afixos de build ----------
+// Todos são percentuais e compartilham o mesmo teto hostil dos afixos existentes.
+export const BUILD_AFFIX_RANGES = {
+  cooldown: [0.03, 0.09],
+  elemental: [0.04, 0.12],
+  status: [0.05, 0.15],
+  area: [0.04, 0.12],
+};
+
+// ---------- Áudio ----------
+// A luta pode ter lacunas longas entre especiais; 12 s evita troca nervosa de faixa.
+export const BOSS_DISENGAGE_TIME = 12;
+export const MUSIC_VOLUME_DEFAULT = 0.5;
+export const SFX_VOLUME_DEFAULT = 0.7;
+export const MUSIC_FADE_TIME = 0.8;
+export const SFX_MAX_VOICES = 8;
+export const SFX_MIN_INTERVAL = 0.06;
+export const AUDIO_BUDGET_TOTAL = 4 * 1024 * 1024;
+export const AUDIO_BUDGET_MUSIC = 1.2 * 1024 * 1024;
+export const AUDIO_BUDGET_SFX = 40 * 1024;
+
 // Recompensa NÃO acompanha o degrau: `xp` e o nível que o loot consulta ficam
 // nos valores da variante comum, então o andar HARDCORE custa cerca de duas
 // vezes mais tempo pelo mesmo ganho. Isso é decisão registrada, não esquecimento
@@ -199,24 +265,24 @@ export const BOSS_STATUS_MAG = {
 export const MAX_PLAYERS = 10;
 
 // ---------- Consciência de grupo ----------
-export const EMBER_LINK_MIN = 7;        // tiles: aparece a linha de brasas
-export const EMBER_LINK_FAR = 14;       // tiles: aparece direção e distância
-export const HUD_ALLY_LIMIT = 3;        // barras de aliado no HUD
+export const EMBER_LINK_MIN = 7; // tiles: aparece a linha de brasas
+export const EMBER_LINK_FAR = 14; // tiles: aparece direção e distância
+export const HUD_ALLY_LIMIT = 3; // barras de aliado no HUD
 export const HUD_ALLY_HYSTERESIS = 1.5; // tiles de margem para trocar quem aparece
 export const HUD_ALLY_REORDER_DELAY = 0.5;
 
 // ---------- Toque ----------
 // A metade esquerda inteira da tela é do joystick (hud-grupo-mobile.md:35): o
 // polegar esquerdo nunca deveria virar ordem de movimento por 5% de largura.
-export const TOUCH_STICK_ZONE = 0.5;    // fração da largura que pertence ao joystick
-export const TOUCH_STICK_RADIUS = 64;   // metade do #stick de 128px: centra o anel no dedo
-export const TOUCH_STICK_TRAVEL = 54;   // curso máximo do polegar dentro do anel
+export const TOUCH_STICK_ZONE = 0.5; // fração da largura que pertence ao joystick
+export const TOUCH_STICK_RADIUS = 64; // metade do #stick de 128px: centra o anel no dedo
+export const TOUCH_STICK_TRAVEL = 54; // curso máximo do polegar dentro do anel
 
 // ---------- Chat ----------
 export const CHAT_MAX_LEN = 140;
 export const CHAT_LOG_LINES = 40;
-export const CHAT_BURST = 3;            // mensagens...
-export const CHAT_BURST_WINDOW = 5;     // ...por esta janela em segundos
+export const CHAT_BURST = 3; // mensagens...
+export const CHAT_BURST_WINDOW = 5; // ...por esta janela em segundos
 
 // ---------- Registro ----------
 // 6 linhas = 95,7px com o line-height medido de 15,95px: ~37% menos área pintada
@@ -262,9 +328,23 @@ export const RECONNECT_RETRY = 3;
 // vertical, então 20 cobre o visível com folga e derruba o pacote a um quinto.
 export const AOI_RADIUS = 20;
 export const NET_EVENT_CAP = 120;
-export const SLOW_PEER_BUFFER = 512 * 1024;   // bytes acumulados sem drenar
-export const SLOW_PEER_STRIKES = 40;          // envios pulados seguidos antes de derrubar
+export const SLOW_PEER_BUFFER = 512 * 1024; // bytes acumulados sem drenar
+export const SLOW_PEER_STRIKES = 40; // envios pulados seguidos antes de derrubar
+
+// ---------- Qualidade da conexão ----------
+// RTT acima de 280 ms já fica visível na resposta dos outros jogadores. Não
+// mudamos o chip no primeiro atraso: três acks lentos seguidos distinguem uma
+// conexão ruim de uma pausa curta do browser ou da coleta de lixo.
+export const CONNECTION_UNSTABLE_RTT_MS = 280;
+export const CONNECTION_UNSTABLE_ACK_WINDOW = 3;
+
+// A recuperação exige RTT menor que o limite de degradação. A faixa entre os
+// dois limites, somada a três acks saudáveis, impede o indicador de alternar
+// a cada pong em uma rede que oscila perto do limite. 180 ms ainda deixa a
+// recuperação perceptível sem exigir uma conexão local para sair do alerta.
+export const CONNECTION_RECOVERY_RTT_MS = 180;
+export const CONNECTION_RECOVERY_ACK_WINDOW = 3;
 
 // ---------- Combate em grupo ----------
-export const HEAL_ALLY_RADIUS = 8;   // tiles: alcance da cura em aliado
-export const TAUNT_TIME = 6;         // segundos que o monstro fica preso na provocação
+export const HEAL_ALLY_RADIUS = 8; // tiles: alcance da cura em aliado
+export const TAUNT_TIME = 6; // segundos que o monstro fica preso na provocação

@@ -31,7 +31,7 @@ export class SessionGuard {
 
   // Conexão caiu sem aviso: pode ser rede momentânea, então tenta voltar.
   hostLost() {
-    if (this.state !== LIVE) return false;   // já tratando, não reinicia a janela
+    if (this.state !== LIVE) return false; // já tratando, não reinicia a janela
     this.state = RECONNECTING;
     this.left = this.window;
     this.sinceRetry = 0;
@@ -60,7 +60,8 @@ export class SessionGuard {
       this.state = ENDED;
       this.endCount++;
       // Encerra uma vez só, por mais que o tick continue chegando.
-      if (this.onEnded) this.onEnded('Partida encerrada', 'O host saiu e a sala foi fechada.', false);
+      if (this.onEnded)
+        this.onEnded('Partida encerrada', 'O host saiu e a sala foi fechada.', false);
     } else if (this.onReconnecting) {
       this.onReconnecting(Math.max(0, this.left), this.window);
     }
@@ -75,5 +76,9 @@ export class SessionGuard {
     return true;
   }
 
-  reset() { this.state = LIVE; this.left = 0; this.sinceRetry = 0; }
+  reset() {
+    this.state = LIVE;
+    this.left = 0;
+    this.sinceRetry = 0;
+  }
 }
