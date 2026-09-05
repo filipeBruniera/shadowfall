@@ -1,5 +1,7 @@
 # Phases: camada-audio
 
+> **Status: pendente.** Este arquivo continua sendo o plano executável da camada de áudio.
+
 Gerado por /plan a partir de PLAN.md — view executável para `./ralph.sh .spec/features/camada-audio/PHASES.md`.
 
 Ordem externa: **`chefes-hardcore` primeiro, `camada-audio` depois**. As emissões desta feature escrevem `hardcore: m.hardcore ? 1 : 0` e funcionam com a marcação ausente (RF-07), mas o caminho positivo de RF-05 só é verificável depois que aquela feature existir.
@@ -9,6 +11,7 @@ Regras que valem para toda fase: `js/sim.js` continua sem `document`/`window`/`c
 ## Phase 1: Fundação — números, assets e contrato de deploy
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -43,6 +46,7 @@ Antes de implementar, leia:
 ## Phase 2: Módulos puros de política
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -63,6 +67,7 @@ Antes de implementar, leia:
 ## Phase 3: Emissões na simulação
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -90,6 +95,7 @@ Antes de implementar, leia:
 ## Phase 4: Transporte na composição
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -110,6 +116,7 @@ Antes de implementar, leia:
 ## Phase 5: Backend de navegador e superfície de UI
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -144,6 +151,7 @@ Antes de implementar, leia:
 ## Phase 6: Cola final na composição
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -164,6 +172,7 @@ Antes de implementar, leia:
 ## Phase 7: Suítes headless
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
@@ -191,6 +200,7 @@ Antes de implementar, leia:
 ## Phase 8: Navegador, sincronia, calibração e fechamento
 
 Antes de implementar, leia:
+
 1. `.spec/features/camada-audio/SPEC.md` — requisitos RIGID que esta fase cobre
 2. `.spec/features/camada-audio/PLAN.md` — decomposição completa, dependências e riscos
 
