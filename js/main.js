@@ -24,6 +24,7 @@ import {
   spawnRing,
   spawnParticles,
 } from './render.js';
+import { loadAtlas } from './atlas.js';
 import { Net, NetMode, buildSnapshot, applySnapshot, interpolate, drainEvents } from './net.js';
 import * as Save from './save.js';
 import { validateSave, describeReport } from './validate.js';
@@ -201,6 +202,8 @@ function resize() {
 }
 addEventListener('resize', resize);
 resize();
+// Atlas de sprites do chão: assíncrono, com fallback procedural até carregar.
+loadAtlas();
 
 // ============================================================
 // MENU

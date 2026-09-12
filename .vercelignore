@@ -1,7 +1,8 @@
-# O deploy é estático: só index.html, styles.css, js/ e vercel.json importam.
+# O deploy é estático: só index.html, styles.css, js/, assets/ e vercel.json importam.
 node_modules
 package-lock.json
 tests
+tools
 .spec
 README.md
 package.json

@@ -2,6 +2,14 @@ import { TILE_W, TILE_H, WALL_H, T, VOCATIONS, RARITY, ELEM_COLOR } from './data
 import { hash2 } from './rng.js';
 import { EMBER_LINK_MIN, BOSS_WINDUP, MONSTER_WINDUP } from './balance.js';
 import { eliteLabel } from './elite.js';
+import {
+  atlasReady,
+  atlasImage,
+  ATLAS_ROWS,
+  ATLAS_WALL,
+  ATLAS_CELL_W,
+  ATLAS_CELL_H,
+} from './atlas.js';
 
 export const cam = { x: 0, y: 0, zoom: 1, shake: 0, shakeX: 0, shakeY: 0 };
 const HALF_W = TILE_W / 2,
@@ -377,6 +385,12 @@ export function drawWorld(ctx, canvas, view, now) {
   // --- Chão ---
   // Um fill/stroke por tile custava 22ms/quadro. Agora tudo vira lote:
   // um Path2D por cor, um fill por lote. Mesmo desenho, ~4x mais barato.
+  // Com o atlas carregado, FLOOR/RUBBLE/GRASS ganham sprite por cima; o
+  // diamante de cor continua sendo pintado por baixo para não vazar preto nas
+  // frestas de subpixel do drawImage.
+  const useAtlas = atlasReady();
+  const atlas = atlasImage();
+  const spriteTiles = [];
   const batch = new Map();
   const gridPath = new Path2D();
   const grassPath = new Path2D();
@@ -408,6 +422,18 @@ export function drawWorld(ctx, canvas, view, now) {
       diamondPath(path, p.x, p.y);
       diamondPath(gridPath, p.x, p.y);
 
+      const spriteRow = useAtlas ? ATLAS_ROWS[t] : undefined;
+      if (spriteRow) {
+        // Sprite cobre o tile inteiro; decorações procedurais viram redundância.
+        spriteTiles.push({
+          row: spriteRow.row,
+          v: Math.floor(n * spriteRow.variants),
+          px: p.x,
+          py: p.y,
+        });
+        continue;
+      }
+
       if (t === T.LAVA) {
         diamondPath(lavaPath, p.x, p.y, TILE_W * 0.82, TILE_H * 0.82);
         lavaPulse = 0.55 + Math.sin(now * 2 + x * 1.7 + y) * 0.25;
@@ -435,6 +461,25 @@ export function drawWorld(ctx, canvas, view, now) {
   for (const [col, path] of batch) {
     ctx.fillStyle = col;
     ctx.fill(path);
+  }
+  if (spriteTiles.length && atlas) {
+    // Ordenado por py: a saia de 16px do sprite (espessura da laje) pende
+    // sobre o tile de baixo, então quem está mais ao fundo desenha primeiro.
+    spriteTiles.sort((a, b) => a.py - b.py);
+    for (const s of spriteTiles) {
+      // Âncora: topo do losango do sprite = topo do losango lógico (py - TILE_H/2).
+      ctx.drawImage(
+        atlas,
+        s.v * ATLAS_CELL_W,
+        s.row * ATLAS_CELL_H,
+        ATLAS_CELL_W,
+        ATLAS_CELL_H,
+        s.px - TILE_W / 2,
+        s.py - TILE_H / 2,
+        ATLAS_CELL_W,
+        ATLAS_CELL_H
+      );
+    }
   }
   if (lavaPulse) {
     ctx.fillStyle = `rgba(255,110,40,${lavaPulse})`;
@@ -546,6 +591,28 @@ export function drawWorld(ctx, canvas, view, now) {
         const dx = Math.abs(w.x - local.x),
           dy = Math.abs(w.y - local.y);
         if (dx < 3.2 && dy < 3.2) alpha = 0.32;
+      }
+      if (useAtlas && atlas && w.t === T.WALL) {
+        // Sprite desenha na hora (drawImage é barato); o flush antes preserva a
+        // ordem de profundidade contra as paredes procedurais acumuladas.
+        flushWalls(wallAcc, ctx);
+        const v = Math.floor(hash2(w.x, w.y) * ATLAS_WALL.variants);
+        ctx.globalAlpha = alpha;
+        // Âncora: base do bloco = losango do tile; topo fica WALL_H acima e os
+        // espinhos sobem spikeH além dele.
+        ctx.drawImage(
+          atlas,
+          v * ATLAS_CELL_W,
+          ATLAS_WALL.y,
+          ATLAS_CELL_W,
+          ATLAS_WALL.h,
+          w.px - TILE_W / 2,
+          w.py - TILE_H / 2 - WALL_H - ATLAS_WALL.spikeH,
+          ATLAS_CELL_W,
+          ATLAS_WALL.h
+        );
+        ctx.globalAlpha = 1;
+        continue;
       }
       collectWall(wallAcc, ctx, w, alpha, now, lights);
       continue;
